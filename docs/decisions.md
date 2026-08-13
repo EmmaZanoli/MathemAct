@@ -152,3 +152,99 @@ unconfigured state is visible without being indistinguishable from a broken migr
 The credential test compares each secret to the empty string inside an expression, which
 yields a plain boolean and exposes nothing; the secret values are injected only into the
 step that runs `db push`.
+
+## 2026-08-13 — `compressHTML: false`
+
+Astro's HTML compressor does not collapse whitespace between a text node and an adjacent
+inline element — it deletes it. A paragraph wrapped like this:
+
+```
+  ... exported nightly as JSON and licensed
+  <a href="...">CC BY 4.0</a>, so it can be analysed
+```
+
+ships as "licensedCC BY 4.0". The bug is invisible in the source, survives review, and is
+caught only by looking at the rendered page. It occurred three times in the first two days
+of this project.
+
+Keeping the source correct by hand is not a fix, because the editor's formatter re-wraps
+long lines on save and reintroduces it — that is how two of the three occurrences got
+there. Turning the compressor off removes the failure mode entirely. The output is a few
+hundred bytes larger before compression and near-identical after gzip, which is a trade
+worth making for an audience that reads a missing space as carelessness.
+
+## 2026-08-13 — The font stylesheet lives in `public/`, not `src/styles/`
+
+CSS cannot call `path()`, and the site is served under a `/MathemAct` prefix, so
+`url('/MathemAct/fonts/…')` inside a stylesheet would hardcode exactly what
+[src/lib/paths.ts](../src/lib/paths.ts) exists to keep in one place.
+
+Putting `fonts.css` next to the woff2 files instead means every `src` is a bare filename
+resolved against the stylesheet's own URL. That is correct under any base and survives a
+move to a custom domain untouched. The cost is one extra stylesheet request rather than
+being bundled, offset by preloading the two faces that appear on every page. The file
+never changes, so it also caches independently of the page CSS.
+
+Fourteen files: seven faces, each as a latin and a latin-ext subset, with real
+`unicode-range` values so latin-ext is fetched only when a page contains a character in
+it. That is not a rounding error on this site — Erdős, Poincaré, Ważewski, and Lindelöf
+all live in latin-ext.
+
+## 2026-08-13 — Markdown is sanitised *before* KaTeX renders, not after
+
+The pipeline is: parse → GFM → find math → to HTML → **sanitise** → render TeX →
+serialise.
+
+Sanitising after KaTeX would mean allowlisting KaTeX's output — dozens of layout classes
+on nested spans plus a parallel MathML tree — which in practice means allowing arbitrary
+spans and classes and giving up most of what the sanitiser was for. Sanitising first is
+also sufficient: by the time KaTeX runs, all that survives of a formula is its TeX source
+as a text node, and KaTeX escapes what it renders.
+
+Three defences, deliberately independent:
+
+1. `remark-rehype` is called without `allowDangerousHtml`, so raw HTML is discarded before
+   the sanitiser sees it.
+2. `rehype-sanitize` runs on the untrusted input, with the default schema extended in
+   exactly one respect: `math-inline` and `math-display` are allowed as class *values* on
+   span and div, because `rehype-katex` finds formulas by that class and the default schema
+   would otherwise strip it — leaving every formula on the site rendered as raw TeX.
+3. KaTeX runs with `trust: false`, which rejects `\href`, `\url`, `\includegraphics`, and
+   `\htmlClass`.
+
+Verified against a page of hostile input before shipping: `<script>`, `<iframe>`,
+`onerror=`, `onclick=`, a `javascript:` link, and a `data:text/html` href were all removed,
+and no attribute in the output contains a dangerous URL.
+
+Note there is no `throwOnError` option: `rehype-katex` omits it deliberately and always
+catches parse errors itself, rendering the offending source in a `.katex-error` span. That
+is the behaviour user-submitted TeX needs — one malformed formula must not fail the build.
+
+## 2026-08-13 — Outcome colours go on the tombstone glyph, never on the label
+
+`--outcome-partial` (`#8A6A1F`) measures 4.41:1 against the ground, just under the 4.5:1
+AA floor for body text. The other two clear it (worked 5.5:1, failed 6.7:1).
+
+Rather than alter a colour CLAUDE.md specifies, the rule is uniform: the outcome colour
+sets the square, and the text label stays in ink. As a graphic the square only needs 3:1,
+which all three clear comfortably. More importantly this is the correct ordering anyway —
+colour must never be the sole carrier of meaning, so the words should be the primary
+signal and the colour a secondary cue. Applying it uniformly is also less shouty than
+coloured labels, which suits the audience.
+
+## 2026-08-13 — Cascade layers for the global stylesheet
+
+`base.css` declares `@layer reset, base, layout` and wraps every reset selector in
+`:where()`, so those rules carry zero specificity. Astro's scoped component styles are
+unlayered, and unlayered styles beat layered ones regardless of specificity, so a
+component always wins against a global default without needing a longer selector or
+`!important`.
+
+The practical effect is that nobody has to know `base.css` exists in order to style a
+component correctly, which is the only reliable way to keep specificity fights from
+accumulating.
+
+One consequence worth knowing, learned the hard way: Astro's scoping attribute is *not*
+applied to a child component's root element. Passing `class="example"` to a component and
+styling `.example` in the parent compiles to a selector that matches nothing. Wrap the
+component in an element belonging to the parent file instead.

@@ -1,0 +1,178 @@
+---
+import Page from '../layouts/Page.astro';
+import { path } from '../lib/paths';
+import { SITE } from '../lib/site';
+---
+
+<Page
+  title="Privacy"
+  description="What MathemAct stores, who processes it, and how to have it erased."
+  lead="What is stored, who else sees it, and how to get rid of it. In plain terms, because a privacy notice nobody reads protects nobody."
+  updated="August 2026"
+>
+  <p class="status">
+    MathemAct does not yet have accounts, and nothing described here is collected today.
+    This notice is published in advance so that it can be read before anyone signs up
+    rather than after.
+  </p>
+
+  <h2>What is stored</h2>
+
+  <dl class="items">
+    <dt>Your email address</dt>
+    <dd>
+      Needed to confirm the account, to sign you in, and to reset a password. It is also
+      what your institutional badge is derived from. It is <strong>never displayed</strong>
+      on the site, never returned by the API, never included in the public export, and
+      never shown to moderators.
+    </dd>
+
+    <dt>Your display name</dt>
+    <dd>
+      Shown on everything you post. It may be a pseudonym, at every verification tier.
+    </dd>
+
+    <dt>Your institution, if the domain matched</dt>
+    <dd>
+      Derived automatically from your confirmed email domain against the Research
+      Organization Registry, along with the date of that check. Stored as the institution
+      name and country. You cannot set or edit this yourself.
+    </dd>
+
+    <dt>Your ORCID iD, if you give one</dt>
+    <dd>Optional. Public by nature, and shown as a link to your ORCID record.</dd>
+
+    <dt>What you post</dt>
+    <dd>
+      Practices, comments, ratings, and still-works confirmations, with the date each was
+      made. Ratings are stored per person so that you can change yours; individual ratings
+      are never shown attributed to a name.
+    </dd>
+  </dl>
+
+  <h3>What is not stored</h3>
+
+  <p>
+    There is no analytics of any kind, no advertising, no tracking pixels, no
+    fingerprinting, and no third-party fonts or scripts loaded from anyone else's servers.
+    Nothing about your visit is recorded while you read: the pages are static files, and
+    the database is contacted only when you sign in or post something. Fonts are served
+    from this site. There is no cookie banner because there is nothing to ask about — the
+    only cookie is the one that keeps you signed in, and it is set only once you sign in.
+  </p>
+
+  <h2>Who processes it</h2>
+
+  <p>Four services are involved. Each receives only what it needs to do its job.</p>
+
+  <dl class="items">
+    <dt>Supabase</dt>
+    <dd>
+      Database and authentication, hosted in the European Union. Holds everything listed
+      above. This is the only processor that sees the whole picture.
+    </dd>
+
+    <dt>Brevo</dt>
+    <dd>
+      Sends the confirmation and password-reset emails, and therefore receives your email
+      address and the contents of those messages. Nothing else. It is never used to send
+      announcements.
+    </dd>
+
+    <dt>Cloudflare</dt>
+    <dd>
+      Provides the Turnstile check that keeps automated signups out. It receives your IP
+      address and a token when you sign up or sign in. It is not used on pages you only
+      read.
+    </dd>
+
+    <dt>GitHub</dt>
+    <dd>
+      Serves the site's files, and therefore receives your IP address and browser user
+      agent as part of any ordinary web request. This is unavoidable for any website; no
+      account is needed to read this one.
+    </dd>
+  </dl>
+
+  <h2>What is public</h2>
+
+  <p>
+    Everything you post is public, and is published under a
+    <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a>
+    licence. It is also included in a nightly export that anyone can download in full. Assume
+    that anything you post can be copied, archived, quoted, and analysed by people you did not
+    anticipate, because it can. Your email address is not in the export.
+  </p>
+
+  <p>
+    Take particular care with transcript excerpts. Remove anyone else's unpublished
+    material before you paste, and remember that a transcript may contain more identifying
+    detail than you noticed when you were in the conversation.
+  </p>
+
+  <h2>Erasing your account</h2>
+
+  <p>
+    Ask at <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> from the address
+    the account uses, and it will be erased. Your profile, email address, and institutional
+    record are deleted outright.
+  </p>
+
+  <p>
+    Content you posted is detached from you rather than deleted with you: the body of a
+    practice or comment is removed and the author attribution is stripped, but the thread
+    structure stays, so that the discussion around it does not collapse into
+    incomprehensibility. If you want specific posts deleted as well, say so and they will
+    be. Anything already downloaded by someone else from a previous export cannot be
+    recalled, which is true of anything published anywhere.
+  </p>
+
+  <h2>Your rights</h2>
+
+  <p>
+    If you are in the European Union or the United Kingdom you have the right to see what
+    is held about you, to have it corrected, to have it erased, to get a copy in a portable
+    form, and to object to how it is used. Write to
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> and it will be dealt
+    with. If a request is refused you will be told why, and you can complain to your
+    national data protection authority.
+  </p>
+
+  <h2>Changes</h2>
+
+  <p>
+    If this notice changes in a way that affects what is collected or who sees it,
+    registered users will be told before it takes effect, not after. The date at the top
+    is the date of the last change, and the full history is in the
+    <a href={SITE.repository}>public repository</a>.
+  </p>
+
+  <p>
+    Questions about any of this, including the awkward ones, go to
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>. The
+    <a href={path('/about/')}>about page</a> explains how verification works in more detail.
+  </p>
+</Page>
+
+<style>
+  .status {
+    padding: var(--space-sm);
+    border: var(--border);
+    background-color: var(--surface);
+    font-size: var(--size-2);
+  }
+
+  .items {
+    margin: 0;
+  }
+
+  .items dt {
+    margin-block-start: var(--space-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .items dd {
+    margin-block-start: var(--space-3xs);
+    margin-inline-start: 0;
+  }
+</style>

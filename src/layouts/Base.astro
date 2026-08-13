@@ -1,0 +1,253 @@
+---
+/**
+ * The page shell: skip link, header, main landmark, footer.
+ *
+ * Every page uses this. It owns the document head, the global stylesheet imports, and
+ * the two landmarks a screen reader user navigates by.
+ */
+import '../styles/tokens.css';
+import '../styles/base.css';
+// KaTeX's stylesheet, bundled by Vite so its font URLs get the base prefix and a content
+// hash automatically. Loaded on every page rather than opt-in per page: it is ~23 KB
+// before compression, the font files are fetched only when a formula actually uses them,
+// and a `math` prop that someone forgets to set is a silently broken formula.
+import 'katex/dist/katex.min.css';
+
+import { asset, path } from '../lib/paths';
+import { LICENCE, NAV, FOOTER_NAV, SITE } from '../lib/site';
+
+interface Props {
+  title: string;
+  description?: string;
+  /** Set on the home page, where "MathemAct — MathemAct" would be absurd. */
+  bareTitle?: boolean;
+}
+
+const { title, description = SITE.description, bareTitle = false } = Astro.props;
+
+const documentTitle = bareTitle ? title : `${title} — ${SITE.name}`;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const here = Astro.url.pathname;
+const year = new Date().getFullYear();
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{documentTitle}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#edf0f2" />
+    <link rel="canonical" href={canonical.href} />
+
+    {/* Preloaded before the font stylesheet is even parsed. These two faces are on every
+        page — Sans 400 sets the body, Serif 600 sets every heading — so fetching them
+        early costs nothing and removes the worst of the swap reflow. The other twelve
+        faces are left to load on demand. crossorigin is required even same-origin,
+        because fonts are always fetched in CORS mode. */}
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href={asset('/fonts/ibm-plex-sans-latin-400-normal.woff2')}
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href={asset('/fonts/ibm-plex-serif-latin-600-normal.woff2')}
+    />
+    <link rel="stylesheet" href={asset('/fonts/fonts.css')} />
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="shell site-header__inner">
+        <a class="wordmark" href={path('/')}>MathemAct</a>
+
+        {
+          NAV.length > 0 && (
+            <nav aria-label="Main">
+              <ul class="nav" role="list">
+                {NAV.map((link) => (
+                  <li>
+                    <a
+                      href={path(link.href)}
+                      aria-current={here === path(link.href) ? 'page' : undefined}
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )
+        }
+      </div>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell site-footer__inner">
+        <nav aria-label="Footer">
+          <ul class="footer-nav" role="list">
+            {
+              FOOTER_NAV.map((link) => (
+                <li>
+                  <a href={path(link.href)}>{link.label}</a>
+                </li>
+              ))
+            }
+            <li>
+              <a href={`mailto:${SITE.contactEmail}`}>Contact</a>
+            </li>
+          </ul>
+        </nav>
+
+        <p class="site-footer__licence">
+          Contributed content is published under <a href={LICENCE.url} rel="license"
+            >{LICENCE.name}</a
+          >. Contributors keep copyright and are credited.
+        </p>
+
+        <p class="site-footer__meta">
+          <span class="mono">MathemAct {year}</span>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  /* ── Skip link ────────────────────────────────────────────────────────────────────
+     Parked above the viewport and brought down on focus. First thing in the tab order,
+     so a keyboard user never has to walk the navigation to reach the content. No
+     transition: this needs to be instant and unambiguous, not animated. */
+  .skip-link {
+    position: absolute;
+    top: 0;
+    left: var(--gutter);
+    z-index: 10;
+    padding: var(--space-2xs) var(--space-sm);
+    border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+    background-color: var(--ink);
+    color: var(--ground);
+    font-size: var(--size-2);
+    text-decoration: none;
+    transform: translateY(-110%);
+  }
+
+  .skip-link:focus {
+    transform: translateY(0);
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────────────────────── */
+  .site-header {
+    border-block-end: var(--border);
+  }
+
+  .site-header__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2xs) var(--space-md);
+    padding-block: var(--space-md);
+  }
+
+  .wordmark {
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: var(--size-5);
+    font-weight: var(--weight-semibold);
+    letter-spacing: var(--tracking-tight);
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .wordmark:hover {
+    color: var(--accent-strong);
+  }
+
+  .nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    margin: 0;
+    padding: 0;
+    font-size: var(--size-2);
+  }
+
+  .nav a {
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+
+  .nav a:hover {
+    color: var(--accent-strong);
+  }
+
+  /* The current page is marked with a rule under it as well as the attribute, so the
+     cue is not carried by colour alone. */
+  .nav a[aria-current='page'] {
+    color: var(--ink);
+    border-block-end: var(--border-width-thick) solid var(--accent);
+    padding-block-end: 2px;
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────────────────────── */
+  .site-footer {
+    margin-block-start: var(--space-3xl);
+    border-block-start: var(--border);
+    padding-block: var(--space-lg) var(--space-xl);
+    font-size: var(--size-2);
+    color: var(--ink-muted);
+  }
+
+  .site-footer__inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs) var(--space-md);
+    margin: 0;
+    padding: 0;
+  }
+
+  .site-footer__licence {
+    max-width: var(--measure);
+  }
+
+  .site-footer__meta {
+    color: var(--ink-muted);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  /* ── Narrow screens ─────────────────────────────────────────────────────────────
+     Checked at 360px. The header stacks rather than compressing the wordmark, because
+     a wrapped two-word wordmark reads worse than a taller header. */
+  @media (max-width: 26rem) {
+    .site-header__inner {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-xs);
+    }
+  }
+</style>

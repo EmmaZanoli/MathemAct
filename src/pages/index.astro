@@ -1,31 +1,312 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
+import Base from '../layouts/Base.astro';
+import Tombstone from '../components/Tombstone.astro';
+import { path } from '../lib/paths';
+import { LEIDEN, LICENCE, SITE } from '../lib/site';
 
-const mission = 'Collectively shaping the future of mathematical research in the age of AI.';
+/** The practice schema, in submission order. Mirrors CLAUDE.md's content model. When the
+ *  form is built this list moves to src/lib/ and both read from it. */
+const fields = [
+  'A title, and whether the work was research, learning, teaching, or writing',
+  'The task — literature search, conjecture generation, proof drafting, proof checking, formalisation, computation, exposition, translation, referee work',
+  'Which tools, at which version, on which date',
+  'What you were trying to do, and then what you actually did, step by step',
+  'The outcome: worked, partially worked, or did not work',
+  'How you verified correctness',
+  'An excerpt of the transcript',
+  'Caveats, and what you would do differently',
+  'Tags, so the account can be found by subject',
+  'Time spent, whether the work was published, whether the AI use was disclosed in the paper, and how confident you are in the result',
+];
 ---
 
-<BaseLayout title="MathemAct" description={mission}>
-  <main>
-    <h1>MathemAct</h1>
-    <p><em>{mission}</em></p>
+<Base title={SITE.name} description={SITE.description} bareTitle>
+  <div class="shell">
+    {/* ── Statement ────────────────────────────────────────────────────────────── */}
+    <section class="statement" aria-labelledby="statement-heading">
+      <h1 id="statement-heading">MathemAct</h1>
+      <p class="mission">{SITE.mission}</p>
 
-    <p>
-      A platform for the mathematics research community to collect structured, first-hand
-      accounts of how AI tools are actually used in mathematical work — and to record where
-      the community agrees and disagrees about how they should be used.
-    </p>
+      <div class="statement__body prose">
+        <p class="lead">
+          MathemAct collects first-hand accounts of how mathematicians use AI tools in
+          their work: what you set out to do, what you actually did, what came out, and
+          how you checked that the result was correct.
+        </p>
+        <p>
+          Every account follows the same structure. That is the whole point. Structured
+          accounts can be compared, filtered, counted, and cited. A thread of impressions
+          cannot.
+        </p>
+      </div>
+    </section>
 
-    <p>Nothing is built yet. This page exists to confirm the deployment pipeline works.</p>
+    {/* ── Principles and practice ──────────────────────────────────────────────── */}
+    <section class="section" aria-labelledby="principles-heading">
+      <h2 id="principles-heading">Principles, and the practice underneath them</h2>
 
-    <hr />
+      <div class="prose">
+        <p>
+          In June 2026 the <a href={LEIDEN.url}>{LEIDEN.name}</a> asked researchers to
+          <q>{LEIDEN.quotes.disclosure}</q>. It also conceded something useful:
+          <q>{LEIDEN.quotes.evolving}</q>.
+        </p>
+        <p>
+          That concession is where this site works. A principle can say that disclosure
+          should happen. It cannot say what a disclosure should contain when the tool was
+          used across four sessions over six hours, produced two usable lemmas and one
+          confident falsehood, and the error was caught only because someone thought to
+          check a boundary case.
+        </p>
+        <p>
+          Nobody can specify that in the abstract. It has to be read off real cases. So
+          MathemAct accumulates them in a fixed schema, until the schema is good enough
+          that a journal could hand it to authors as a disclosure template.
+        </p>
+      </div>
 
-    <p>
-      {/* Text and link stay on one line: compressHTML strips a newline between them
-          outright rather than collapsing it to a space. Note the JSX-style comment —
-          an HTML <!-- --> comment would be emitted into the built page. */}
-      <small>
-        Content is published under <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a>.
-      </small>
-    </p>
-  </main>
-</BaseLayout>
+      <p class="disclaimer">
+        MathemAct is an independent project. It is not affiliated with the Leiden
+        Declaration, its working group, or the International Mathematical Union, and it
+        carries no endorsement from any of them.
+      </p>
+    </section>
+
+    {/* ── What a contribution looks like ───────────────────────────────────────── */}
+    <section class="section" aria-labelledby="contribution-heading">
+      <h2 id="contribution-heading">What a contribution looks like</h2>
+
+      <div class="prose">
+        <p>
+          An account is called a practice: one piece of work, reported by the person who
+          did it. The form asks for these, in this order.
+        </p>
+      </div>
+
+      <ul class="tombstone-list prose">
+        {fields.map((field) => <li>{field}</li>)}
+      </ul>
+
+      <div class="prose">
+        <p>
+          One of them has no skip and no <q>not applicable</q>.
+          <strong>How you verified correctness</strong> is required on every account, without
+          exception. It is the field that separates a corpus a mathematician can use from a
+          pile of anecdotes. There are plenty of places to put anecdotes; this is not one.
+        </p>
+        <p>
+          The transcript excerpt is pasted in and stored here rather than linked. Share
+          links expire, get revoked, and sometimes breach the provider's terms. The
+          excerpt is the record. You confirm, before posting, that you have removed
+          anyone else's unpublished material from it.
+        </p>
+        <p>
+          Writing one should take under ten minutes. If it takes longer, the form is
+          wrong, not you.
+        </p>
+      </div>
+    </section>
+
+    {/* ── Three things worth knowing ───────────────────────────────────────────── */}
+    <section class="section" aria-labelledby="different-heading">
+      <h2 id="different-heading">Three things worth knowing</h2>
+
+      <div class="points">
+        <article class="point">
+          <h3>Failures count the same as successes</h3>
+          <div class="point__body">
+            <p>
+              An account reporting that the tool got it wrong is worth as much here as one
+              reporting that it got it right, and often more, because failure modes are
+              what nobody publishes. A corpus of successes alone would be advertising.
+              Nothing in the form or the interface treats a failure as the lesser
+              contribution.
+            </p>
+          </div>
+        </article>
+
+        <article class="point">
+          <h3>Every practice has an expiry</h3>
+          <div class="point__body">
+            <p>
+              Model, version, and date of use are required, and any signed-in
+              mathematician can record that a practice still works or no longer does. A
+              method that held against a 2025 model may be nonsense against a 2026 one.
+              The square beside each account says which it is:
+            </p>
+            <ul class="legend" role="list">
+              <li><Tombstone status="verified" /> — a correctness check is recorded, and someone has confirmed it still works</li>
+              <li><Tombstone status="stale" /> — not rechecked since an older model</li>
+              <li><Tombstone status="broken" /> — someone tried it and reported that it failed</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="point">
+          <h3>The whole corpus is downloadable</h3>
+          <div class="point__body">
+            <p>
+              Everything published here is exported nightly as JSON and licensed
+              <a href={LICENCE.url} rel="license">{LICENCE.name}</a>, so it can be analysed
+              without scraping and without asking. Researchers studying how mathematics
+              adopts these tools are among the people this is built for.
+            </p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    {/* ── Call to action ───────────────────────────────────────────────────────── */}
+    <section class="cta" aria-labelledby="cta-heading">
+      <h2 id="cta-heading" class="cta__heading">Read how this works</h2>
+      <p class="cta__body">
+        The about page has the full picture: the schema, how a verified email becomes an
+        institutional badge, and what is and is not kept about you.
+      </p>
+      <p><a class="button" href={path('/about/')}>How this works</a></p>
+      <p class="cta__note">
+        Posting opens once accounts and moderation are in place.
+      </p>
+    </section>
+  </div>
+</Base>
+
+<style>
+  /* Section rhythm is set here, once, rather than on each section's own class, so a new
+     section inherits it without anyone remembering to. Element selectors inside a
+     section are wrapped in :where() to keep them at zero specificity — a component
+     dropped into a section must never have to out-specify the page. */
+  .statement {
+    padding-block: var(--space-2xl) var(--space-xl);
+  }
+
+  .section {
+    padding-block: var(--space-xl);
+    border-block-start: var(--border);
+  }
+
+  .statement :where(h1) {
+    font-size: var(--size-8);
+    letter-spacing: -0.02em;
+  }
+
+  .mission {
+    max-width: var(--measure);
+    margin-block-start: var(--space-xs);
+    font-family: var(--font-serif);
+    font-size: var(--size-4);
+    font-style: italic;
+    color: var(--ink-muted);
+    text-wrap: balance;
+  }
+
+  .statement__body {
+    margin-block-start: var(--space-lg);
+  }
+
+  .lead {
+    font-size: var(--size-4);
+    line-height: var(--leading-relaxed);
+  }
+
+  .section :where(h2) {
+    max-width: var(--measure);
+    margin-block-end: var(--space-md);
+  }
+
+  /* Set apart from the surrounding prose because it is a legal statement, not an
+     argument, and it must not read as part of the case being made. */
+  .disclaimer {
+    max-width: var(--measure);
+    margin-block-start: var(--space-lg);
+    padding-inline-start: var(--space-sm);
+    border-inline-start: var(--border-width-thick) solid var(--rule);
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  .tombstone-list {
+    margin-block: var(--space-md);
+  }
+
+  /* Three columns on wide screens, one on narrow. auto-fit rather than a media query, so
+     the breakpoint follows the content width instead of a guessed device size. */
+  .points {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: var(--space-lg);
+    margin-block-start: var(--space-md);
+  }
+
+  /* Subgrid so the headings share a row and the bodies share the next one. Without it a
+     heading that wraps to two lines pushes its own paragraph down and the three columns
+     start at three different heights, which is exactly the kind of raggedness this
+     audience reads as carelessness. */
+  .point {
+    display: grid;
+    grid-template-rows: subgrid;
+    grid-row: span 2;
+    row-gap: var(--space-2xs);
+  }
+
+  .point :where(h3) {
+    font-size: var(--size-4);
+  }
+
+  .legend {
+    margin-block-start: var(--space-sm);
+    padding: 0;
+    font-size: var(--size-2);
+  }
+
+  /* Normal inline flow, not flex. Tombstone's root is already inline-flex, so it sits on
+     the text baseline unaided — whereas making the li a flex container turns the trailing
+     description into one unbreakable flex item, which wraps onto its own line and reads
+     as a separate legend entry. */
+  .legend > li + li {
+    margin-block-start: var(--space-3xs);
+  }
+
+  /* ── Call to action ─────────────────────────────────────────────────────────── */
+  .cta {
+    margin-block-start: var(--space-xl);
+    padding: var(--space-lg);
+    border: var(--border-strong);
+    background-color: var(--surface);
+  }
+
+  .cta__heading {
+    font-size: var(--size-5);
+  }
+
+  .cta__body {
+    max-width: var(--measure);
+    margin-block: var(--space-2xs) var(--space-md);
+  }
+
+  .button {
+    display: inline-block;
+    padding: var(--space-2xs) var(--space-md);
+    border: var(--border-strong);
+    color: var(--ink);
+    font-weight: var(--weight-semibold);
+    text-decoration: none;
+  }
+
+  .button:hover {
+    background-color: var(--ink);
+    color: var(--ground);
+  }
+
+  .cta__note {
+    margin-block-start: var(--space-md);
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  @media (max-width: 30rem) {
+    .cta {
+      padding: var(--space-md);
+    }
+  }
+</style>

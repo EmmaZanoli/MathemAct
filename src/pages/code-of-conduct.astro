@@ -1,0 +1,164 @@
+---
+import Page from '../layouts/Page.astro';
+import { path } from '../lib/paths';
+import { SITE } from '../lib/site';
+---
+
+<Page
+  title="Code of conduct"
+  description="What is expected of contributors to MathemAct, what is not tolerated, and what happens when the line is crossed."
+  lead="Scepticism is the point of this site. Contempt is not. This page is the difference between them."
+  updated="August 2026"
+>
+  <p class="status">
+    MathemAct does not yet have accounts. This is published in advance so that anyone
+    deciding whether to take part can read the terms first.
+  </p>
+
+  <h2>Scope</h2>
+
+  <p>
+    This applies to everything posted here — practices, comments, ratings, reports — and to
+    messages sent to the addresses on this site. It applies to everyone equally, including
+    whoever is doing the moderating.
+  </p>
+
+  <h2>What is expected</h2>
+
+  <dl class="items">
+    <dt>Argue with the account, not the person</dt>
+    <dd>
+      <q>This verification step does not rule out the error I would worry about</q> is the
+      kind of comment this site is for.
+      <q>Anyone who trusts a chatbot with a proof is not a serious mathematician</q> is not.
+      The first can be answered; the second only makes people stop posting.
+    </dd>
+
+    <dt>Assume the account is honest until you have reason not to</dt>
+    <dd>
+      People are describing their own work, often work that did not go well. Doubt a
+      claim, ask what was checked, ask for the transcript — but start from the assumption
+      that the person is reporting in good faith.
+    </dd>
+
+    <dt>Respect pseudonyms absolutely</dt>
+    <dd>
+      Admitting to heavy AI use still carries professional risk, and some of the most
+      valuable accounts here will only ever be posted under a pseudonym. Do not try to
+      work out who someone is, do not speculate publicly about it, and do not hint that
+      you have guessed. This is the rule most likely to get an account removed without a
+      warning first.
+    </dd>
+
+    <dt>Do not weaponise a disclosure</dt>
+    <dd>
+      Someone who posts here has told you something about their practice that they were
+      under no obligation to tell anyone. Using it against them — in a referee report, a
+      hiring discussion, a grant panel, or online — defeats the entire purpose of the
+      project.
+    </dd>
+
+    <dt>Post other people's material only if you may</dt>
+    <dd>
+      Transcript excerpts must have third-party unpublished material removed before you
+      paste them. Unpublished proofs, referee reports, and private correspondence are not
+      yours to reproduce, whoever typed them into the model.
+    </dd>
+  </dl>
+
+  <h2>What is not acceptable</h2>
+
+  <ul class="tombstone-list">
+    <li>Harassment, intimidation, or sustained hostility toward a person.</li>
+    <li>
+      Attempting to identify a pseudonymous contributor, or publishing anyone's personal
+      information.
+    </li>
+    <li>
+      Demeaning remarks about someone's nationality, gender, religion, disability, age,
+      institution, or career stage.
+    </li>
+    <li>
+      Posting an account of work you did not do, or fabricating a transcript, an outcome,
+      or a verification step.
+    </li>
+    <li>Promotion of a product, a service, or yourself in place of a genuine account.</li>
+    <li>Reproducing unpublished material belonging to someone who has not agreed.</li>
+  </ul>
+
+  <p>
+    Disagreement is not on that list, and will not be added to it. Reporting that a widely
+    praised tool failed you, or that a widely condemned one worked, is a contribution and
+    is treated as one.
+  </p>
+
+  <h2>Reporting</h2>
+
+  <p>
+    Every practice and comment can be reported from the page it appears on. If it concerns
+    a moderator, or you would rather it did not go through the site, write to
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+  </p>
+
+  <p>
+    Tell us what you saw and where. You do not have to explain why it upset you, and you
+    will not be asked to justify reporting something.
+  </p>
+
+  <h2>What happens next</h2>
+
+  <p>
+    Moderation here is volunteer-run. That means it is careful rather than fast, and it is
+    honest to say so up front: a report may take days. Content that looks like it could do
+    real harm is hidden while it is looked at, and hiding something is not a finding
+    against anyone.
+  </p>
+
+  <p>Depending on what happened, the response is one of:</p>
+
+  <ul class="tombstone-list">
+    <li>Nothing, with a note to whoever reported it explaining why.</li>
+    <li>A private word with the person who posted.</li>
+    <li>The content hidden, with the thread structure left intact.</li>
+    <li>The account suspended, or removed.</li>
+  </ul>
+
+  <p>
+    If your content is hidden or your account is suspended, you will be told what rule was
+    applied and why. You can reply, and a decision will be reconsidered if you have reason
+    to think it was wrong. Deanonymisation and harassment do not get a warning first.
+  </p>
+
+  <h2>Changes</h2>
+
+  <p>
+    This document will change as the site meets situations nobody anticipated. Changes are
+    dated at the top and their history is in the
+    <a href={SITE.repository}>public repository</a>. The
+    <a href={path('/privacy/')}>privacy notice</a> covers what is stored about you, including
+    what happens to your content if you leave.
+  </p>
+</Page>
+
+<style>
+  .status {
+    padding: var(--space-sm);
+    border: var(--border);
+    background-color: var(--surface);
+    font-size: var(--size-2);
+  }
+
+  .items {
+    margin: 0;
+  }
+
+  .items dt {
+    margin-block-start: var(--space-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .items dd {
+    margin-block-start: var(--space-3xs);
+    margin-inline-start: 0;
+  }
+</style>
