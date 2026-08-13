@@ -1,0 +1,26 @@
+---
+// Minimal document shell. Deliberately unstyled: the design system in CLAUDE.md
+// (tokens.css, self-hosted IBM Plex, the QED tombstone) lands in a later task, and a
+// half-applied version of it would read worse than plain HTML.
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="canonical" href={canonical.href} />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

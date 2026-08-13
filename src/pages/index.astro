@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+
+const mission = 'Collectively shaping the future of mathematical research in the age of AI.';
+---
+
+<BaseLayout title="MathemAct" description={mission}>
+  <main>
+    <h1>MathemAct</h1>
+    <p><em>{mission}</em></p>
+
+    <p>
+      A platform for the mathematics research community to collect structured, first-hand
+      accounts of how AI tools are actually used in mathematical work — and to record where
+      the community agrees and disagrees about how they should be used.
+    </p>
+
+    <p>Nothing is built yet. This page exists to confirm the deployment pipeline works.</p>
+
+    <hr />
+
+    <p>
+      {/* Text and link stay on one line: compressHTML strips a newline between them
+          outright rather than collapsing it to a space. Note the JSX-style comment —
+          an HTML <!-- --> comment would be emitted into the built page. */}
+      <small>
+        Content is published under <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a>.
+      </small>
+    </p>
+  </main>
+</BaseLayout>

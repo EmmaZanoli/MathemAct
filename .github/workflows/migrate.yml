@@ -1,0 +1,68 @@
+# Apply supabase/migrations/ to the production database.
+#
+# Migrations are append-only plain SQL applied by the Supabase CLI. The Supabase GitHub
+# integration is deliberately not used — see docs/decisions.md.
+#
+# Fork safety: `pull_request` is absent from `on:` by design, so a fork's pull request
+# cannot start this workflow, and forked repositories have no access to these secrets
+# regardless. The `if:` below re-states both facts so that widening the triggers later
+# cannot quietly hand a stranger's SQL a connection to the live database.
+name: Migrate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/migrate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two migrations at once, and never cancel one part-way through: an
+# interrupted `db push` leaves the schema in a state no migration file describes.
+concurrency:
+  group: supabase-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: >-
+      github.repository == 'EmmaZanoli/MathemAct'
+      && github.event_name != 'pull_request'
+      && github.event_name != 'pull_request_target'
+    runs-on: ubuntu-latest
+    env:
+      # Comparing a secret against '' evaluates to a plain boolean, so this exposes
+      # nothing while still letting the steps below decide whether there is anything to
+      # do. The secret values themselves are injected only into the step that uses them.
+      HAVE_CREDENTIALS: ${{ secrets.SUPABASE_DB_URL != '' && secrets.SUPABASE_ACCESS_TOKEN != '' }}
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Without this the job would go green while having done nothing, which is the one
+      # outcome a migration workflow must never produce silently.
+      - name: Warn if credentials are missing
+        if: env.HAVE_CREDENTIALS != 'true'
+        run: |
+          echo "::warning title=Migrations not applied::SUPABASE_DB_URL and/or SUPABASE_ACCESS_TOKEN are not set. Add them under Settings → Secrets and variables → Actions, then re-run this workflow."
+
+      - name: Install Supabase CLI
+        if: env.HAVE_CREDENTIALS == 'true'
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3.0.0
+        with:
+          version: latest
+
+      - name: Apply migrations
+        if: env.HAVE_CREDENTIALS == 'true'
+        env:
+          # --db-url is what actually applies the SQL; it connects directly and needs no
+          # linked project on disk, so the CLI's local state never has to be committed.
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # Read by the CLI for anything that goes through the Management API rather than
+          # the database connection.
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase db push --db-url "$SUPABASE_DB_URL"
