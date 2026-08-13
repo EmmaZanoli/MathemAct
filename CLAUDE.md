@@ -32,10 +32,10 @@ Consequences for design decisions:
 
 ## Audience
 
-Professional mathematicians, skewed European, mostly senior, extremely
-sceptical, and unusually sensitive to typographic and mathematical sloppiness. Many do
-not have and will not create a GitHub account. Some will only contribute pseudonymously
-because admitting heavy AI reliance carries professional stigma.
+Professional mathematicians, skewed European, mostly senior, extremely sceptical, and
+unusually sensitive to typographic and mathematical sloppiness. Many do not have and will
+not create a GitHub account. Some will only contribute pseudonymously because admitting
+heavy AI reliance carries professional stigma.
 
 The single most important flow is: **a researcher submits a well-structured account in
 under ten minutes.**
@@ -47,12 +47,11 @@ under ten minutes.**
 2. **Static hosting.** The site is built to static files and served by GitHub Pages.
    There is no application server. All dynamic behaviour is either build-time or
    client-side calls to Supabase.
-3. **No secrets in the client or in the repo.** The Supabase project URL and the
-   anon/publishable key are designed to be public and may be committed. The
-   `service_role` key and the database connection string are GitHub Actions secrets only,
-   used exclusively by workflows. Never reference them in site code.
-4. **Verification happens server-side.** See "Identity" below. Any path by which a user
-   could set their own affiliation is a critical bug.
+3. **No secrets in the client or in the repo.** See "Where secrets live" below. The
+   Supabase project URL and the anon/publishable key are designed to be public and may be
+   committed. Nothing else may.
+4. **Verification happens server-side.** See "Identity". Any path by which a user could
+   set their own affiliation is a critical bug.
 5. **Keep logic in Postgres.** Constraints, triggers, RLS, plain SQL. These are portable
    to any Postgres host. Avoid Supabase Edge Functions unless something genuinely needs
    to make an outbound network call at request time.
@@ -65,9 +64,10 @@ under ten minutes.**
 |---|---|
 | Site generator | Astro, static output |
 | Hosting | GitHub Pages via GitHub Actions |
-| Database + auth | Supabase free tier, **EU region (Frankfurt or Ireland)** |
-| Auth method | Email + password with mandatory email confirmation, custom SMTP |
-| Bot defence | Cloudflare Turnstile on signup |
+| Database + auth | Supabase free tier, EU region, already provisioned |
+| Auth method | Email + password with mandatory email confirmation |
+| Transactional email | Brevo SMTP relay, free plan, 300 emails/day |
+| Bot defence | Cloudflare Turnstile, verified by Supabase Auth's built-in CAPTCHA support |
 | Math rendering | KaTeX, rendered at build time where possible |
 | Full-text search | Pagefind, over built HTML |
 | Institution data | ROR (Research Organization Registry), CC0 dump loaded into Postgres |
@@ -83,6 +83,11 @@ expensive.
 
 Free tier facts that shape the architecture: 500 MB database, 5 GB egress, no backups,
 no SLA, and projects pause after about a week of inactivity.
+
+**The Supabase GitHub integration is deliberately not used.** Its main function is
+database branching, which is a paid feature billed per branch-hour, and it would couple
+our migration flow to a vendor feature. Migrations are plain SQL applied by the Supabase
+CLI. See "Migration flow".
 
 ### Read/write split — the core architectural rule
 
@@ -103,6 +108,93 @@ build timestamp and prepend them. Build timestamp is emitted into the JSON at ex
 time. When the database is unreachable, the overlay fails silently and the static content
 stands.
 
+## Supabase project configuration already chosen
+
+The project exists. These decisions are made and the code must respect them.
+
+- **Region: EU.** Irreversible, already set.
+- **Data API: enabled.** PostgREST is how the browser writes. Required.
+- **Automatically expose new tables: OFF.**
+- **Automatic RLS: ON.**
+- **Email confirmation: required.**
+- **Custom SMTP: Brevo**, configured in the dashboard.
+
+### API exposure — consequences for every migration
+
+Because new tables are not auto-exposed, a table is invisible to the Data API until it is
+explicitly granted. Missing grant and missing policy look identical from the client, so:
+
+- If a table must be reachable from the browser, the **same migration** includes its
+  grants, e.g. `GRANT SELECT ON <table> TO anon, authenticated;` and
+  `GRANT INSERT, UPDATE ON <table> TO authenticated;`. Grant the narrowest set of
+  privileges; RLS policies then restrict which rows.
+- **Grants control whether the endpoint exists. Policies control which rows it returns.**
+  Both are needed.
+- Tables that must **not** be granted to `anon` or `authenticated`, because only
+  server-side triggers and CI workflows read them: `ror_institutions`, `ror_domains`,
+  `blocked_domains`, `settings`, and any embedding or staging table. Create these in a
+  `private` schema, which is not in the exposed schema list.
+- If a query returns nothing and a policy looks correct, **check the grants first.**
+- Every table still gets `ENABLE ROW LEVEL SECURITY` in its creating migration. Do not
+  rely on the project default.
+
+### Three Postgres traps that would leak data here
+
+1. **Views have no RLS of their own.** By default a view runs with its creator's
+   privileges and will happily return pending and hidden rows to anonymous callers. Every
+   view over a user-content table must be created `WITH (security_invoker = on)`. This
+   applies to the staleness view and the rating aggregate view.
+2. **`SECURITY DEFINER` functions bypass RLS.** Required for the institution-matching
+   trigger, which reads `auth.users`. Every such function must pin its search path
+   (`SET search_path = ''`) and fully qualify all names.
+3. **The `public` schema is exposed by URL.** Anything there is defended only by grants
+   and RLS. `reports` and `moderation_actions` must live in `public` because the
+   moderation UI reads them from the browser, so those policies deserve the closest
+   review.
+
+## Where secrets live
+
+| Secret | Location | Notes |
+|---|---|---|
+| Supabase project URL | Public env var, committed | Designed to be public |
+| Supabase anon/publishable key | Public env var, committed | Designed to be public |
+| Turnstile **site** key | Public env var, committed | Public by design |
+| Turnstile **secret** key | Supabase dashboard, Auth CAPTCHA settings | Never in the repo, never in Actions |
+| Brevo SMTP key | Supabase dashboard, Auth SMTP settings | Never in the repo, never in Actions |
+| `SUPABASE_DB_URL` | GitHub Actions secret | Export and backup workflow only |
+| `SUPABASE_SERVICE_ROLE_KEY` | GitHub Actions secret | Export workflow only |
+| `SUPABASE_ACCESS_TOKEN` | GitHub Actions secret | Migration workflow only |
+
+A static site has no server, so Turnstile cannot be verified by our own code. Supabase
+Auth verifies it natively — the secret key belongs in its dashboard and nowhere else.
+The same reasoning applies to SMTP: mail is sent by Supabase, not by us.
+
+## Migration flow
+
+```
+supabase login
+supabase link --project-ref <ref>
+# Claude Code writes SQL into supabase/migrations/
+supabase db push          # apply
+supabase test db          # run pgTAP
+```
+
+`supabase start` runs the whole stack locally in Docker for destructive experiments.
+Migrations are **append-only**: never edit an applied migration, add a new one.
+
+## Email
+
+Brevo free plan, 300 emails/day, counted per envelope recipient, shared across all send
+types. One email per signup, one per password reset — ample for an invited cohort. Never
+send announcements through this channel.
+
+Relevant to the code: nothing. Supabase sends the mail and the SMTP configuration lives
+in its dashboard. That is deliberate — swapping provider is five fields in a settings
+page, not a code change. Say so in the runbook.
+
+Relevant to the copy: the Supabase default email templates mention Supabase and read as
+phishing. They are rewritten by hand before any user testing.
+
 ## Identity and badges
 
 Three independent signals. Institutional and ORCID stack on top of Registered.
@@ -119,15 +211,15 @@ Rules that are not negotiable:
   trigger, never from user input. `profiles` columns holding affiliation, verification
   timestamps, role, and ban status are protected by a `BEFORE UPDATE` trigger that
   reverts any user attempt to change them.
-- **Never display or expose the email address itself**, not in the API response, not in
-  the export, not to admins in the UI.
+- **Never display or expose the email address itself** — not in an API response, not in
+  the export, not to moderators in the UI.
 - Domain matching uses ROR domains with **longest-suffix** matching, so
   `maths.ox.ac.uk` resolves to Oxford. TLD heuristics like `.edu` or `.ac.uk` are
-  forbidden — they fail on `ens.fr`, `inria.fr`, `mis.mpg.de`, `sissa.it`, `weizmann.ac.il`,
-  which are exactly our users.
+  forbidden — they fail on `ens.fr`, `inria.fr`, `mis.mpg.de`, `sissa.it`,
+  `weizmann.ac.il`, which are exactly our users.
 - Badges state only what was verified: "Institutional email verified — Universität Bonn
-  (Aug 2026)". Never imply faculty status, seniority, or current employment.
-  Verification date is always visible; prompt re-verification annually.
+  (Aug 2026)". Never imply faculty status, seniority, or current employment. The
+  verification date is always visible; prompt re-verification annually.
 - Pseudonymous display names are allowed at every tier. An institutionally verified user
   may show the badge with a pseudonym.
 
@@ -177,7 +269,7 @@ An 11-point integer scale, 0 to 10.
   coverage — how many raters expressed an opinion — as its own number.
 - Display the **median and the full histogram**. The mean of an 11-point bipolar scale is
   misleading when the distribution is bimodal, and bimodal is exactly what to expect on
-  the contested propositions.
+  the contested propositions. **Do not compute or expose a mean anywhere.**
 - **Do not reveal the aggregate to a user until they have rated**, to limit bandwagon
   effects. This community's minority position is frequently the correct one.
 - One rating per user per proposition, enforced by a unique constraint. Ratings are
@@ -191,9 +283,12 @@ An 11-point integer scale, 0 to 10.
 - Account erasure must actually work: a documented flow that removes profile data and
   detaches authored content. This is a genuine advantage of the database over a
   git-based store, and part of why we chose it.
-- Moderation is volunteer-run. Every user-visible content table needs a
-  `status` column (`pending` / `published` / `hidden`) and there is a `reports` table.
-  Nothing ships to real users without a working hide path.
+- Data processors to disclose in the privacy notice: Supabase (database, auth, EU
+  region), Brevo (transactional email), Cloudflare (Turnstile), GitHub (hosting). State
+  what each receives.
+- Moderation is volunteer-run. Every user-visible content table needs a `status` column
+  (`pending` / `published` / `hidden`) and there is a `reports` table. Nothing ships to
+  real users without a working hide path.
 
 ## Design direction
 
@@ -208,17 +303,18 @@ restrained with one signature.
   Mono for all metadata — model names, versions, dates, scores, tags. The Mono/Sans/Serif
   split is doing real work: monospace marks anything a machine could parse. Self-host
   woff2 subsets.
-- **Signature element:** the QED tombstone. A filled square `■` marks a practice whose
-  correctness verification is recorded and confirmed still-working; an open square `□`
-  marks one that is unverified, stale, or reported as no longer working. It is the
-  status system, the list bullet, and the section divider. It encodes something true
-  rather than decorating.
+- **Signature element:** the QED tombstone. A filled square marks a practice whose
+  correctness verification is recorded and confirmed still-working; an open square marks
+  one that is unverified, stale, or reported as no longer working. It is the status
+  system, the list bullet, and the section divider. It encodes something true rather than
+  decorating.
 - Do not use: cream backgrounds with terracotta accents, near-black with acid green,
   hairline-rule broadsheet pastiche, numbered `01 / 02 / 03` markers where the content is
   not a sequence, or gradient hero panels.
-- Quality floor, unannounced: responsive to mobile, visible keyboard focus, `prefers-reduced-motion`
-  respected, semantic landmarks, form labels bound to inputs, colour never the sole carrier
-  of meaning (pair every outcome colour with the tombstone glyph or text).
+- Quality floor, unannounced: responsive to mobile, visible keyboard focus,
+  `prefers-reduced-motion` respected, semantic landmarks, form labels bound to inputs,
+  colour never the sole carrier of meaning (pair every outcome colour with the tombstone
+  glyph or text).
 
 ## Copy conventions
 
@@ -241,20 +337,21 @@ user-facing text.
   supabase/migrations/  numbered SQL migrations, applied in order
   supabase/tests/       pgTAP tests, RLS especially
   scripts/              one-off and scheduled Node/Python scripts
-  .github/workflows/    deploy, nightly export, embeddings
-  docs/                 governance, code of conduct, decisions log
+  .github/workflows/    deploy, migrate, nightly export, embeddings, link check
+  docs/                 governance, runbook, decisions log
 ```
 
 ## Working conventions
 
-- **Migrations are append-only.** Never edit an applied migration; add a new one.
 - Every migration file starts with a comment saying what it does and why.
 - TypeScript throughout the site. Shared validation logic lives in `src/lib/` and is used
-  by both the form and, where feasible, mirrored as a Postgres `CHECK`. Client validation
-  is convenience; the database constraint is the truth.
+  by both the form and the display layer, and is mirrored as a Postgres `CHECK` where
+  feasible. Client validation is convenience; the database constraint is the truth.
 - Do not install a UI component library or Tailwind. Plain CSS with the tokens in
-  `src/styles/tokens.css`. The design is small and specific enough that a framework costs
-  more than it saves.
+  `src/styles/tokens.css`.
+- All data access goes through functions in `src/lib/`. Page components never call
+  Supabase directly — the static export step later swaps the source behind those
+  functions, and direct calls in components would turn that into a refactor.
 - After each task: run the build, fix warnings, then commit with a message describing the
   change. Do not commit `.env`.
 - Keep `docs/decisions.md` updated with one short entry per non-obvious choice.
@@ -265,8 +362,9 @@ user-facing text.
   `base` set correctly and every internal link must respect it. Getting this wrong breaks
   every link only after deploy, not locally.
 - GitHub Pages has no SPA fallback. Generate real pages, plus a `404.html`.
-- Supabase's built-in email sender is rate-limited to a handful per hour and will fail
-  the moment a group of testers signs up. Custom SMTP must be configured before any user
-  testing.
-- RLS defaults to permissive if you forget to enable it on a table. Every new table gets
+- Auth redirect URLs must be registered in the Supabase dashboard for both localhost and
+  the deployed origin, or confirmation and reset links fail in a way that looks like
+  broken email.
+- Supabase Auth has its own emails-per-hour rate limit, independent of Brevo's daily cap.
+- RLS defaults to permissive if you forget to enable it. Every new table gets
   `ENABLE ROW LEVEL SECURITY` in the same migration that creates it, without exception.
