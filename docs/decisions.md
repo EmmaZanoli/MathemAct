@@ -248,3 +248,102 @@ One consequence worth knowing, learned the hard way: Astro's scoping attribute i
 applied to a child component's root element. Passing `class="example"` to a component and
 styling `.example` in the parent compiles to a selector that matches nothing. Wrap the
 component in an element belonging to the parent file instead.
+
+## 2026-08-14 — The affiliation trigger is SECURITY DEFINER; the guard that protects it is not
+
+`private.protect_profile_columns()` reverts every system-owned column on
+`public.profiles`. It is deliberately **SECURITY INVOKER**, and that is the single most
+important line in the identity migrations.
+
+Inside a `SECURITY DEFINER` function, `current_user` is the function's *owner*, not the
+caller. The guard decides whether to revert by asking who is running the statement. Had it
+been DEFINER, that question would have returned the owner on every call — including calls
+made by a browser — so it would have concluded that every caller was trusted, reverted
+nothing, and read in review as though it worked. A guard that protects nothing while
+appearing to is worse than no guard, because it stops anyone looking again.
+
+As INVOKER, `current_user` is `authenticated` for a browser and the table owner when the
+badge trigger (which *is* DEFINER, because it must read the private schema) performs its
+update. That is exactly the distinction needed.
+
+The trusted set is computed from the table's real owner via `pg_has_role` rather than a
+hardcoded role name, so it stays correct if migrations are ever applied as a different
+role, and it fails safe: an unanticipated role is guarded rather than trusted.
+
+## 2026-08-14 — Protection is doubled: column grants and a trigger
+
+`UPDATE` on `public.profiles` is granted per column, so an attempt to write `role` is
+rejected by Postgres before any trigger runs. The trigger then reverts the same columns
+anyway.
+
+Either alone would hold today. The trigger exists for the day someone adds a feature,
+finds the column list in the way, and writes `grant update on public.profiles to
+authenticated`. The pgTAP suite tests exactly that scenario — it widens the grant itself
+and asserts the badge still cannot be forged.
+
+Institution columns are reverted for admins too. An admin override would make "verified"
+mean "verified, or an admin said so", which is not a claim this project can make.
+
+## 2026-08-14 — The badge is re-derived when a confirmed address changes
+
+The brief asked only for the null → non-null transition on `email_confirmed_at`. That
+alone leaves a hole: confirm at a university, collect the badge, move the account to a
+personal address, keep the institution forever. The trigger therefore also fires when a
+confirmed address changes, and a failed match *clears* the columns rather than leaving
+them. Failing open there would have been the whole vulnerability.
+
+## 2026-08-14 — The institution is a snapshot, and has no foreign key
+
+`institution_name` and `institution_country` are copied onto the profile when the badge is
+issued and never refreshed. A badge claims "this address was confirmed at this institution
+on this date"; rewriting it because ROR later renamed a record would make the claim untrue.
+
+For the same reason there is no foreign key to `private.ror_institutions`. CI reloads that
+table wholesale, and a routine data refresh must not be able to fail, cascade, or mutate
+anyone's profile.
+
+## 2026-08-14 — Candidate suffixes are enumerated, not matched with LIKE
+
+`private.match_institution()` builds the list of suffixes of a domain and compares each
+with equality. The obvious alternative, `where $1 like '%.' || domain`, cannot use an index
+because of the leading wildcard, and this runs on a table of every domain in ROR.
+
+The bare TLD is never a candidate. A single-label ROR domain would be a data error, and
+treating one as a match would hand a badge to an entire country.
+
+## 2026-08-14 — Database tests run in CI, because they cannot run here
+
+WSL is blocked by group policy on the development machine — `wsl` fails with
+`0x80070569`, "the user has not been granted the requested logon type at this computer" —
+so Rancher Desktop cannot start, there is no container runtime, and `supabase start` is
+impossible locally.
+
+`.github/workflows/test-db.yml` stands up the full local stack on a runner and runs the
+pgTAP suite there. The full stack rather than a bare Postgres, because the `auth` schema,
+`auth.users`, and the `anon` and `authenticated` roles are created by the auth service and
+every test depends on at least one of them.
+
+This is the better home for it regardless: it now gates every future change instead of
+depending on someone remembering to run it. It runs on branches and pull requests, and
+`migrate.yml` only runs on `main`, so the tests are a gate in front of production rather
+than a report after the fact.
+
+## 2026-08-14 — What the Security Advisor flags, and why it is accepted
+
+Checked from `migrate.yml` against the Management API rather than by eye in the dashboard,
+so the answer is in the run log. **Zero error-level findings.** Five in total:
+
+- **3 × `rls_enabled_no_policy` (INFO)** on the three `private` tables. This is the intended
+  design, not a gap: RLS enabled with no policies is deny-all, and the tables are reachable
+  only by the table owner and by `SECURITY DEFINER` functions owned by it. Adding a policy
+  would weaken it.
+- **2 × `*_security_definer_function_executable` (WARN)** on `public.rls_auto_enable`. Not
+  ours. It is created by Supabase's "Automatic RLS: ON" project setting, and it returns
+  `event_trigger`, so Postgres refuses to invoke it directly whoever holds EXECUTE. Left
+  alone deliberately: it is a platform-managed object, and revoking on it risks breaking a
+  feature we chose to have, to silence a warning that is not exploitable.
+
+Because a clean advisor run says nothing about our own objects specifically, `migrate.yml`
+also asserts the invariant we actually control: no function in the `private` schema grants
+EXECUTE to `anon` or `authenticated`. Postgres grants EXECUTE to PUBLIC on every new
+function by default, so that is always one forgotten `REVOKE` away from being false.
