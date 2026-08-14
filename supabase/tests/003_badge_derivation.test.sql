@@ -118,8 +118,10 @@ select is(
 -- Without this, the sequence "confirm at a university, then move the account to a
 -- personal address" would leave the badge in place forever.
 
+-- A different consumer address from the one the second account holds: auth.users carries
+-- a partial unique index on email.
 update auth.users
-   set email = 'someone@gmail.com'
+   set email = 'moved-on@gmail.com'
  where id = '11111111-1111-1111-1111-111111111111';
 
 select is(
