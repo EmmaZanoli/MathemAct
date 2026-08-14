@@ -24,3 +24,9 @@ Thumbs.db
 # Local working notes, not part of the project
 CLAUDE.md
 prompts/*.md
+
+# ROR data dumps. ~290 MB, refreshed on ROR's schedule rather than ours, and a stale copy
+# in the repository would be worse than none. See docs/ror.md.
+*ror-data*.json
+*ror-data*.csv
+*ror-data*.zip
