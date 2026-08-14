@@ -511,10 +511,17 @@ async function insertBatched(client, target, columns, rows, batchSize, label) {
       .join(',');
     await client.query(`insert into ${target} values ${values}`, chunk.flat());
 
-    const done = Math.min(offset + size, rows.length);
-    process.stdout.write(`\r  staging ${label}: ${done.toLocaleString('en-GB')} / ${rows.length.toLocaleString('en-GB')}`);
+    // Only when someone is watching. A carriage return does not overwrite in a CI log,
+    // so this would otherwise emit sixty near-identical lines into the run output.
+    if (process.stdout.isTTY) {
+      const done = Math.min(offset + size, rows.length);
+      process.stdout.write(
+        `\r  staging ${label}: ${done.toLocaleString('en-GB')} / ${rows.length.toLocaleString('en-GB')}`,
+      );
+    }
   }
-  process.stdout.write('\n');
+  if (process.stdout.isTTY) process.stdout.write('\n');
+  else console.log(`  staged ${rows.length.toLocaleString('en-GB')} ${label}`);
 }
 
 try {

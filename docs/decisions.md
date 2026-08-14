@@ -347,3 +347,38 @@ Because a clean advisor run says nothing about our own objects specifically, `mi
 also asserts the invariant we actually control: no function in the `private` schema grants
 EXECUTE to `anon` or `authenticated`. Postgres grants EXECUTE to PUBLIC on every new
 function by default, so that is always one forgotten `REVOKE` away from being false.
+
+## 2026-08-14 — The ROR loader reconciles; it does not only upsert
+
+`scripts/load-ror.mjs` stages the whole dump, upserts, then **deletes rows the dump no
+longer contains**, in one transaction. A pure upsert is idempotent but not correct over
+time: when ROR withdraws a record or drops a domain, a stale row would sit here forever,
+still handing out badges for a domain the institution no longer claims.
+
+It refuses a load that would more than halve the table, because that is what happens when
+someone points it at a filtered or truncated file, and the failure would otherwise be a
+quiet mass deletion. `--allow-shrink` overrides it.
+
+It streams rather than reading the file. The v2.11 dump is 291 MB for 135,710 records, and
+`JSON.parse` on that wants roughly 2 GB of heap and dies with an allocation failure rather
+than a message.
+
+Full detail, including the licence and the refresh cadence, is in [ror.md](ror.md).
+
+## 2026-08-14 — Only 23% of ROR records carry a domain, and we do not paper over it
+
+101,926 of 135,710 records in v2.11 have an empty `domains` array. Among them: the Max
+Planck Society, the MPI for Mathematics in the Sciences, the MPI for Mathematics in Bonn,
+Oberwolfach, Institut Mittag-Leffler, and Leiden University. None of those can receive an
+institutional badge as things stand.
+
+The tempting fix — fall back to the `links` website field — is rejected. Leiden's recorded
+website is `leiden.edu`, while its mathematicians write from `@leidenuniv.nl` and
+`@universiteitleiden.nl`. Deriving a match domain from a marketing URL produces badges
+that are *wrong* rather than merely absent, and this project survives a missing badge far
+better than a false one.
+
+[ror.md](ror.md) sets out the three honest options: contribute the domains upstream to
+ROR, maintain a small curated supplement in its own table with provenance per row, or
+accept the gap. None is chosen yet, because choosing the second means becoming the
+authority for those rows, and that is a governance decision rather than a technical one.
