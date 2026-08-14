@@ -16,7 +16,21 @@ of only successes is worthless and reads as advertising. And **the corpus is
 machine-readable and downloadable**, because researchers studying AI adoption in
 mathematics are part of the intended audience.
 
-Status: skeleton. The deployment pipeline works; no features are built yet.
+## Status
+
+Public site and identity layer built. **No posting yet** — accounts, the submission form,
+and moderation are still to come.
+
+| | |
+|---|---|
+| ✅ | Deploy pipeline, GitHub Pages, 404 |
+| ✅ | Design system, self-hosted IBM Plex, the QED tombstone |
+| ✅ | Home, about, privacy, code of conduct — written, not stubbed |
+| ✅ | Markdown-with-TeX rendering, sanitised at build time |
+| ✅ | Profiles, RLS, institutional badges derived server-side |
+| ✅ | ROR loader, 132,706 institutions, 116,985 domains |
+| ✅ | ORCID verified by OAuth |
+| ⬜ | Auth UI, submission form, moderation, propositions, export |
 
 ## Stack
 
@@ -26,11 +40,12 @@ Status: skeleton. The deployment pipeline works; no features are built yet.
 | Hosting | GitHub Pages via GitHub Actions |
 | Database + auth | Supabase (free tier, EU region) |
 | Auth method | Email + password, mandatory email confirmation |
+| ORCID | Linked by OAuth via a Supabase custom OIDC provider — see [docs/orcid.md](docs/orcid.md) |
 | Transactional email | Brevo SMTP relay |
 | Bot defence | Cloudflare Turnstile, verified by Supabase Auth |
-| Math rendering | KaTeX, at build time where possible |
+| Math rendering | KaTeX, at build time |
 | Full-text search | Pagefind, over built HTML |
-| Institution data | ROR, CC0 dump loaded into Postgres |
+| Institution data | ROR, CC0 dump loaded into Postgres — see [docs/ror.md](docs/ror.md) |
 
 ### The one architectural rule
 
@@ -40,6 +55,16 @@ A nightly workflow exports published content to JSON committed to `data/`, and t
 builds from those files. Browsers only talk to Supabase when someone logs in, submits,
 comments, votes, or confirms a practice. A traffic spike therefore never touches the
 egress quota, and reading still works if the database is paused or over quota.
+
+### Identity, in one paragraph
+
+Everything that could be claimed is instead derived. Affiliation comes from the confirmed
+email domain, matched against ROR by a `SECURITY DEFINER` trigger; the ORCID iD comes from
+a completed OAuth flow. **There is no request shape that carries an affiliation or an
+ORCID iD from a browser into the database.** Those columns have no `UPDATE` grant *and*
+are reverted by a `BEFORE UPDATE` trigger, and the pgTAP suite proves both by widening the
+grant itself and trying anyway. The email address is never displayed, never returned by
+the API, never exported, and never shown to moderators.
 
 ## Local development
 
@@ -75,31 +100,58 @@ never edit an applied migration, add a new one.**
 supabase login
 supabase link --project-ref fgnmafmzracdytpfqpel
 supabase db push          # apply to the remote database
-supabase test db          # run pgTAP tests
-supabase start            # full local stack in Docker, for destructive experiments
+supabase start            # full local stack in Docker
+supabase test db          # run the pgTAP suite against it
 ```
 
 Pushing to `main` with changes under `supabase/migrations/` applies them via
-[.github/workflows/migrate.yml](.github/workflows/migrate.yml).
+[.github/workflows/migrate.yml](.github/workflows/migrate.yml), which then reports the
+Security Advisor findings and asserts that nothing in the `private` schema is executable by
+a browser role.
+
+**Branch first for anything touching the database.** `test-db.yml` runs on branches and
+pull requests; `migrate.yml` runs only on `main`. So the suite is a gate in front of
+production rather than a report after it.
+
+### Database tests
+
+106 pgTAP assertions across six files in `supabase/tests/`, covering domain matching, the
+API surface, badge derivation, write protection, matching precedence, and the ORCID link.
+
+They run in CI rather than locally, because the primary development machine is a managed
+Windows laptop where WSL is blocked by group policy — there is no container runtime, so
+`supabase start` cannot run at all. That turned out to be the better home for them: they
+now gate every change rather than depending on someone remembering.
+
+### Loading ROR
+
+```sh
+node scripts/load-ror.mjs path/to/ror-data.json --dry-run   # no database needed
+```
+
+Full instructions, the licence, the refresh cadence, and the domain-coverage caveats are in
+[docs/ror.md](docs/ror.md). `ror-verify.yml` loads the current release into a throwaway
+database monthly and reports what the matcher makes of real mathematics institutes.
 
 ## Repository layout
 
 ```
-src/pages/              routes
-src/components/         UI components
-src/layouts/
-src/lib/                supabase client, formatting, validation shared with forms
-src/styles/tokens.css   design tokens, single source of truth
-public/fonts/           self-hosted woff2
-data/                   committed JSON export the site builds from
-supabase/migrations/    numbered SQL migrations, applied in order
-supabase/tests/         pgTAP tests, RLS especially
-scripts/                one-off and scheduled scripts
-.github/workflows/      deploy, migrate, nightly export, embeddings, link check
-docs/                   governance, runbook, decisions log
+src/pages/              routes: home, about, privacy, code of conduct, 404
+src/components/         Tombstone (the QED status glyph), Markdown (sanitised, with TeX)
+src/layouts/            Base (shell), Page (long-form prose)
+src/lib/                paths, site constants, status vocabulary, markdown pipeline
+src/styles/             tokens.css (single source of truth), base.css (cascade layers)
+public/fonts/           self-hosted IBM Plex woff2 + the @font-face that loads them
+data/                   committed JSON export the site builds from (not yet populated)
+supabase/migrations/    numbered SQL, applied in order, append-only
+supabase/tests/         pgTAP: RLS, grants, triggers, matching
+scripts/load-ror.mjs    streams the ROR dump into the private schema
+.github/workflows/      deploy, migrate, test-db, ror-verify
+docs/                   decisions log, ROR notes, ORCID runbook
 ```
 
-Non-obvious choices are recorded in [docs/decisions.md](docs/decisions.md).
+Non-obvious choices are recorded in [docs/decisions.md](docs/decisions.md), including the
+ones that turned out to be wrong — superseded entries are marked rather than deleted.
 
 ## Licence
 
