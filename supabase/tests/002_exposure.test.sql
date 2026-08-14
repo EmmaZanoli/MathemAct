@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(25);
+select plan(27);
 
 -- The private schema is not reachable at all ------------------------------------------
 
@@ -42,6 +42,11 @@ select throws_ok(
   $$ select count(*) from private.blocked_domains $$,
   '42501'::text, null::text,
   'anon cannot read private.blocked_domains'
+);
+select throws_ok(
+  $$ select count(*) from private.manual_domains $$,
+  '42501'::text, null::text,
+  'anon cannot read private.manual_domains'
 );
 select throws_ok(
   $$ select private.match_institution('ox.ac.uk') $$,
@@ -122,6 +127,10 @@ select ok(
 select ok(
   (select relrowsecurity from pg_class where oid = 'private.blocked_domains'::regclass),
   'row level security is enabled on private.blocked_domains'
+);
+select ok(
+  (select relrowsecurity from pg_class where oid = 'private.manual_domains'::regclass),
+  'row level security is enabled on private.manual_domains'
 );
 
 -- profiles is granted exactly as intended ---------------------------------------------

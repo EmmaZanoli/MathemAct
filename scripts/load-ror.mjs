@@ -248,6 +248,92 @@ function normaliseDomain(raw) {
   return domain;
 }
 
+/** The website URL a record records for itself, if any. */
+function extractWebsite(record) {
+  const links = Array.isArray(record.links) ? record.links : [];
+  return links.find((l) => l?.type === 'website' && typeof l.value === 'string')?.value ?? null;
+}
+
+/**
+ * Suffixes that must never become a domain in their own right.
+ *
+ * A derived domain is only ever as good as the URL it came from, and a record whose
+ * website is a page on a shared academic or government site would otherwise contribute
+ * that shared host. `ac.uk` as a domain would badge every British academic as whichever
+ * record happened to derive it.
+ *
+ * Curated ROR domains are not filtered through this: a human put those there.
+ */
+const NEVER_DERIVE = new Set([
+  'ac.at', 'ac.be', 'ac.cn', 'ac.cy', 'ac.il', 'ac.in', 'ac.ir', 'ac.jp', 'ac.kr',
+  'ac.nz', 'ac.rs', 'ac.th', 'ac.uk', 'ac.za',
+  'edu.au', 'edu.br', 'edu.cn', 'edu.co', 'edu.eg', 'edu.gr', 'edu.hk', 'edu.in',
+  'edu.mx', 'edu.my', 'edu.pl', 'edu.sa', 'edu.sg', 'edu.tr', 'edu.tw', 'edu.ua',
+  'co.jp', 'co.kr', 'co.nz', 'co.uk', 'co.za',
+  'com.au', 'com.br', 'com.cn', 'com.mx', 'com.tr',
+  'gov.au', 'gov.br', 'gov.cn', 'gov.in', 'gov.uk',
+  'org.au', 'org.br', 'org.uk', 'net.au', 'or.jp', 'or.kr', 'go.jp',
+  'res.in', 'nic.in', 'gob.mx', 'gob.es',
+  // Site builders and code hosts. A record whose website lives on one of these has no
+  // domain of its own to contribute.
+  'github.io', 'gitlab.io', 'wordpress.com', 'blogspot.com', 'wixsite.com', 'weebly.com',
+  'squarespace.com', 'sites.google.com', 'google.com', 'notion.site', 'netlify.app',
+  'vercel.app', 'herokuapp.com', 'azurewebsites.net', 'sharepoint.com', 'facebook.com',
+  'linkedin.com', 'researchgate.net', 'wikipedia.org',
+]);
+
+/**
+ * Decide which website-derived hosts are safe to use as match domains.
+ *
+ * Accepted only when the host is claimed by exactly one record in the whole dump and is
+ * not already curated by a different one. Measured against ROR v2.11, that rule refuses
+ * 2,400 hosts that a curated record already owns -- the ones that would have produced a
+ * *wrong* badge -- and 10,663 shared by two or more records, which are ambiguous. It
+ * accepts 85,911, recovering 8,253 of the 9,870 European education and facility records
+ * that ROR leaves without a domain.
+ *
+ * Also refused: a host that is a parent of several curated domains. Adding `mpg.de`
+ * because one Max Planck institute's website points there would attribute every other
+ * institute's mail to that one record. Those are exactly the cases that deserve a human
+ * decision, so they are reported and left for private.manual_domains.
+ */
+const PARENT_OF_MANY = 3;
+
+function chooseDerivedDomains(curatedByDomain, candidates) {
+  const byHost = new Map();
+  for (const candidate of candidates) {
+    if (!byHost.has(candidate.domain)) byHost.set(candidate.domain, []);
+    byHost.get(candidate.domain).push(candidate);
+  }
+
+  const curatedDomains = [...curatedByDomain.keys()];
+  const accepted = [];
+  const refused = { publicSuffix: 0, alreadyCurated: 0, shared: 0, parentOfMany: [] };
+
+  for (const [host, claimants] of byHost) {
+    if (NEVER_DERIVE.has(host)) {
+      refused.publicSuffix++;
+      continue;
+    }
+    if (curatedByDomain.has(host)) {
+      refused.alreadyCurated++;
+      continue;
+    }
+    if (claimants.length > 1) {
+      refused.shared++;
+      continue;
+    }
+    const children = curatedDomains.filter((d) => d.endsWith(`.${host}`)).length;
+    if (children >= PARENT_OF_MANY) {
+      refused.parentOfMany.push({ host, children, name: claimants[0].name });
+      continue;
+    }
+    accepted.push(claimants[0]);
+  }
+
+  return { accepted, refused };
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -281,11 +367,12 @@ async function main() {
   console.log(`Reading ${options.path} (${(fileInfo.size / 1024 / 1024).toFixed(1)} MB)`);
 
   const institutions = [];
-  const domains = [];
+  const domains = []; // [domain, ror_id, source]
+  const curatedByDomain = new Map(); // domain -> ror_id[]
+  const derivable = []; // records with no curated domain but a website to try
   const skipped = {
     inactiveOrWithdrawn: 0,
-    noDomains: 0,
-    allDomainsUnusable: 0,
+    noDomainAndNoWebsite: 0,
     noName: 0,
     noCountry: 0,
     badRorId: 0,
@@ -302,12 +389,6 @@ async function main() {
     if (status !== 'active') {
       skipped.inactiveOrWithdrawn++;
       skippedStatuses.set(status, (skippedStatuses.get(status) ?? 0) + 1);
-      continue;
-    }
-
-    const rawDomains = Array.isArray(record.domains) ? record.domains : [];
-    if (rawDomains.length === 0) {
-      skipped.noDomains++;
       continue;
     }
 
@@ -329,19 +410,38 @@ async function main() {
       continue;
     }
 
+    const row = [rorId, name.slice(0, 500), country.code, country.name];
+
+    const rawDomains = Array.isArray(record.domains) ? record.domains : [];
     const usable = new Set();
     for (const raw of rawDomains) {
       const domain = normaliseDomain(raw);
       if (domain) usable.add(domain);
       else droppedDomains++;
     }
-    if (usable.size === 0) {
-      skipped.allDomainsUnusable++;
+
+    if (usable.size > 0) {
+      institutions.push(row);
+      for (const domain of usable) {
+        domains.push([domain, rorId, 'ror_domain']);
+        if (!curatedByDomain.has(domain)) curatedByDomain.set(domain, []);
+        curatedByDomain.get(domain).push(rorId);
+      }
       continue;
     }
 
-    institutions.push([rorId, name.slice(0, 500), country.code, country.name]);
-    for (const domain of usable) domains.push([domain, rorId]);
+    // No curated domain. The record's own website may still identify one, but only the
+    // whole dump can say whether that host is unambiguously theirs, so the decision waits
+    // until everything has been read.
+    const derived = normaliseDomain(extractWebsite(record));
+    if (derived) derivable.push({ domain: derived, rorId, name, row });
+    else skipped.noDomainAndNoWebsite++;
+  }
+
+  const { accepted, refused } = chooseDerivedDomains(curatedByDomain, derivable);
+  for (const candidate of accepted) {
+    institutions.push(candidate.row);
+    domains.push([candidate.domain, candidate.rorId, 'ror_website']);
   }
 
   // ── Summary ────────────────────────────────────────────────────────────────────────
@@ -351,21 +451,44 @@ async function main() {
     .map(([status, count]) => `${status} ${count.toLocaleString('en-GB')}`)
     .join(', ');
 
+  const curatedCount = domains.filter((d) => d[2] === 'ror_domain').length;
+  const derivedCount = domains.length - curatedCount;
+  const n = (v) => v.toLocaleString('en-GB');
+
   console.log(`
 Parsed
-  records read              ${read.toLocaleString('en-GB')}
-  institutions to load      ${institutions.length.toLocaleString('en-GB')}
-  domains to load           ${domains.length.toLocaleString('en-GB')}
+  records read              ${n(read)}
+  institutions to load      ${n(institutions.length)}
+  domains to load           ${n(domains.length)}
+    from ROR domains        ${n(curatedCount)}
+    derived from website    ${n(derivedCount)}
 
-Skipped (${totalSkipped.toLocaleString('en-GB')} records)
-  not active                ${skipped.inactiveOrWithdrawn.toLocaleString('en-GB')}${statusDetail ? `  (${statusDetail})` : ''}
-  no domains field          ${skipped.noDomains.toLocaleString('en-GB')}
-  no usable domain          ${skipped.allDomainsUnusable.toLocaleString('en-GB')}
-  no display name           ${skipped.noName.toLocaleString('en-GB')}
-  no country on any location ${skipped.noCountry.toLocaleString('en-GB')}
-  unrecognised ROR id       ${skipped.badRorId.toLocaleString('en-GB')}
+Skipped (${n(totalSkipped)} records)
+  not active                ${n(skipped.inactiveOrWithdrawn)}${statusDetail ? `  (${statusDetail})` : ''}
+  no domain and no website  ${n(skipped.noDomainAndNoWebsite)}
+  no display name           ${n(skipped.noName)}
+  no country on any location ${n(skipped.noCountry)}
+  unrecognised ROR id       ${n(skipped.badRorId)}
 
-  individual domains dropped as malformed: ${droppedDomains.toLocaleString('en-GB')}`);
+Website hosts refused
+  public or shared suffix   ${n(refused.publicSuffix)}
+  already curated elsewhere ${n(refused.alreadyCurated)}   <- these would be a WRONG badge
+  claimed by 2+ records     ${n(refused.shared)}   <- ambiguous
+  parent of curated domains ${n(refused.parentOfMany.length)}   <- for private.manual_domains
+
+  individual domains dropped as malformed: ${n(droppedDomains)}`);
+
+  // The parent-of-many cases are the actionable ones: each is a plausible institution
+  // domain that only a human should decide about, because accepting it would attribute
+  // every child domain's mail to one record.
+  if (refused.parentOfMany.length > 0) {
+    const worst = refused.parentOfMany.sort((a, b) => b.children - a.children).slice(0, 15);
+    console.log('\nWithheld parent domains, most consequential first:');
+    for (const p of worst) {
+      console.log(`  ${p.host.padEnd(28)} parent of ${String(p.children).padStart(4)} curated  ${p.name}`);
+    }
+    console.log('  Add any that are correct to private.manual_domains, with evidence.');
+  }
 
   if (institutions.length === 0) {
     console.error('\nNothing to load. Refusing to continue.');
@@ -423,8 +546,8 @@ async function load(dbUrl, institutions, domains, options) {
     );
     await insertBatched(
       client,
-      'staging_domains (domain, ror_id)',
-      2,
+      'staging_domains (domain, ror_id, source)',
+      3,
       domains,
       options.batchSize,
       'domains',
@@ -470,9 +593,9 @@ async function load(dbUrl, institutions, domains, options) {
     `);
 
     await client.query(`
-      insert into private.ror_domains (domain, ror_id)
-      select domain, ror_id from staging_domains
-      on conflict (domain, ror_id) do nothing
+      insert into private.ror_domains (domain, ror_id, source)
+      select domain, ror_id, source from staging_domains
+      on conflict (domain, ror_id) do update set source = excluded.source
     `);
 
     await client.query('commit');

@@ -9,7 +9,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(14);
+select plan(16);
 
 -- Fixtures. Synthetic ROR identifiers; see 001 for why.
 insert into private.ror_institutions (ror_id, name, country_code, country_name) values
@@ -86,6 +86,12 @@ select isnt(
   'the verification date is recorded, because a badge attests to a check on a date'
 );
 
+select is(
+  (select institution_source from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
+  'ror_domain'::text,
+  'the layer that supplied the domain is recorded, so a bad one can be found later'
+);
+
 -- A consumer address earns nothing ----------------------------------------------------
 
 insert into auth.users (
@@ -134,6 +140,12 @@ select is(
   (select institution_verified_at from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
   null::timestamptz,
   'and clears the verification date with it'
+);
+
+select is(
+  (select institution_source from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
+  null::text,
+  'and the provenance with it'
 );
 
 -- The reverse direction also works: an account that started on a consumer address and

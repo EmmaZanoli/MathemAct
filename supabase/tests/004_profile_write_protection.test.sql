@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(15);
+select plan(16);
 
 insert into private.ror_institutions (ror_id, name, country_code, country_name)
 values ('0oxford01', 'University of Oxford', 'GB', 'United Kingdom');
@@ -124,10 +124,17 @@ update public.profiles
        institution_name        = 'Institute for Advanced Study',
        institution_country     = 'United States',
        institution_verified_at = now(),
+       institution_source      = 'manual',
        display_name            = 'Still Me'
  where id = '11111111-1111-1111-1111-111111111111';
 
 reset role;
+
+select is(
+  (select institution_source from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
+  'ror_domain'::text,
+  'the trigger reverts a self-declared provenance too'
+);
 
 select is(
   (select role from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
