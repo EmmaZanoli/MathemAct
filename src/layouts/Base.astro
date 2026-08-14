@@ -70,26 +70,54 @@ const year = new Date().getFullYear();
       <div class="shell site-header__inner">
         <a class="wordmark" href={path('/')}>MathemAct</a>
 
-        {
-          NAV.length > 0 && (
-            <nav aria-label="Main">
-              <ul class="nav" role="list">
-                {NAV.map((link) => (
-                  <li>
-                    <a
-                      href={path(link.href)}
-                      aria-current={here === path(link.href) ? 'page' : undefined}
-                    >
-                      {link.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-          )
-        }
+        <nav aria-label="Main">
+          <ul class="nav" role="list">
+            {
+              NAV.map((link) => (
+                <li>
+                  <a
+                    href={path(link.href)}
+                    aria-current={here === path(link.href) ? 'page' : undefined}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ))
+            }
+
+            {/* Both destinations ship, and one is revealed once the browser has guessed
+                which applies. They are real pages either way, so a wrong guess costs a
+                click and never a broken flow — see src/lib/session-hint.ts for why the
+                header guesses instead of asking. Neither is shown before the guess is
+                made: an "Account" link that turns into "Sign in" a moment later is worse
+                than a header that settles a frame late. */}
+            <li class="nav__account" data-account-link="out" hidden>
+              <a href={path('/account/sign-in/')}>Sign in</a>
+            </li>
+            <li class="nav__account" data-account-link="in" hidden>
+              <a
+                href={path('/account/')}
+                aria-current={here === path('/account/') ? 'page' : undefined}
+              >
+                Account
+              </a>
+            </li>
+          </ul>
+        </nav>
       </div>
     </header>
+
+    <script>
+      // Deliberately the only script on a reading page, and it imports nothing from
+      // Supabase. See src/lib/session-hint.ts.
+      import { readSessionHint } from '../lib/session-hint';
+
+      const hint = readSessionHint();
+
+      for (const item of document.querySelectorAll<HTMLElement>('[data-account-link]')) {
+        item.hidden = item.dataset.accountLink !== hint;
+      }
+    </script>
 
     <main id="main">
       <slot />
@@ -193,6 +221,22 @@ const year = new Date().getFullYear();
 
   .nav a:hover {
     color: var(--accent-strong);
+  }
+
+  /* The account link is a different kind of destination from the content nav — it is
+     about you rather than about the site — so it is set apart by a rule rather than just
+     by position. Dropped on narrow screens, where a vertical rule between wrapped items
+     lands in the wrong place. */
+  .nav__account {
+    padding-inline-start: var(--space-md);
+    border-inline-start: var(--border);
+  }
+
+  @media (max-width: 26rem) {
+    .nav__account {
+      padding-inline-start: 0;
+      border-inline-start: 0;
+    }
   }
 
   /* The current page is marked with a rule under it as well as the attribute, so the

@@ -15,6 +15,7 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.58.0",
     "astro": "7.2.1",
     "katex": "0.18.4",
     "rehype-katex": "7.0.1",

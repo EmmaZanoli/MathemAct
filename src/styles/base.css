@@ -16,7 +16,12 @@
  * primitives at the bottom, and nothing that a component would plausibly need to undo.
  */
 
-@layer reset, base, layout;
+/* `forms` is declared here although its rules live in forms.css, which only the account
+ * pages import. Layer *order* is fixed by the first declaration the browser sees, so it
+ * has to be stated in the stylesheet every page loads — otherwise the account pages would
+ * order the layers differently from every other page, and a rule that worked in isolation
+ * would lose in context. An empty layer costs nothing. */
+@layer reset, base, layout, forms;
 
 /* ══ Reset ══════════════════════════════════════════════════════════════════════════ */
 

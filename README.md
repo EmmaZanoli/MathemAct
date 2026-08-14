@@ -18,8 +18,8 @@ mathematics are part of the intended audience.
 
 ## Status
 
-Public site and identity layer built. **No posting yet** — accounts, the submission form,
-and moderation are still to come.
+Public site, identity layer, and account flows built. **No posting yet** — the submission
+form and moderation are still to come.
 
 | | |
 |---|---|
@@ -29,7 +29,13 @@ and moderation are still to come.
 | ✅ | Markdown-with-TeX rendering, sanitised at build time |
 | ✅ | Profiles, RLS, institutional badges derived server-side |
 | ✅ | ROR loader, 132,706 institutions, 116,985 domains |
-| ⬜ | Auth UI, submission form, moderation, propositions, export |
+| ✅ | Sign up, confirm, sign in, reset, profile, erasure request |
+| ⬜ | Submission form, moderation, propositions, nightly export, search |
+
+The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
+the dashboard configuration in [docs/auth.md](docs/auth.md). Without them they render a
+plain "accounts are not switched on for this deployment yet", and the rest of the site is
+unaffected.
 
 ## Stack
 
@@ -63,6 +69,23 @@ database.** Those columns have no `UPDATE` grant *and* are reverted by a `BEFORE
 trigger, and the pgTAP suite proves both by widening the grant itself and trying anyway.
 The email address is never displayed, never returned by the API, never exported, and never
 shown to moderators.
+
+### Accounts
+
+Email and password with mandatory confirmation, Cloudflare Turnstile on the four pages that
+send mail or take a password, and no account enumeration anywhere — sign-in gives one
+message for a wrong password and an unknown address, and the reset confirmation is phrased
+conditionally on purpose.
+
+All of it is client-side, because there is no server. `src/lib/auth.ts` holds every
+operation and returns finished prose rather than error objects; `src/lib/session.ts` is a
+four-state store where "signed out" and "we cannot tell you" are different answers. The
+header does **not** load any of this — it guesses from `localStorage`, so a reading page
+ships 240 bytes of JavaScript and never touches Supabase.
+
+Dashboard configuration — redirect URLs, CAPTCHA, SMTP, and rewritten email templates —
+is in [docs/auth.md](docs/auth.md). None of it is in this repository, which is where the
+secrets are not.
 
 ## Local development
 
@@ -113,8 +136,9 @@ production rather than a report after it.
 
 ### Database tests
 
-87 pgTAP assertions across five files in `supabase/tests/`, covering domain matching, the
-API surface, badge derivation, write protection, and matching precedence.
+115 pgTAP assertions across seven files in `supabase/tests/`, covering domain matching, the
+API surface, badge derivation, write protection, matching precedence, what signup metadata
+is allowed to set, and who may file or read an erasure request.
 
 They run in CI rather than locally, because the primary development machine is a managed
 Windows laptop where WSL is blocked by group policy — there is no container runtime, so
@@ -134,18 +158,20 @@ database monthly and reports what the matcher makes of real mathematics institut
 ## Repository layout
 
 ```
-src/pages/              routes: home, about, privacy, code of conduct, 404
-src/components/         Tombstone (the QED status glyph), Markdown (sanitised, with TeX)
-src/layouts/            Base (shell), Page (long-form prose)
-src/lib/                paths, site constants, status vocabulary, markdown pipeline
-src/styles/             tokens.css (single source of truth), base.css (cascade layers)
+src/pages/              home, about, privacy, code of conduct, 404
+src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase
+src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
+src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)
+src/lib/                paths, site constants, status vocabulary, markdown, auth, session,
+                        profile queries, validation, formatting, form helpers
+src/styles/             tokens.css (single source of truth), base.css, forms.css
 public/fonts/           self-hosted IBM Plex woff2 + the @font-face that loads them
 data/                   committed JSON export the site builds from (not yet populated)
 supabase/migrations/    numbered SQL, applied in order, append-only
 supabase/tests/         pgTAP: RLS, grants, triggers, matching
 scripts/load-ror.mjs    streams the ROR dump into the private schema
 .github/workflows/      deploy, migrate, test-db, ror-verify
-docs/                   decisions log, ROR notes
+docs/                   decisions log, ROR notes, auth runbook
 ```
 
 Non-obvious choices are recorded in [docs/decisions.md](docs/decisions.md), including the

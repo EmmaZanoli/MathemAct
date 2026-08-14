@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(27);
+select plan(29);
 
 -- The private schema is not reachable at all ------------------------------------------
 
@@ -173,6 +173,39 @@ select ok(
 select ok(
   (select relrowsecurity from pg_class where oid = 'private.settings'::regclass),
   'row level security is enabled on private.settings'
+);
+
+-- The two systemic guards -------------------------------------------------------------
+-- Written against the catalogue rather than against a list of table names, so they cover
+-- tables that do not exist yet. Row level security defaults to permissive when someone
+-- forgets to enable it, and that omission is invisible from the client: the table simply
+-- answers every question it is asked.
+
+select is_empty(
+  $$ select c.relname
+       from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relkind = 'r'
+        and not c.relrowsecurity $$,
+  'every table in the exposed schema has row level security enabled'
+);
+
+-- A view has no row level security of its own and runs with its creator's privileges
+-- unless told otherwise, so an ordinary view over a user-content table hands pending and
+-- hidden rows to anonymous callers while looking entirely correct in review.
+select is_empty(
+  $$ select c.relname
+       from pg_class c
+       join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and c.relkind = 'v'
+        and coalesce(
+              (select o.option_value
+                 from pg_options_to_table(c.reloptions) o
+                where o.option_name = 'security_invoker'),
+              'false') <> 'true' $$,
+  'every view in the exposed schema is security_invoker'
 );
 
 select * from finish();

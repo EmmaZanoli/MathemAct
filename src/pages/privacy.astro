@@ -11,9 +11,9 @@ import { SITE } from '../lib/site';
   updated="August 2026"
 >
   <p class="status">
-    MathemAct does not yet have accounts, and nothing described here is collected today.
-    This notice is published in advance so that it can be read before anyone signs up
-    rather than after.
+    Accounts are built but not yet open, so nothing described here is being collected
+    today. This notice is published in advance so that it can be read before anyone signs
+    up rather than after.
   </p>
 
   <h2>What is stored</h2>
@@ -45,17 +45,34 @@ import { SITE } from '../lib/site';
       made. Ratings are stored per person so that you can change yours; individual ratings
       are never shown attributed to a name.
     </dd>
+
+    <dt>An erasure request, if you make one</dt>
+    <dd>
+      The fact that your account has asked to be erased, when it was asked, and anything
+      you chose to add. Only you and an administrator can see it, and withdrawing the
+      request deletes the record of it outright.
+    </dd>
   </dl>
 
   <h3>What is not stored</h3>
 
   <p>
-    There is no analytics of any kind, no advertising, no tracking pixels, no
-    fingerprinting, and no third-party fonts or scripts loaded from anyone else's servers.
-    Nothing about your visit is recorded while you read: the pages are static files, and
-    the database is contacted only when you sign in or post something. Fonts are served
-    from this site. There is no cookie banner because there is nothing to ask about — the
-    only cookie is the one that keeps you signed in, and it is set only once you sign in.
+    There is no analytics of any kind, no advertising, no tracking pixels, and no
+    fingerprinting. Nothing about your visit is recorded while you read: the pages are
+    static files, and the database is contacted only when you sign in or post something.
+    Fonts are served from this site rather than from anyone else's font service.
+  </p>
+
+  <p>
+    Exactly one script is loaded from another company, on exactly four pages: Cloudflare's
+    Turnstile check, where you sign up, sign in, reset a password, or ask for another
+    confirmation link. It is not on any page you only read, and you can confirm that by
+    viewing source.
+  </p>
+
+  <p>
+    There is no cookie banner because there are no cookies. Being signed in is kept in this
+    browser's own local storage, written when you sign in and removed when you sign out.
   </p>
 
   <h2>Who processes it</h2>
@@ -79,8 +96,9 @@ import { SITE } from '../lib/site';
     <dt>Cloudflare</dt>
     <dd>
       Provides the Turnstile check that keeps automated signups out. It receives your IP
-      address and a token when you sign up or sign in. It is not used on pages you only
-      read.
+      address and a token when you sign up, sign in, ask for a password reset, or ask for
+      another confirmation link. Its script is loaded on those four pages and nowhere else,
+      so it is never involved in a page you only read.
     </dd>
 
     <dt>GitHub</dt>
@@ -111,9 +129,12 @@ import { SITE } from '../lib/site';
   <h2>Erasing your account</h2>
 
   <p>
-    Ask at <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> from the address
-    the account uses, and it will be erased. Your profile, email address, and institutional
-    record are deleted outright.
+    Ask on the <a href={path('/account/delete/')}>erasure page</a> while signed in, and it
+    will be done. Your profile, email address, and institutional record are deleted
+    outright. Asking from within the account means nobody has to prove who they are by
+    email, and it means the request cannot be made by someone else on your behalf. If you
+    cannot sign in, write to <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a
+    > from the address the account uses.
   </p>
 
   <p>

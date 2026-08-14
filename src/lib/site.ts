@@ -16,6 +16,18 @@ export const SITE = {
     'work, and a record of where the community agrees and disagrees about how they ' +
     'should be used.',
   contactEmail: 'matesimpatica@gmail.com',
+  /**
+   * The address confirmation and password-reset emails arrive from. Named on the
+   * confirmation-pending page so an unexpected message is recognisable rather than
+   * suspicious — an unfamiliar sender is the single most common reason a confirmation
+   * email is deleted or reported.
+   *
+   * The mail itself is sent by Supabase through Brevo, and the sender is configured in the
+   * Supabase dashboard under Authentication → SMTP settings. This constant must be kept in
+   * step with that field by hand; nothing checks it. See docs/auth.md.
+   */
+  senderEmail: 'matesimpatica@gmail.com',
+  senderName: 'MathemAct',
   repository: 'https://github.com/EmmaZanoli/MathemAct',
 } as const;
 

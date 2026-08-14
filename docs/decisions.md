@@ -494,3 +494,93 @@ One consequence worth stating in the interface and not only here: an ORCID iD is
 name, and this site permits pseudonyms at every tier for good reason. Linking one to a
 pseudonymous account connects the two for anyone who looks. The privacy notice and the
 about page now say so; the linking UI must say so at the point of the decision.
+
+## 2026-08-14 — Implicit flow rather than PKCE for email links
+
+PKCE is the more secure of the two and the one Supabase recommends. It is the wrong choice
+here, and the reason is entirely about who uses this site.
+
+Under PKCE the code in a confirmation link is worthless without a verifier held in the
+browser that started the flow. Our users sign up on a laptop in an office and open their
+mail on a phone, and under PKCE that produces an error indistinguishable from a broken
+link — for an audience already inclined to read an unfamiliar automated email as phishing.
+The cost of the failure is not one annoyed person; it is a signup that never completes and
+never gets reported, from exactly the senior, sceptical readers this project needs.
+
+Under implicit flow the tokens arrive in the URL fragment. A fragment is never sent to any
+server, and there is no server here in any case; the client strips it from the address bar
+on arrival, and the link is single-use. The residual exposure is browser history and
+anything with access to the page's URL. That is a real cost, and it is smaller than a
+confirmation flow that breaks whenever mail is read on a different device.
+
+## 2026-08-14 — The header guesses whether you are signed in
+
+The header is on every page, including the ones people come here to read. Deciding between
+"Sign in" and "Account" by asking the real session store would mean loading the Supabase
+client — 122 KB before compression — on the home page, which is precisely the coupling the
+read/write split exists to prevent.
+
+So `src/lib/session-hint.ts` reads `localStorage` directly, matching Supabase's storage key
+by shape, and takes a guess. Both destinations are real pages that establish the truth for
+themselves, so a wrong guess costs a click and never a broken flow. It does mean depending
+on a key name that is an implementation detail; the match is deliberately loose, and a
+rename upstream degrades it to "always signed out", which is the harmless direction.
+
+Measured result: the home page ships 240 bytes of JavaScript and the account pages ship the
+client. Reading the site never loads it.
+
+## 2026-08-14 — Four session states, not two
+
+"Signed out" and "we cannot tell you" are different facts, and the interface that conflates
+them is the one that tells a visitor their password was rejected when the truth is that the
+deployment has no keys configured. `SessionState` therefore has `loading`, `signed-in`,
+`signed-out`, and `unavailable` with a reason, and `Account.astro` renders each of them in
+its own words.
+
+This is what makes the degraded state honest rather than merely non-crashing. A checkout
+with an unfilled `.env` — which is the state this repository is in right now — builds,
+deploys, serves every page, and says "accounts are not switched on for this deployment yet"
+on the eight pages that need them.
+
+## 2026-08-14 — Erasure is a row, not an email
+
+The privacy notice promises that account erasure actually works. A `mailto:` cannot prove
+the request came from the account it names, so `public.deletion_requests` is written by an
+authenticated session and the `user_id` is established by the session rather than typed
+into a field. Withdrawing deletes the row outright rather than marking it cancelled, so
+changing your mind leaves nothing behind.
+
+There is no UPDATE grant and no UPDATE policy on the table. `status` is the operator's, and
+is unreachable from a browser in either direction. Reading is limited to the requester and
+to admins — not moderators: erasure is an account action, not a content action, and the
+moderation queue has no reason to know who has asked to leave.
+
+Acting on a request is manual and belongs to the moderation tooling. Nothing in the site
+deletes anything.
+
+## 2026-08-14 — Signup metadata is read for exactly two keys
+
+`raw_user_meta_data` is whatever the browser sent. `private.handle_new_user()` reads
+`display_name` and `is_pseudonym` out of it and nothing else, and both name columns the
+user is allowed to write anyway. The restraint is the security property: a version of this
+that copied the object wholesale, or read `role`, would hand out moderator accounts to
+anyone who could open a network tab. `006_signup_metadata.test.sql` asserts that a signup
+asking for `role: admin`, `is_banned: false` and an institution gets none of them.
+
+The pseudonym preference is read at signup rather than set afterwards because the people
+most likely to want it are the ones for whom the gap between signing up and fixing it is
+the risk.
+
+## 2026-08-14 — No account enumeration, in the copy as well as the code
+
+Supabase is configured not to reveal whether an address is registered: with email
+confirmation required, signup returns a decoy user rather than an error. That protection is
+trivially undone by an interface that says "this address is already in use", so the copy
+had to be written to match it. Sign-in gives the same message for a wrong password and an
+unknown address; the password-reset confirmation is phrased conditionally — "if that
+address has an account" — rather than "check your email", which quietly asserts the thing
+we are refusing to tell you.
+
+This is not theoretical for this community. Some members have professional reasons to keep
+their participation here private, and a form that answers "is this person registered" hands
+that away to anyone who can type.
