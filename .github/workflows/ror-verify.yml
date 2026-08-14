@@ -59,7 +59,15 @@ jobs:
         id: dump
         run: |
           set -euo pipefail
-          meta=$(curl -sS --fail-with-body \
+
+          # Zenodo intermittently answers a large download with a 504. Retry rather than
+          # fail the job over somebody else's load balancer; --retry-all-errors is what
+          # makes curl retry an HTTP error rather than only a connection failure.
+          fetch() { curl -sS -L --fail-with-body \
+                      --retry 6 --retry-delay 15 --retry-all-errors \
+                      --connect-timeout 30 --max-time 900 "$@"; }
+
+          meta=$(fetch \
             'https://zenodo.org/api/records?q=conceptrecid:6347574&sort=mostrecent&all_versions=false&size=1')
 
           record=$(printf '%s' "$meta" | jq -r '.hits.hits[0].id')
@@ -69,8 +77,7 @@ jobs:
           key=$(printf '%s' "$meta" | jq -r '.hits.hits[0].files[0].key')
 
           echo "ROR $version, published $published, DOI $doi"
-          curl -sS -L --fail-with-body -o ror.zip \
-            "https://zenodo.org/records/${record}/files/${key}?download=1"
+          fetch -o ror.zip "https://zenodo.org/records/${record}/files/${key}?download=1"
           unzip -q ror.zip -d ror
 
           # Releases from 2.0 onward carry no schema suffix; older ones ship both schemas
