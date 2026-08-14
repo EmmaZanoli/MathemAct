@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(16);
+select plan(17);
 
 insert into private.ror_institutions (ror_id, name, country_code, country_name)
 values ('0oxford01', 'University of Oxford', 'GB', 'United Kingdom');
@@ -158,6 +158,12 @@ select is(
   (select orcid_verified from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
   false,
   'the trigger reverts orcid_verified'
+);
+
+select is(
+  (select orcid from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
+  null::text,
+  'and the iD itself, which only a completed OAuth flow may set'
 );
 
 select is(

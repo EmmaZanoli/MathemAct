@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(27);
+select plan(29);
 
 -- The private schema is not reachable at all ------------------------------------------
 
@@ -172,6 +172,14 @@ select ok(
 select ok(
   not has_column_privilege('authenticated', 'public.profiles', 'orcid_verified', 'UPDATE'),
   'authenticated has no column grant on orcid_verified'
+);
+select ok(
+  not has_column_privilege('authenticated', 'public.profiles', 'orcid', 'UPDATE'),
+  'authenticated has no column grant on orcid either: it comes from a completed OAuth flow'
+);
+select ok(
+  (select relrowsecurity from pg_class where oid = 'private.settings'::regclass),
+  'row level security is enabled on private.settings'
 );
 
 select * from finish();
