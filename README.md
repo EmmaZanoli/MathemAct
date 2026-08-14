@@ -170,7 +170,7 @@ data/                   committed JSON export the site builds from (not yet popu
 supabase/migrations/    numbered SQL, applied in order, append-only
 supabase/tests/         pgTAP: RLS, grants, triggers, matching
 scripts/load-ror.mjs    streams the ROR dump into the private schema
-.github/workflows/      deploy, migrate, test-db, ror-verify
+.github/workflows/      deploy, migrate, test-db, ror-verify, auth-config
 docs/                   decisions log, ROR notes, auth runbook
 ```
 

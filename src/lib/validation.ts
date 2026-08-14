@@ -21,8 +21,13 @@ export const LIMITS = {
   note: { max: 1000 },
   /**
    * Not a database constraint — Supabase Auth enforces the password minimum, and its
-   * setting is in the dashboard rather than in any migration. Keep this number and the
-   * dashboard's "Minimum password length" in step; docs/auth.md says where it lives.
+   * setting is in the dashboard rather than in any migration.
+   *
+   * `.github/workflows/auth-config.yml` asserts that this number and the dashboard's
+   * "Minimum password length" are equal, weekly and on every change to this file. It finds
+   * the value by matching `password: { min: N }` against this source, so restructuring
+   * LIMITS means updating that pattern — the workflow fails rather than passes when it
+   * cannot find its own input, so the reminder arrives on its own.
    */
   password: { min: 10 },
 } as const;

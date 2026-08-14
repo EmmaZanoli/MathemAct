@@ -31,6 +31,13 @@ above starts in a browser. Three consequences that shape everything else:
 
 Everything below is at <https://supabase.com/dashboard>, project ref `fgnmafmzracdytpfqpel`.
 
+**One item on this list is checked automatically.** `.github/workflows/auth-config.yml`
+reads the dashboard's minimum password length through the Management API and fails if it
+disagrees with `LIMITS.password.min` in `src/lib/validation.ts`. It runs weekly as well as
+on changes to that file, because the dashboard can drift without producing a commit and
+there would otherwise be nothing to trigger on. Everything else here is still checked by a
+human reading it, and the same mechanism would extend to any of it.
+
 ### 1. Authentication → URL Configuration
 
 `Site URL`:
@@ -64,7 +71,7 @@ change.
 | Enable email provider | on | |
 | Confirm email | **on** | The institutional badge is derived from a *confirmed* address. Turning this off makes every badge worthless. |
 | Secure email change | on | Changing an address re-derives the badge; both addresses should have to agree. |
-| Minimum password length | **10** | Must match `LIMITS.password.min` in `src/lib/validation.ts`. Nothing checks that they agree. |
+| Minimum password length | **10** | Must match `LIMITS.password.min` in `src/lib/validation.ts`. `auth-config.yml` fails if they disagree — weekly, and on any change to that file. |
 
 ### 3. Authentication → Attack Protection → CAPTCHA
 

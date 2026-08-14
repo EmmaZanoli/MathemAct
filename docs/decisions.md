@@ -584,3 +584,30 @@ we are refusing to tell you.
 This is not theoretical for this community. Some members have professional reasons to keep
 their participation here private, and a form that answers "is this person registered" hands
 that away to anyone who can type.
+
+## 2026-08-14 — A dashboard setting that must match the repo gets a workflow
+
+The minimum password length lives in two places that cannot see each other: `LIMITS.password.min`
+in `src/lib/validation.ts`, which the form enforces, and Supabase Auth's own setting, which
+lives in a dashboard nobody can grep. Both directions of drift are defects. If the dashboard
+is lower, the form is the only thing enforcing the length we told people about. If it is
+higher, the form accepts a password the server then rejects, so the failure arrives after
+the button rather than beside the field.
+
+`auth-config.yml` reads the setting through the Management API and fails on a mismatch. The
+part worth keeping is the **schedule**: a dashboard change leaves no commit, so there is
+nothing to trigger on, and a check that only ran on push would never fire in the case it
+exists for. It runs weekly as well as on changes to `validation.ts`.
+
+It fails rather than warns, unlike the "no credentials" path it inherits from `migrate.yml`.
+A missing secret means the check could not run; a mismatch means it ran and found the
+defect, and those deserve different colours. It also fails when it cannot find
+`password: { min: N }` in the source, so restructuring `LIMITS` produces a failed check
+rather than a silently vacuous one.
+
+This is the first of the `docs/auth.md` checklist to be automated rather than read by a
+human. The same mechanism extends to the rest of that response — SMTP, CAPTCHA, the
+redirect allow-list, `mailer_autoconfirm` — and each is a few more lines. They are left out
+for now because they would fail immediately against a project whose dashboard is still
+being set up, and a workflow that is red for a known reason quickly becomes a workflow
+nobody reads.
