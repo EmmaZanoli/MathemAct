@@ -108,7 +108,12 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          printf '%s' "$lints" | jq -r '.lints[] | "\(.level)  \(.name)  \(.title)"'
+          # Full detail on stdout. A finding that names no object is not actionable, and
+          # chasing one costs a round trip through CI.
+          printf '%s' "$lints" | jq -r '
+            .lints[]
+            | "\(.level)  \(.name)\n    \(.detail // .title)\n    objects: \(.metadata // {} | tostring)\n"
+          ' | sed -e 's/<[^>]*>//g'
           echo "errors=$errors warnings=$warns total=$total"
 
           if [ "$errors" -gt 0 ]; then
