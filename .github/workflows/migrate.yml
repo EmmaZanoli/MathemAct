@@ -120,3 +120,49 @@ jobs:
             echo "::error title=Security advisor::${errors} error-level finding(s). See the job summary."
             exit 1
           fi
+
+      # The advisor reports on the whole project, including objects Supabase creates
+      # itself, so a clean advisor run does not by itself prove our own functions are
+      # unreachable. This asserts the thing we actually control: nothing in the private
+      # schema is executable by a browser role. Postgres grants EXECUTE to PUBLIC on every
+      # new function by default, so this is one forgotten REVOKE away from being false.
+      - name: Assert private functions are unreachable
+        if: env.HAVE_CREDENTIALS == 'true'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROJECT_REF: fgnmafmzracdytpfqpel
+        run: |
+          set -euo pipefail
+
+          query='select n.nspname as schema, p.proname as name,
+                        pg_get_function_result(p.oid) as returns,
+                        p.prosecdef as security_definer,
+                        coalesce(array_to_string(p.proacl, ISPACE), :default_acl) as acl
+                   from pg_proc p
+                   join pg_namespace n on n.oid = p.pronamespace
+                  where n.nspname in (SPRIVATE, SPUBLIC) and p.prokind = ISF
+                  order by 1, 2'
+          # Quoting through JSON, YAML and bash at once is not worth the risk of a subtle
+          # mistake in a security check, so the literals are substituted here.
+          query=${query//ISPACE/\'\, \'}
+          query=${query//:default_acl/\'(default: PUBLIC EXECUTE)\'}
+          query=${query//SPRIVATE/\'private\'}
+          query=${query//SPUBLIC/\'public\'}
+          query=${query//ISF/\'f\'}
+
+          body=$(jq -nc --arg q "$query" '{query: $q}')
+          rows=$(curl -sS --fail-with-body \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "https://api.supabase.com/v1/projects/${PROJECT_REF}/database/query")
+
+          echo "$rows" | jq -r '.[] | "\(.schema).\(.name) -> \(.returns)  definer=\(.security_definer)\n    acl: \(.acl)\n"'
+
+          leaked=$(echo "$rows" | jq '[.[] | select(.schema == "private")
+                                          | select(.acl | test("(^|,)\\s*(anon|authenticated)="))] | length')
+          echo "private functions reachable by a browser role: $leaked"
+          if [ "$leaked" -gt 0 ]; then
+            echo "::error title=Private function exposed::A function in the private schema grants EXECUTE to anon or authenticated."
+            exit 1
+          fi
