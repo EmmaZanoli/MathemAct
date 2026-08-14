@@ -372,11 +372,11 @@ async function main() {
   const derivable = []; // records with no curated domain but a website to try
   const skipped = {
     inactiveOrWithdrawn: 0,
-    noDomainAndNoWebsite: 0,
     noName: 0,
     noCountry: 0,
     badRorId: 0,
   };
+  let noDomainAndNoWebsite = 0;
   const skippedStatuses = new Map();
   let read = 0;
   let droppedDomains = 0;
@@ -410,7 +410,15 @@ async function main() {
       continue;
     }
 
-    const row = [rorId, name.slice(0, 500), country.code, country.name];
+    // Every active, well-formed record, whether or not it ends up with a domain.
+    //
+    // Institutions and domains are loaded independently on purpose. private.manual_domains
+    // exists precisely to give a domain to an institution ROR left without one, and it can
+    // only do that if the institution is present to be named. Loading only institutions
+    // that already had a domain made the manual table unable to serve its own purpose:
+    // mpg.de -> Max Planck Society matched, then resolved to nothing, and the badge was
+    // silently withheld. The extra rows are a lookup table nobody queries directly.
+    institutions.push([rorId, name.slice(0, 500), country.code, country.name]);
 
     const rawDomains = Array.isArray(record.domains) ? record.domains : [];
     const usable = new Set();
@@ -421,7 +429,6 @@ async function main() {
     }
 
     if (usable.size > 0) {
-      institutions.push(row);
       for (const domain of usable) {
         domains.push([domain, rorId, 'ror_domain']);
         if (!curatedByDomain.has(domain)) curatedByDomain.set(domain, []);
@@ -434,13 +441,12 @@ async function main() {
     // whole dump can say whether that host is unambiguously theirs, so the decision waits
     // until everything has been read.
     const derived = normaliseDomain(extractWebsite(record));
-    if (derived) derivable.push({ domain: derived, rorId, name, row });
-    else skipped.noDomainAndNoWebsite++;
+    if (derived) derivable.push({ domain: derived, rorId, name });
+    else noDomainAndNoWebsite++;
   }
 
   const { accepted, refused } = chooseDerivedDomains(curatedByDomain, derivable);
   for (const candidate of accepted) {
-    institutions.push(candidate.row);
     domains.push([candidate.domain, candidate.rorId, 'ror_website']);
   }
 
@@ -463,14 +469,14 @@ Parsed
     from ROR domains        ${n(curatedCount)}
     derived from website    ${n(derivedCount)}
 
-Skipped (${n(totalSkipped)} records)
+Skipped entirely (${n(totalSkipped)} records)
   not active                ${n(skipped.inactiveOrWithdrawn)}${statusDetail ? `  (${statusDetail})` : ''}
-  no domain and no website  ${n(skipped.noDomainAndNoWebsite)}
   no display name           ${n(skipped.noName)}
   no country on any location ${n(skipped.noCountry)}
   unrecognised ROR id       ${n(skipped.badRorId)}
 
 Website hosts refused
+  no domain and no website  ${n(noDomainAndNoWebsite)}
   public or shared suffix   ${n(refused.publicSuffix)}
   already curated elsewhere ${n(refused.alreadyCurated)}   <- these would be a WRONG badge
   claimed by 2+ records     ${n(refused.shared)}   <- ambiguous

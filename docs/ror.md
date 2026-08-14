@@ -90,13 +90,20 @@ From v2.11:
 
 ```
 records read              135,710
-institutions loaded        30,780
-domains loaded             31,125
+institutions loaded       132,706
+domains loaded            116,985
+  from ROR domains         31,125
+  derived from website     85,860
 
-skipped
-  no domains field        101,926
-  inactive or withdrawn     3,004   (inactive 1,595, withdrawn 1,409)
+skipped entirely            3,004   (inactive 1,595, withdrawn 1,409)
 ```
+
+**Every active record becomes an institution row, whether or not it has a domain.** The
+two tables are loaded independently on purpose: `private.manual_domains` exists to give a
+domain to an institution ROR left without one, and it can only do that if the institution
+is there to be named. Loading only institutions that already had a domain made the manual
+table unable to serve its own purpose — `mpg.de` matched the Max Planck Society and then
+resolved to nothing, so the badge was silently withheld.
 
 ## The gap, and the three layers that close it
 
