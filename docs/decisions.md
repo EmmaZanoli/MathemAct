@@ -423,6 +423,45 @@ Still unsolved, and not solvable this way: a researcher at an institution ROR do
 list, or one working from a personal address. That needs a request-and-review path with
 moderation tooling behind it.
 
+## 2026-08-14 — ORCID removed entirely
+
+**Superseded by this entry, but kept because the findings below survive the removal.**
+
+The ORCID tier is gone. Two tiers remain, Registered and Institutional. `profiles.orcid`
+and `profiles.orcid_verified` are dropped, along with the identity trigger; nothing
+user-facing mentions ORCID.
+
+Removed for scope, not because it did not work. It did — 14 pgTAP assertions covered
+linking, unlinking, non-ORCID identities, a malformed subject, and the issuer fallback —
+but it could do nothing at all until somebody registered an ORCID client and configured a
+custom provider in the Supabase dashboard, and it added a fifth data processor to the
+privacy notice for a badge nobody had asked for yet. Two working tiers now beat three
+tiers where one is inert.
+
+**If it is ever revived, these three things are already established and should not be
+re-derived:**
+
+1. **A self-declared iD is not acceptable.** Resolving a submitted iD against ORCID's
+   public API proves the iD exists and nothing about who submitted it. A badge reading
+   "ORCID-linked" on that basis is an overclaim, and this project's own rule is that a
+   badge states only what was verified. If the tier returns, it returns as OAuth.
+2. **It must be a link on an existing account, never a sign-in.** ORCID's OIDC returns no
+   email claim — the advertised set is `sub`, `name`, `given_name`, `family_name`, `iss`,
+   `auth_time`. An account created by signing in with ORCID would have no email address,
+   and therefore no institutional badge (that tier derives from a confirmed email domain),
+   no password reset, and no way to reach the person.
+3. **The mechanics are known.** ORCID is a conformant OIDC provider at issuer
+   `https://orcid.org`; the `sub` claim *is* the iD (`"sub": "0000-0002-5062-2209"`); the
+   `openid` scope alone returns it; Supabase's custom OIDC providers are available on the
+   free plan (up to three) and hold the client secret in their dashboard, so nothing enters
+   this repository. The implementation is in the git history at migration
+   `20260814140000_orcid_verified_by_oauth.sql` and its test file.
+
+One more thing worth carrying forward: an ORCID iD is a real name, and this site permits
+pseudonyms at every tier deliberately. Linking one to a pseudonymous account connects the
+two for anyone who looks, and the interface would have to say so at the point of the
+decision rather than afterwards.
+
 ## 2026-08-14 — ORCID is verified by OAuth, and is a link rather than a login
 
 The original design resolved a *submitted* iD against ORCID's public API. That proves the

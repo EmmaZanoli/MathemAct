@@ -10,7 +10,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(17);
+select plan(14);
 
 insert into private.ror_institutions (ror_id, name, country_code, country_name)
 values ('0oxford01', 'University of Oxford', 'GB', 'United Kingdom');
@@ -76,11 +76,6 @@ select throws_ok(
   'a signed-in user cannot write institution_name: no column grant'
 );
 
-select throws_ok(
-  $$ update public.profiles set orcid_verified = true where id = '11111111-1111-1111-1111-111111111111' $$,
-  '42501'::text, null::text,
-  'a signed-in user cannot write orcid_verified: no column grant'
-);
 
 -- What they may do.
 update public.profiles
@@ -119,7 +114,6 @@ set local request.jwt.claims to '{"sub":"11111111-1111-1111-1111-111111111111","
 update public.profiles
    set role                    = 'admin',
        is_banned               = false,
-       orcid_verified          = true,
        institution_ror_id      = '0oxford01',
        institution_name        = 'Institute for Advanced Study',
        institution_country     = 'United States',
@@ -154,17 +148,6 @@ select is(
   'and the country with it'
 );
 
-select is(
-  (select orcid_verified from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
-  false,
-  'the trigger reverts orcid_verified'
-);
-
-select is(
-  (select orcid from public.profiles where id = '11111111-1111-1111-1111-111111111111'),
-  null::text,
-  'and the iD itself, which only a completed OAuth flow may set'
-);
 
 select is(
   (select display_name from public.profiles where id = '11111111-1111-1111-1111-111111111111'),

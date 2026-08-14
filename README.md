@@ -29,7 +29,6 @@ and moderation are still to come.
 | ✅ | Markdown-with-TeX rendering, sanitised at build time |
 | ✅ | Profiles, RLS, institutional badges derived server-side |
 | ✅ | ROR loader, 132,706 institutions, 116,985 domains |
-| ✅ | ORCID verified by OAuth |
 | ⬜ | Auth UI, submission form, moderation, propositions, export |
 
 ## Stack
@@ -40,7 +39,6 @@ and moderation are still to come.
 | Hosting | GitHub Pages via GitHub Actions |
 | Database + auth | Supabase (free tier, EU region) |
 | Auth method | Email + password, mandatory email confirmation |
-| ORCID | Linked by OAuth via a Supabase custom OIDC provider — see [docs/orcid.md](docs/orcid.md) |
 | Transactional email | Brevo SMTP relay |
 | Bot defence | Cloudflare Turnstile, verified by Supabase Auth |
 | Math rendering | KaTeX, at build time |
@@ -58,13 +56,13 @@ egress quota, and reading still works if the database is paused or over quota.
 
 ### Identity, in one paragraph
 
-Everything that could be claimed is instead derived. Affiliation comes from the confirmed
-email domain, matched against ROR by a `SECURITY DEFINER` trigger; the ORCID iD comes from
-a completed OAuth flow. **There is no request shape that carries an affiliation or an
-ORCID iD from a browser into the database.** Those columns have no `UPDATE` grant *and*
-are reverted by a `BEFORE UPDATE` trigger, and the pgTAP suite proves both by widening the
-grant itself and trying anyway. The email address is never displayed, never returned by
-the API, never exported, and never shown to moderators.
+Two tiers: Registered, and Institutional on top of it. Affiliation is never claimed — it
+is derived from the confirmed email domain, matched against ROR by a `SECURITY DEFINER`
+trigger. **There is no request shape that carries an affiliation from a browser into the
+database.** Those columns have no `UPDATE` grant *and* are reverted by a `BEFORE UPDATE`
+trigger, and the pgTAP suite proves both by widening the grant itself and trying anyway.
+The email address is never displayed, never returned by the API, never exported, and never
+shown to moderators.
 
 ## Local development
 
@@ -115,8 +113,8 @@ production rather than a report after it.
 
 ### Database tests
 
-106 pgTAP assertions across six files in `supabase/tests/`, covering domain matching, the
-API surface, badge derivation, write protection, matching precedence, and the ORCID link.
+87 pgTAP assertions across five files in `supabase/tests/`, covering domain matching, the
+API surface, badge derivation, write protection, and matching precedence.
 
 They run in CI rather than locally, because the primary development machine is a managed
 Windows laptop where WSL is blocked by group policy — there is no container runtime, so
@@ -147,7 +145,7 @@ supabase/migrations/    numbered SQL, applied in order, append-only
 supabase/tests/         pgTAP: RLS, grants, triggers, matching
 scripts/load-ror.mjs    streams the ROR dump into the private schema
 .github/workflows/      deploy, migrate, test-db, ror-verify
-docs/                   decisions log, ROR notes, ORCID runbook
+docs/                   decisions log, ROR notes
 ```
 
 Non-obvious choices are recorded in [docs/decisions.md](docs/decisions.md), including the
