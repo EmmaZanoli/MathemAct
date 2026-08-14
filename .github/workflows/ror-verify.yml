@@ -121,24 +121,34 @@ jobs:
             ('ista.ac.at',            'ac.at'),
             ('math.uni-bonn.de',      'department under a university domain'),
             ('bcamath.org',           'a .org research centre'),
-            ('mis.mpg.de',            'in ROR, but the record carries no domain'),
-            ('leidenuniv.nl',         'in ROR, but the record carries no domain'),
+            ('uantwerpen.be',         'no ROR domain; recovered from the website'),
+            ('uni-mannheim.de',       'no ROR domain; recovered from the website'),
+            ('lsbu.ac.uk',            'no ROR domain; recovered from the website'),
+            ('ippt.pan.pl',           'no ROR domain; recovered from the website'),
+            ('math.leidenuniv.nl',    'no ROR domain; manual, ROR lists leiden.edu'),
+            ('mis.mpg.de',            'no ROR domain; manual, specific institute'),
+            ('mpim-bonn.mpg.de',      'no ROR domain; manual, specific institute'),
+            ('mfo.de',                'no ROR domain; manual'),
+            ('mittag-leffler.se',     'no ROR domain; manual'),
+            ('fhi.mpg.de',            'no record of its own; falls back to manual mpg.de'),
             ('gmail.com',             'consumer provider, must be refused'),
             ('outlook.com',           'consumer provider, must be refused'),
+            ('europa.eu',             'withheld parent: must NOT be one institution'),
             ('some-company.uk',       'a TLD is never a match')
           )
           select p.email_domain            as "email domain",
                  coalesce(i.name, '--')    as "resolves to",
                  coalesce(i.country_name, '--') as "country",
-                 coalesce(m.ror_id, '--')  as "ror id",
+                 coalesce(m.source, '--')  as "via",
                  p.note                    as "why it is here"
             from probe p
-            left join lateral (select private.match_institution(p.email_domain) as ror_id) m on true
+            left join lateral (select * from private.match_institution(p.email_domain)) m on true
             left join private.ror_institutions i on i.ror_id = m.ror_id
            order by (m.ror_id is null), p.email_domain;
 
+          select source, count(*) from private.ror_domains group by source order by source;
+          select count(*) as manual_domains from private.manual_domains;
           select count(*) as institutions from private.ror_institutions;
-          select count(*) as domains from private.ror_domains;
           SQL
 
           {

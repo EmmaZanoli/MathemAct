@@ -378,7 +378,47 @@ website is `leiden.edu`, while its mathematicians write from `@leidenuniv.nl` an
 that are *wrong* rather than merely absent, and this project survives a missing badge far
 better than a false one.
 
-[ror.md](ror.md) sets out the three honest options: contribute the domains upstream to
-ROR, maintain a small curated supplement in its own table with provenance per row, or
-accept the gap. None is chosen yet, because choosing the second means becoming the
-authority for those rows, and that is a governance decision rather than a technical one.
+**Superseded the same day — see the next entry. The reasoning above is wrong.**
+
+## 2026-08-14 — Three domain layers, and the correction to the entry above
+
+Measured rather than assumed, the previous entry does not hold. A vanity domain nobody
+sends mail from produces a **useless** derived entry, not a harmful one: the badge is
+absent either way. The genuinely dangerous outcome is a derived host that another record
+has already curated, and that is precisely detectable.
+
+Against ROR v2.11, deriving a domain from each record's website and accepting it only when
+the host is claimed by exactly one record in the whole dump refuses 752 already-curated
+hosts, 3,196 shared by two or more records, 9 public suffixes, and 49 parents of three or
+more curated domains — and accepts 85,860. The headline number that forced this: only
+**41.1%** of active European `education` records carry a domain, so ROR's curated field
+alone leaves most European universities unreachable.
+
+A domain now comes from one of three layers, and `profiles.institution_source` records
+which one issued each badge:
+
+| | |
+|---|---|
+| `manual` | `private.manual_domains`, added by a human with written evidence |
+| `ror_domain` | ROR's curated `domains` field |
+| `ror_website` | derived by the loader, unique hosts only |
+
+**Longest suffix wins first; source only breaks ties at equal length.** Specificity is a
+question of correctness — `mis.mpg.de` names a different institution than `mpg.de` — while
+authority is a question of trust, and correctness comes first. The block list still
+overrides everything, including a mistaken manual entry.
+
+The parent-of-many guard is the one worth keeping. Without it the loader was about to map
+`min-saude.pt`, the Portuguese health ministry, to a single hospital whose website is a
+page on it, and `europa.eu` to the European Council. Those cases are withheld and reported
+for a human decision instead, which is also how the high-value ones get found: `psl.eu`,
+`kyoto-u.ac.jp`, `unam.mx`.
+
+`institution_source` is stored and never displayed. The badge claims "an address at this
+institution's domain was confirmed on this date", equally true whichever table supplied
+the domain. The column exists so a bad derived domain can be traced to the badges it
+issued rather than guessed at.
+
+Still unsolved, and not solvable this way: a researcher at an institution ROR does not
+list, or one working from a personal address. That needs a request-and-review path with
+moderation tooling behind it.

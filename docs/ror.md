@@ -98,41 +98,104 @@ skipped
   inactive or withdrawn     3,004   (inactive 1,595, withdrawn 1,409)
 ```
 
-## The limitation that matters
+## The gap, and the three layers that close it
 
-**Only about 23% of active ROR records carry a domain at all.** A record with no `domains`
-entry can never produce a badge, no matter how well known the institution is. This is not
-a bug in the loader; the field is genuinely empty upstream.
+**ROR's `domains` field is mostly empty.** 101,926 of 135,710 records have none. Broken
+down, the number that matters is worse than the headline:
 
-Verified in v2.11, all present, all active, all with an empty `domains` array:
+| Type (Europe, Israel, Turkey) | records | with a domain |
+|---|---:|---:|
+| education | 6,110 | **41.1%** |
+| facility | 8,017 | 21.7% |
+| funder | 6,824 | 38.0% |
+| healthcare | 5,081 | 14.9% |
+| company | 16,404 | 8.0% |
 
-| Institution | ROR | Website recorded | Domain recorded |
-|---|---|---|---|
-| Max Planck Society | `01hhn8329` | mpg.de | — |
-| MPI for Mathematics in the Sciences, Leipzig | `00ez2he07` | mis.mpg.de | — |
-| MPI for Mathematics, Bonn | `02dh8ja68` | mpim-bonn.mpg.de | — |
-| Mathematical Research Institute of Oberwolfach | `001zbj766` | mfo.de | — |
-| Institut Mittag-Leffler | `02z85gz67` | mittag-leffler.se | — |
-| Leiden University | `027bh9e22` | leiden.edu | — |
+**Fewer than half of European universities carry a domain in ROR.** Not obscure ones:
+Antwerp, Mannheim, London South Bank, Westminster, St Petersburg, and — pointedly, given
+whose declaration this project works under — Leiden.
 
-Leiden University is on that list, which is a pointed illustration given whose declaration
-this project works under.
+So a domain now comes from one of three layers.
 
-**We do not fall back to the `links` website field**, and should not. Leiden's recorded
-website is `leiden.edu`, while its staff actually write from `@leidenuniv.nl` and
-`@universiteitleiden.nl`. Deriving a match domain from a marketing URL would produce
-badges that are wrong rather than merely absent, and a wrong badge is far more damaging to
-this project than a missing one.
+### 1. `ror_domain` — ROR's curated field
 
-The honest options, none of them taken yet:
+Authoritative, unmodified. 31,125 domains in v2.11.
 
-1. **Contribute the domains upstream.** ROR accepts curation requests, and a fix there
-   helps everyone rather than only us. Slow, and correct.
-2. **A small curated supplement**, in its own table, consulted after ROR, with each entry
-   recording who added it and on what evidence. Faster, and it makes us the authority for
-   those rows — which is a real responsibility, not a shortcut.
-3. **Accept the gap.** Affected users are Registered rather than Institutional. Their
-   accounts work; the badge is simply absent.
+### 2. `ror_website` — derived by the loader, only when unambiguous
 
-Until one is chosen, expect a mathematician at Oberwolfach or the MPI in Bonn to sign up
-and get no badge, and expect them to ask why. The answer is above.
+For a record with no curated domain, the host of its own recorded website is used, but
+**only if that host is claimed by exactly one record in the entire dump**. Measured on
+v2.11, the loader refuses:
+
+| refused | count | why |
+|---|---:|---|
+| already curated by another record | 752 | would issue a **wrong** badge |
+| claimed by 2+ records | 3,196 | ambiguous |
+| a public or shared suffix | 9 | `ac.uk`, `github.io`, and friends |
+| parent of ≥3 curated domains | 49 | would swallow every child's mail |
+
+and accepts 85,860. That recovers most of the missing European institutions
+automatically, with no human curation.
+
+The last guard earns its keep. It caught `min-saude.pt` — the Portuguese health ministry's
+domain — about to be attributed to one hospital whose website is a page on it, and
+`europa.eu` about to become the European Council. Both would have badged thousands of
+people wrongly. Those cases are reported by the loader for a human to decide instead.
+
+An earlier version of this document said we should never derive from the website field,
+on the grounds that Leiden's recorded site is `leiden.edu` while its staff write from
+`@leidenuniv.nl`. That reasoning was wrong, and worth recording as wrong: a vanity domain
+nobody sends mail from produces a **useless** entry, not a harmful one — the badge is
+absent either way. The genuinely dangerous cases are the collisions, and those are exactly
+what the uniqueness rule detects.
+
+### 3. `manual` — added by hand, with evidence
+
+`private.manual_domains`, for what the other two cannot reach. Each row records who added
+it, when, and why, in enough detail for someone else to re-check. This table is the only
+one here whose contents are **our** responsibility rather than ROR's, and it should stay
+small.
+
+Seeded with the institutions found missing while loading v2.11:
+
+| Domain | Institution | Evidence |
+|---|---|---|
+| `mpg.de` | Max Planck Society | website in ROR record `01hhn8329` |
+| `mis.mpg.de` | MPI for Mathematics in the Sciences | website in ROR record `00ez2he07` |
+| `mpim-bonn.mpg.de` | MPI for Mathematics, Bonn | website in ROR record `02dh8ja68` |
+| `mfo.de` | Oberwolfach | website in ROR record `001zbj766` |
+| `mittag-leffler.se` | Institut Mittag-Leffler | website in ROR record `02z85gz67` |
+| `leidenuniv.nl` | Leiden University | published staff addresses at `math.leidenuniv.nl` |
+
+`mpg.de` alone covers every Max Planck institute that has no entry of its own, by
+longest-suffix. The Leiden row is the one to re-check against the university directly:
+ROR's recorded site is `leiden.edu`, and the mail domain was established from published
+staff addresses rather than from ROR.
+
+### Precedence
+
+**Longest suffix wins first**, because a more specific domain names a more specific
+institution and that is a question of correctness. **Source breaks ties only at equal
+length**, where it is a question of trust: `manual` > `ror_domain` > `ror_website`.
+
+So `mis.mpg.de` beats `mpg.de` regardless of where each came from, and a manual entry
+overrides a curated one for the identical domain. The block list still overrides
+everything, including a mistaken manual entry — a human error is still an error.
+
+### Provenance is recorded on the badge
+
+`profiles.institution_source` stores which layer issued each badge. It is never displayed:
+the badge claims "an address at this institution's domain was confirmed on this date",
+which is equally true whichever table supplied the domain. It exists so that if a derived
+domain later proves wrong, the badges it issued can be found and revoked rather than
+guessed at.
+
+## What this still does not solve
+
+A researcher at an institution ROR has never heard of, or one who works from a personal
+address, still gets no badge. No domain-matching scheme fixes that; it needs a request and
+review path, where a user states their affiliation and a moderator checks it. That is a
+separate piece of work and it needs the moderation tooling to exist first.
+
+Contributing the missing domains upstream to ROR remains worth doing regardless. It helps
+everyone rather than only us, and every accepted contribution shrinks layers 2 and 3.
