@@ -422,3 +422,36 @@ issued rather than guessed at.
 Still unsolved, and not solvable this way: a researcher at an institution ROR does not
 list, or one working from a personal address. That needs a request-and-review path with
 moderation tooling behind it.
+
+## 2026-08-14 — ORCID is verified by OAuth, and is a link rather than a login
+
+The original design resolved a *submitted* iD against ORCID's public API. That proves the
+iD exists and nothing about who submitted it, so anyone could have pasted a well-known
+mathematician's iD and worn an "ORCID-linked" badge. Against this project's own rule —
+a badge states only what was verified — that is an overclaim, and worse than no badge.
+
+ORCID is a conformant OIDC provider whose `sub` claim is the iD itself, and the `openid`
+scope alone returns it. Supabase performs the code exchange, so the client secret sits in
+its dashboard beside the Turnstile and Brevo secrets and never enters this repository.
+`profiles.orcid` is now read from `auth.identities` by trigger and is system-owned: the
+column grant is revoked and the guard reverts it, exactly like the institution columns.
+
+`orcid` and `orcid_verified` are tied by a constraint rather than merely kept in step. An
+iD that is present but unverified is now unrepresentable, which is a stronger statement
+than a convention nobody can see.
+
+**ORCID is offered as a link on an existing account, never as a way to sign in.** Its OIDC
+returns no email claim at all — the advertised set is `sub`, `name`, `given_name`,
+`family_name`, `iss`, `auth_time`. An account created by signing in with ORCID would have
+no email address, and therefore no institutional badge (that whole tier derives from a
+confirmed email domain), no password reset, and no way to reach the person. This is the
+decisive constraint, not a preference.
+
+Configuration is manual and deliberately not in a migration: registering the ORCID client
+and adding the custom provider are dashboard steps, written up in [orcid.md](orcid.md).
+Until they are done the trigger never fires, which is inert rather than broken.
+
+One consequence worth stating in the interface and not only here: an ORCID iD is a real
+name, and this site permits pseudonyms at every tier for good reason. Linking one to a
+pseudonymous account connects the two for anyone who looks. The privacy notice and the
+about page now say so; the linking UI must say so at the point of the decision.

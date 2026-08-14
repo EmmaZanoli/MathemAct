@@ -39,8 +39,13 @@ import { SITE } from '../lib/site';
       name and country. You cannot set or edit this yourself.
     </dd>
 
-    <dt>Your ORCID iD, if you give one</dt>
-    <dd>Optional. Public by nature, and shown as a link to your ORCID record.</dd>
+    <dt>Your ORCID iD, if you link one</dt>
+    <dd>
+      Optional, and recorded only by signing in to ORCID — there is no field for typing
+      one. Public by nature, and shown as a link to your ORCID record. Unlinking removes
+      it. An ORCID iD is a real name, so linking it to a pseudonymous account connects the
+      two for anyone who looks.
+    </dd>
 
     <dt>What you post</dt>
     <dd>
@@ -63,7 +68,7 @@ import { SITE } from '../lib/site';
 
   <h2>Who processes it</h2>
 
-  <p>Four services are involved. Each receives only what it needs to do its job.</p>
+  <p>Five services are involved. Each receives only what it needs to do its job.</p>
 
   <dl class="items">
     <dt>Supabase</dt>
@@ -91,6 +96,14 @@ import { SITE } from '../lib/site';
       Serves the site's files, and therefore receives your IP address and browser user
       agent as part of any ordinary web request. This is unavoidable for any website; no
       account is needed to read this one.
+    </dd>
+
+    <dt>ORCID</dt>
+    <dd>
+      Only if you choose to link your ORCID iD. ORCID then sees that you signed in to this
+      site's registered application, and your IP address as any website does. It receives
+      nothing else from us: not your email address, not your display name, not anything you
+      have written.
     </dd>
   </dl>
 
