@@ -198,6 +198,23 @@ export interface Section {
   readonly required: boolean;
 }
 
+// ── Looking a label up ────────────────────────────────────────────────────────────────
+// The display layer needs the same words the form used. Falling back to the raw value
+// rather than to an empty string, so that a vocabulary widened by a migration but not yet
+// here renders as `proof_repair` — visibly unfinished — instead of as a blank.
+
+export function areaLabel(value: string): string {
+  return AREAS.find((choice) => choice.value === value)?.label ?? value;
+}
+
+export function taskTypeLabel(value: string): string {
+  return TASK_TYPES.find((choice) => choice.value === value)?.label ?? value;
+}
+
+export function outcomeLabel(value: string): string {
+  return OUTCOME_CHOICES.find((choice) => choice.value === value)?.label ?? value;
+}
+
 export const SECTIONS: readonly Section[] = [
   { id: 'title', number: 1, title: 'Title', required: true },
   { id: 'area', number: 2, title: 'Area', required: true },

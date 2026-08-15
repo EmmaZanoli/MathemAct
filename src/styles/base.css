@@ -21,7 +21,7 @@
  * has to be stated in the stylesheet every page loads — otherwise the account pages would
  * order the layers differently from every other page, and a rule that worked in isolation
  * would lose in context. An empty layer costs nothing. */
-@layer reset, base, layout, forms;
+@layer reset, base, layout, forms, corpus;
 
 /* ══ Reset ══════════════════════════════════════════════════════════════════════════ */
 
@@ -49,6 +49,25 @@
   :where(input, button, textarea, select) {
     font: inherit;
     color: inherit;
+  }
+
+  /* ── The hidden attribute actually hides things ─────────────────────────────────────
+   * The browser's own `[hidden] { display: none }` lives in the user-agent stylesheet,
+   * which *any* author rule outranks. So the moment a component sets `display: flex` on a
+   * class, `element.hidden = true` stops working on it — silently, and only for that
+   * component.
+   *
+   * This shipped three times before it was noticed, each time as something that looked
+   * like a logic bug: a listing whose filters updated the count and the chips while hiding
+   * no cards, a deletion form visible underneath the request it had just filed, and a
+   * disclosure question that appeared for practices that were never published.
+   *
+   * Not wrapped in :where(), and !important on purpose. This is the one declaration in the
+   * project that must beat everything, including a component's own scoped styles, which
+   * are unlayered and otherwise win. `hidden` means hidden.
+   */
+  [hidden] {
+    display: none !important;
   }
 
   /* Long identifiers — DOIs, ORCID iDs, model version strings — must not force a

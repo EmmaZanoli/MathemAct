@@ -1,0 +1,128 @@
+---
+/**
+ * Everything one contributor has published.
+ *
+ * Deliberately thin. This is not a profile page with a follower count and an activity
+ * graph — it is the answer to "what else has this person written", which is the question a
+ * reader asks after an account they found useful. Anything more would turn a corpus into a
+ * network, and the corpus is the point.
+ *
+ * The badge block says exactly what was verified and no more: an address at an
+ * institution's domain was confirmed to work, on a date. Not employment, not position, not
+ * seniority. A pseudonym is marked as one, at every tier, because a pseudonymous
+ * institutional badge is a normal and intended combination here.
+ */
+import Base from '../../layouts/Base.astro';
+import Badges from '../../components/Badges.astro';
+import PracticeCard from '../../components/PracticeCard.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { path } from '../../lib/paths';
+import { listAuthors, practicesByAuthor } from '../../lib/practices';
+
+export async function getStaticPaths() {
+  const authors = await listAuthors();
+
+  return Promise.all(
+    authors.map(async (author) => ({
+      params: { id: author.id },
+      props: { author, practices: await practicesByAuthor(author.id) },
+    })),
+  );
+}
+
+const { author, practices } = Astro.props;
+
+const outcomes = {
+  worked: practices.filter((practice) => practice.outcome === 'worked').length,
+  partial: practices.filter((practice) => practice.outcome === 'partial').length,
+  failed: practices.filter((practice) => practice.outcome === 'failed').length,
+};
+---
+
+<Base
+  title={author.displayName}
+  description={`Practices contributed to MathemAct by ${author.displayName}.`}
+>
+  <div class="shell corpus">
+    <p class="breadcrumb">
+      <a href={path('/practices/')}>← All practices</a>
+    </p>
+
+    <header class="corpus__header">
+      <h1>{author.displayName}</h1>
+
+      {
+        author.isPseudonym && (
+          <p class="corpus__lead">
+            A pseudonym. Pseudonyms are allowed at every verification tier here, including
+            alongside an institutional badge — please do not try to work out who this is.
+          </p>
+        )
+      }
+
+      <div class="author__badges">
+        <Badges institution={author.institution} />
+      </div>
+
+      <p class="author__summary">
+        <span class="meta">
+          {practices.length} published {practices.length === 1 ? 'practice' : 'practices'}
+        </span>
+        {
+          practices.length > 0 && (
+            <span class="author__breakdown">
+              — {outcomes.worked} worked, {outcomes.partial} partly worked, {outcomes.failed}{' '}
+              did not
+            </span>
+          )
+        }
+      </p>
+    </header>
+
+    {
+      practices.length === 0 ? (
+        <div class="empty">
+          <p class="empty__heading">Nothing published yet.</p>
+          <p>
+            This account exists and has posted nothing that has cleared moderation. Pending
+            submissions are visible only to their author.
+          </p>
+        </div>
+      ) : (
+        <div>
+          {practices.map((practice) => (
+            <PracticeCard practice={practice} showAuthor={false} />
+          ))}
+        </div>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .breadcrumb {
+    margin-block-end: var(--space-md);
+    font-size: var(--size-2);
+  }
+
+  .author__badges {
+    margin-block-start: var(--space-md);
+  }
+
+  .author__summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3xs);
+    align-items: baseline;
+    margin-block-start: var(--space-md);
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+  }
+</style>

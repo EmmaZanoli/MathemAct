@@ -61,12 +61,17 @@ export interface NavLink {
   readonly href: string;
 }
 
-/** Header navigation. Grows as sections ship. */
-export const NAV: readonly NavLink[] = [{ label: 'About', href: '/about/' }];
+/** Header navigation. Grows as sections ship. Practices comes first because it is what the
+ *  site is for; About explains it to someone who has already seen one. */
+export const NAV: readonly NavLink[] = [
+  { label: 'Practices', href: '/practices/' },
+  { label: 'About', href: '/about/' },
+];
 
 /** Footer navigation, internal pages only. The licence and contact are rendered
  *  separately because one is an external link and the other is a mailto. */
 export const FOOTER_NAV: readonly NavLink[] = [
+  { label: 'Practices', href: '/practices/' },
   { label: 'About', href: '/about/' },
   { label: 'Code of conduct', href: '/code-of-conduct/' },
   { label: 'Privacy', href: '/privacy/' },

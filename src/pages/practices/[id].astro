@@ -1,0 +1,463 @@
+---
+/**
+ * One practice, laid out to be skimmed the way a researcher skims a paper.
+ *
+ * A reader arriving here usually wants one specific thing: how did they check it, which
+ * model was it, did it work. So every field is a titled block with a mono label above it,
+ * and the two that decide whether the rest is worth reading — the outcome and the
+ * verification — are set larger and on a raised surface near the top. Everything else is in
+ * the content model's order, because that order is the reporting standard.
+ *
+ * A real page at a real URL, generated at build time. That is what makes a practice
+ * citable, and it is why reads go through the corpus module rather than a browser query:
+ * see the header of src/lib/practices.ts.
+ */
+import Base from '../../layouts/Base.astro';
+import Badges from '../../components/Badges.astro';
+import CopyButton from '../../components/CopyButton.astro';
+import StalenessNote from '../../components/StalenessNote.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { longDate } from '../../lib/format';
+import { path } from '../../lib/paths';
+import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/practice-schema';
+import { getPractice, listPractices } from '../../lib/practices';
+import { LICENCE, SITE } from '../../lib/site';
+
+export async function getStaticPaths() {
+  const practices = await listPractices();
+  return practices.map((practice) => ({ params: { id: practice.id } }));
+}
+
+const { id } = Astro.params;
+const practice = await getPractice(id!);
+
+// getStaticPaths only ever produces ids that exist, so this is unreachable — it is here
+// because `practice` is optional to the type system and an unchecked `!` would turn a
+// future refactor into a stack trace during the build.
+if (!practice) return Astro.redirect(path('/practices/'));
+
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const authorName = practice.author?.displayName ?? 'Anonymous';
+
+/**
+ * A citation somebody can paste into a paper. Author, title, the corpus, the date it was
+ * posted, the URL, and the licence — which has to be in the string, because a reader who
+ * copies this and drops it into a bibliography is exactly the person who needs to know they
+ * are allowed to.
+ */
+const citation =
+  `${authorName}. "${practice.title}". ${SITE.name}, ` +
+  `${longDate(practice.createdAt)}. ${canonical}. ${LICENCE.name}.`;
+
+const metadata = [
+  practice.timeSpentMinutes !== null
+    ? { term: 'Time spent', value: `${practice.timeSpentMinutes} min` }
+    : null,
+  practice.authorConfidence !== null
+    ? { term: 'Author confidence', value: `${practice.authorConfidence} / 10` }
+    : null,
+  practice.wasPublished !== null
+    ? { term: 'Published', value: practice.wasPublished ? 'yes' : 'no' }
+    : null,
+  practice.wasDisclosed !== null
+    ? { term: 'Disclosed in the paper', value: practice.wasDisclosed ? 'yes' : 'no' }
+    : null,
+].filter((entry) => entry !== null);
+---
+
+<Base title={practice.title} description={practice.aim}>
+  <div class="shell corpus">
+    <p class="breadcrumb">
+      <a href={path('/practices/')}>← All practices</a>
+    </p>
+
+    <div class="practice">
+      <div class="practice__body">
+        <header>
+          <h1>{practice.title}</h1>
+
+          <div class="practice__status">
+            <StalenessNote staleness={practice.staleness} outcome={practice.outcome} verbose />
+          </div>
+
+          <ul class="card__facts practice__facts" role="list">
+            <li>{areaLabel(practice.area)}</li>
+            <li>{taskTypeLabel(practice.taskType)}</li>
+            <li><span class="meta">Posted {longDate(practice.createdAt)}</span></li>
+          </ul>
+        </header>
+
+        {/* Outcome and verification first, before the narrative. They are what a reader is
+            deciding on, and burying them under the method would be arranging the page for
+            the author rather than for the person reading it. */}
+        <section class="field-block field-block--key">
+          <span class="field-block__label">Outcome</span>
+          <p class="field-block__body"><strong>{outcomeLabel(practice.outcome)}.</strong> {practice.outcomeNotes}</p>
+        </section>
+
+        <section class="field-block field-block--key">
+          <span class="field-block__label">How this was verified</span>
+          <p class="field-block__body">{practice.verification}</p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">What they were trying to do</span>
+          <p class="field-block__body">{practice.aim}</p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">What they actually did</span>
+          <p class="field-block__body">{practice.method}</p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">Tools used</span>
+          <table class="tools-table">
+            <thead>
+              <tr>
+                <th scope="col">Tool</th>
+                <th scope="col">Version</th>
+                <th scope="col">Date used</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                practice.tools.map((tool) => (
+                  <tr>
+                    <td>{tool.name}</td>
+                    <td>{tool.version}</td>
+                    <td>{tool.usedOn}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </section>
+
+        {
+          practice.transcriptExcerpt && (
+            <section class="field-block">
+              <span class="field-block__label">Transcript</span>
+
+              <details class="transcript">
+                <summary class="transcript__summary">
+                  Show the excerpt ({practice.transcriptExcerpt.length.toLocaleString('en-GB')}{' '}
+                  characters)
+                </summary>
+
+                <div class="transcript__head">
+                  <p class="field__hint">
+                    Pasted by the author, who confirmed that other people's unpublished
+                    material had been removed.
+                  </p>
+                  <CopyButton text={practice.transcriptExcerpt} label="Copy transcript" />
+                </div>
+
+                <div class="transcript__body">{practice.transcriptExcerpt}</div>
+
+                {practice.transcriptUrl && (
+                  <p class="field__hint">
+                    The author also linked to <a href={practice.transcriptUrl} rel="nofollow noopener">the original conversation</a>.
+                    Share links expire and get revoked, so the excerpt above is the record.
+                  </p>
+                )}
+              </details>
+            </section>
+          )
+        }
+
+        {
+          practice.caveats && (
+            <section class="field-block">
+              <span class="field-block__label">Caveats, and what they would do differently</span>
+              <p class="field-block__body">{practice.caveats}</p>
+            </section>
+          )
+        }
+
+        {/* Filled in from the browser: the tally on this page is as old as the last build,
+            and "three people say this no longer works" is exactly the kind of number a
+            reader acts on. */}
+        <section class="field-block" id="confirmations">
+          <span class="field-block__label">Does this still work?</span>
+
+          <div class="confirm" data-confirm data-practice-id={practice.id}>
+            <p class="confirm__tally" data-confirm-tally>
+              {
+                practice.staleness.confirmationCount === 0
+                  ? 'Nobody has reported either way.'
+                  : `${practice.staleness.confirmationCount} report${practice.staleness.confirmationCount === 1 ? '' : 's'} so far.`
+              }
+            </p>
+
+            <div data-confirm-signedout hidden>
+              <p class="field__hint">
+                <a href={path('/account/sign-in/')}>Sign in</a> to report whether this still
+                works. It is the lightest contribution there is, and it is what stops the
+                corpus quietly going out of date.
+              </p>
+            </div>
+
+            <form class="form" data-confirm-form hidden novalidate>
+              <fieldset class="choices">
+                <legend class="field__label">Have you tried this?</legend>
+                <label class="choice" for="verdict-still">
+                  <input class="choice__input" type="radio" id="verdict-still" name="verdict" value="still_works" />
+                  <span>It still works</span>
+                </label>
+                <label class="choice" for="verdict-no">
+                  <input class="choice__input" type="radio" id="verdict-no" name="verdict" value="no_longer_works" />
+                  <span>It no longer works</span>
+                </label>
+              </fieldset>
+
+              <div class="field">
+                <label class="field__label" for="confirm-note">
+                  A sentence about what you saw <span class="field__optional">optional</span>
+                </label>
+                <input class="field__control" type="text" id="confirm-note" maxlength={500} />
+              </div>
+
+              <div class="actions">
+                <button class="button button--primary" type="submit">Report</button>
+                <button class="button button--quiet" type="button" data-confirm-withdraw hidden>
+                  Withdraw my report
+                </button>
+              </div>
+
+              <p class="form-status" data-confirm-status role="status" tabindex="-1" hidden></p>
+            </form>
+
+            <ul class="confirm__notes" data-confirm-notes role="list"></ul>
+          </div>
+        </section>
+      </div>
+
+      <aside class="aside">
+        <div class="aside__block">
+          <span class="aside__label">Posted by</span>
+          {
+            practice.author ? (
+              <>
+                <p>
+                  <a href={path(`/authors/${practice.author.id}/`)}>{practice.author.displayName}</a>
+                  {practice.author.isPseudonym && <span class="field__hint"> — a pseudonym</span>}
+                </p>
+                <Badges institution={practice.author.institution} />
+              </>
+            ) : (
+              <p class="field__hint">
+                This account has since been erased. The contribution stays in the corpus
+                without a name on it, which is what erasure means here.
+              </p>
+            )
+          }
+        </div>
+
+        {
+          practice.tags.length > 0 && (
+            <div class="aside__block">
+              <span class="aside__label">Subject areas</span>
+              <ul class="card__tools" role="list">
+                {practice.tags.map((tag) => (
+                  <li class="tool-chip tool-chip--tag">
+                    <a href={path(`/practices/?tag=${tag.code}`)}>
+                      <span class="tool-chip__name">{tag.code}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        }
+
+        {
+          metadata.length > 0 && (
+            <div class="aside__block">
+              <span class="aside__label">For counting</span>
+              <dl>
+                {metadata.map((entry) => (
+                  <>
+                    <dt>{entry.term}</dt>
+                    <dd>{entry.value}</dd>
+                  </>
+                ))}
+              </dl>
+            </div>
+          )
+        }
+
+        <div class="aside__block citation">
+          <span class="aside__label">Cite this</span>
+          <p class="field__hint">
+            Published under <a href={LICENCE.url} rel="license">{LICENCE.name}</a>. You may
+            copy and quote it anywhere, with attribution.
+          </p>
+          <p class="citation__string">{citation}</p>
+          <CopyButton text={citation} label="Copy citation" />
+        </div>
+      </aside>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import { longDate } from '../../lib/format';
+  import {
+    loadConfirmations,
+    saveConfirmation,
+    withdrawConfirmation,
+    type Confirmation,
+  } from '../../lib/practices';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import { hideStatus, setBusy, showStatus } from '../../lib/forms';
+
+  const root = document.querySelector<HTMLElement>('[data-confirm]');
+
+  if (root) {
+    const practiceId = root.dataset.practiceId!;
+    const tally = root.querySelector<HTMLElement>('[data-confirm-tally]')!;
+    const signedOut = root.querySelector<HTMLElement>('[data-confirm-signedout]')!;
+    const form = root.querySelector<HTMLFormElement>('[data-confirm-form]')!;
+    const note = root.querySelector<HTMLInputElement>('#confirm-note')!;
+    const status = root.querySelector<HTMLElement>('[data-confirm-status]')!;
+    const withdraw = root.querySelector<HTMLButtonElement>('[data-confirm-withdraw]')!;
+    const notes = root.querySelector<HTMLElement>('[data-confirm-notes]')!;
+    const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+
+    let viewerId: string | null = null;
+
+    subscribeToSession((state) => {
+      if (state.status === 'loading') return;
+
+      viewerId = state.status === 'signed-in' ? state.userId : null;
+      form.hidden = viewerId === null;
+      signedOut.hidden = viewerId !== null;
+
+      void refresh();
+    });
+
+    void startSession();
+
+    async function refresh(): Promise<void> {
+      const result = await loadConfirmations(practiceId, viewerId);
+
+      // The static tally stands if the database cannot be reached. It is a day old at
+      // worst, which is a great deal better than an error where a number should be.
+      if (!result.ok) return;
+
+      const { all, mine } = result.value;
+      const works = all.filter((one) => one.verdict === 'still_works').length;
+      const broken = all.length - works;
+
+      tally.textContent = all.length
+        ? `${works} say it still works · ${broken} say it no longer does`
+        : 'Nobody has reported either way.';
+
+      if (mine) {
+        form
+          .querySelector<HTMLInputElement>(`input[value="${mine.verdict}"]`)!
+          .checked = true;
+        note.value = mine.note;
+        submit.textContent = 'Update my report';
+        withdraw.hidden = false;
+      } else {
+        submit.textContent = 'Report';
+        withdraw.hidden = true;
+      }
+
+      notes.replaceChildren(
+        ...all
+          .filter((one) => one.note)
+          .slice(0, 5)
+          .map(render),
+      );
+    }
+
+    function render(confirmation: Confirmation): HTMLLIElement {
+      const item = document.createElement('li');
+      item.className = 'confirm__note';
+
+      const who = document.createElement('span');
+      who.className = 'confirm__who';
+      who.textContent =
+        `${confirmation.displayName}${confirmation.isPseudonym ? ' (pseudonym)' : ''} · ` +
+        `${confirmation.verdict === 'still_works' ? 'still works' : 'no longer works'} · ` +
+        longDate(confirmation.createdAt);
+
+      const body = document.createElement('span');
+      body.textContent = confirmation.note;
+
+      item.append(who, body);
+      return item;
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      hideStatus(status);
+
+      const verdict = form.querySelector<HTMLInputElement>('input[name="verdict"]:checked')?.value;
+      if (!verdict || !viewerId) {
+        showStatus(status, 'error', 'Choose whether it still works before reporting.');
+        return;
+      }
+
+      setBusy(submit, true, 'Reporting…');
+      const result = await saveConfirmation(
+        practiceId,
+        viewerId,
+        verdict as 'still_works' | 'no_longer_works',
+        note.value,
+      );
+      setBusy(submit, false);
+
+      if (!result.ok) {
+        showStatus(status, 'error', result.message);
+        return;
+      }
+
+      await refresh();
+      showStatus(status, 'success', 'Recorded. Thank you — this is what keeps the corpus honest.');
+    });
+
+    withdraw.addEventListener('click', async () => {
+      if (!viewerId) return;
+
+      hideStatus(status);
+      setBusy(withdraw, true, 'Withdrawing…');
+      const result = await withdrawConfirmation(practiceId, viewerId);
+      setBusy(withdraw, false);
+
+      if (!result.ok) {
+        showStatus(status, 'error', result.message);
+        return;
+      }
+
+      form.reset();
+      await refresh();
+      showStatus(status, 'notice', 'Withdrawn. Nothing of yours remains on this practice.');
+    });
+  }
+</script>
+
+<style>
+  .breadcrumb {
+    margin-block-end: var(--space-md);
+    font-size: var(--size-2);
+  }
+
+  .practice__status {
+    margin-block-start: var(--space-md);
+  }
+
+  .practice__facts {
+    margin-block-start: var(--space-sm);
+  }
+
+  .meta {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+  }
+</style>

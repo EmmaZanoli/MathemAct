@@ -1,0 +1,424 @@
+---
+/**
+ * The corpus, filtered.
+ *
+ * Every practice is rendered into this page at build time and the filters hide and reorder
+ * what is already there. That is not a shortcut around pagination — it is what makes the
+ * filters linkable: the URL is the state, so a filtered view can be pasted into an email or
+ * cited in a paper and the person who opens it sees what the sender saw. A server-rendered
+ * filter would need a server, and there is not one.
+ *
+ * When the corpus outgrows one page — several thousand practices, on the order of a few
+ * megabytes of HTML — this becomes a build-time split by area with the same URL contract.
+ * Not before: a filter that needs a round trip is a filter people stop using.
+ */
+import Base from '../../layouts/Base.astro';
+import PracticeCard from '../../components/PracticeCard.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { path } from '../../lib/paths';
+import { AREAS, OUTCOME_CHOICES, TASK_TYPES } from '../../lib/practice-schema';
+import { listPractices, listToolNames, listUsedTags } from '../../lib/practices';
+
+const practices = await listPractices();
+const tools = await listToolNames();
+const tags = await listUsedTags();
+
+/** Only offer a filter that some practice actually has. A vocabulary of ten task types over
+ *  a corpus of four is nine dead ends and one result. */
+const usedAreas = new Set(practices.map((practice) => practice.area));
+const usedTaskTypes = new Set(practices.map((practice) => practice.taskType));
+const usedOutcomes = new Set(practices.map((practice) => practice.outcome));
+
+const groups = [
+  {
+    key: 'area',
+    legend: 'Area',
+    options: AREAS.filter((choice) => usedAreas.has(choice.value)).map((choice) => ({
+      value: choice.value,
+      label: choice.label,
+    })),
+  },
+  {
+    key: 'task',
+    legend: 'Task type',
+    options: TASK_TYPES.filter((choice) => usedTaskTypes.has(choice.value)).map((choice) => ({
+      value: choice.value,
+      label: choice.label,
+    })),
+  },
+  {
+    key: 'outcome',
+    legend: 'Outcome',
+    options: OUTCOME_CHOICES.filter((choice) => usedOutcomes.has(choice.value)).map((choice) => ({
+      value: choice.value,
+      label: choice.label,
+    })),
+  },
+  {
+    key: 'tag',
+    legend: 'Subject area',
+    options: tags.map((tag) => ({ value: tag.code, label: tag.label })),
+  },
+  {
+    key: 'tool',
+    legend: 'Tool',
+    options: tools.map((tool) => ({ value: tool.toLowerCase(), label: tool })),
+  },
+].filter((group) => group.options.length > 0);
+---
+
+<Base
+  title="Practices"
+  description="First-hand accounts of how mathematicians have used AI tools, filterable by area, task, outcome, subject and tool."
+>
+  <div class="shell corpus">
+    <header class="corpus__header">
+      <h1>Practices</h1>
+      <p class="corpus__lead">
+        First-hand accounts of AI tool use in mathematical work. Filter them, sort them, and
+        link the result — the filters are in the address bar, so a view of this corpus can be
+        cited like anything else.
+      </p>
+    </header>
+
+    {
+      practices.length === 0 ? (
+        <div class="empty">
+          <p class="empty__heading">Nothing has been published yet.</p>
+          <p>
+            The corpus is empty because it has not started. Every account in it will have
+            been written by somebody who did the work and then took ten minutes to say what
+            happened — including, and especially, when it did not go well.
+          </p>
+          <p class="actions">
+            <a class="button button--primary" href={path('/practices/new/')}>
+              Post the first practice
+            </a>
+            <a class="button" href={path('/about/')}>What this is for</a>
+          </p>
+        </div>
+      ) : (
+        <div class="listing">
+          <form class="filters" data-filters>
+            {groups.map((group) => (
+              <fieldset class="filters__group" data-group={group.key}>
+                <legend class="filters__legend">{group.legend}</legend>
+                <div class="filters__options">
+                  {group.options.map((option) => (
+                    <label class="filters__option">
+                      <input type="checkbox" name={group.key} value={option.value} />
+                      <span>{option.label}</span>
+                      <span class="filters__tally" data-tally={`${group.key}:${option.value}`} />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            ))}
+          </form>
+
+          <div class="results">
+            <div class="results__head">
+              <p class="results__count" data-count aria-live="polite">
+                {practices.length} practices
+              </p>
+
+              <p class="results__sort">
+                <label for="sort">Sort by</label>
+                <select id="sort" data-sort>
+                  <option value="recent">Most recent</option>
+                  <option value="activity">Confirmation activity</option>
+                </select>
+              </p>
+            </div>
+
+            {/* A cited link may name a tag that has since been retired or a tool nothing
+                uses any more. Dropping those silently would show the reader more than the
+                sender saw, without either of them finding out. */}
+            <p class="results__dropped" data-dropped hidden></p>
+
+            <ul class="chips" data-chips role="list" />
+
+            <div data-results>
+              {practices.map((practice) => (
+                <PracticeCard practice={practice} />
+              ))}
+            </div>
+
+            <div class="empty" data-no-results hidden>
+              <p class="empty__heading">Nothing matches all of those filters.</p>
+              <p data-suggestion />
+              <p class="actions">
+                <button class="button" type="button" data-clear>Clear all filters</button>
+              </p>
+            </div>
+          </div>
+        </div>
+      )
+    }
+  </div>
+</Base>
+
+<script>
+  /**
+   * Filtering, sorting, and the URL.
+   *
+   * The address bar is the state. Every change writes to it with replaceState, and the page
+   * reads it on load and on back-navigation, so a filtered view survives being copied,
+   * bookmarked, or arrived at from a tag link on a practice page.
+   */
+  const filters = document.querySelector<HTMLFormElement>('[data-filters]');
+
+  if (filters) {
+    const results = document.querySelector<HTMLElement>('[data-results]')!;
+    const count = document.querySelector<HTMLElement>('[data-count]')!;
+    const chips = document.querySelector<HTMLElement>('[data-chips]')!;
+    const noResults = document.querySelector<HTMLElement>('[data-no-results]')!;
+    const suggestion = document.querySelector<HTMLElement>('[data-suggestion]')!;
+    const sort = document.querySelector<HTMLSelectElement>('[data-sort]')!;
+    const clear = document.querySelector<HTMLButtonElement>('[data-clear]')!;
+
+    const cards = [...results.querySelectorAll<HTMLElement>('[data-practice]')];
+    const DIMENSIONS = ['area', 'task', 'outcome', 'tag', 'tool'] as const;
+    type Dimension = (typeof DIMENSIONS)[number];
+
+    const LEGEND: Record<Dimension, string> = {
+      area: 'Area',
+      task: 'Task',
+      outcome: 'Outcome',
+      tag: 'Subject',
+      tool: 'Tool',
+    };
+
+    /** The card attribute each dimension filters on, and whether it holds a list. */
+    const FIELD: Record<Dimension, { attr: string; multi: boolean }> = {
+      area: { attr: 'area', multi: false },
+      task: { attr: 'taskType', multi: false },
+      outcome: { attr: 'outcome', multi: false },
+      tag: { attr: 'tags', multi: true },
+      tool: { attr: 'tools', multi: true },
+    };
+
+    function selected(): Record<Dimension, string[]> {
+      const chosen = {} as Record<Dimension, string[]>;
+
+      for (const dimension of DIMENSIONS) {
+        chosen[dimension] = [
+          ...filters!.querySelectorAll<HTMLInputElement>(
+            `input[name="${dimension}"]:checked`,
+          ),
+        ].map((input) => input.value);
+      }
+
+      return chosen;
+    }
+
+    /** Whether one card satisfies one dimension. An empty selection matches everything. */
+    function matchesDimension(card: HTMLElement, dimension: Dimension, values: string[]): boolean {
+      if (values.length === 0) return true;
+
+      const field = FIELD[dimension];
+      const raw = card.dataset[field.attr] ?? '';
+
+      // Values within a dimension are OR'd: "research or teaching" is the useful question,
+      // where "research and teaching" would always be empty. Dimensions are AND'd.
+      return field.multi
+        ? raw.split('|').some((entry) => values.includes(entry))
+        : values.includes(raw);
+    }
+
+    function matches(card: HTMLElement, chosen: Record<Dimension, string[]>): boolean {
+      return DIMENSIONS.every((dimension) => matchesDimension(card, dimension, chosen[dimension]));
+    }
+
+    function apply(pushUrl: boolean): void {
+      const chosen = selected();
+      const visible = cards.filter((card) => matches(card, chosen));
+
+      for (const card of cards) card.hidden = !visible.includes(card);
+
+      count.textContent =
+        visible.length === cards.length
+          ? `${cards.length} practices`
+          : `${visible.length} of ${cards.length} practices`;
+
+      order();
+      paintChips(chosen);
+      paintTallies(chosen);
+
+      noResults.hidden = visible.length > 0;
+      if (visible.length === 0) suggestion.textContent = suggest(chosen);
+
+      if (pushUrl) writeUrl(chosen);
+    }
+
+    /**
+     * Which single filter to loosen. For each active dimension, count what dropping it
+     * alone would return, and name the one that unlocks the most — a dead end with a way
+     * out of it is a different thing from a dead end.
+     */
+    function suggest(chosen: Record<Dimension, string[]>): string {
+      let best: { dimension: Dimension; gain: number } | null = null;
+
+      for (const dimension of DIMENSIONS) {
+        if (chosen[dimension].length === 0) continue;
+
+        const relaxed = { ...chosen, [dimension]: [] as string[] };
+        const gain = cards.filter((card) => matches(card, relaxed)).length;
+
+        if (gain > 0 && (!best || gain > best.gain)) best = { dimension, gain };
+      }
+
+      if (!best) {
+        return 'Clearing the filters brings back the whole corpus, which is the only thing left to try.';
+      }
+
+      return (
+        `Removing the ${LEGEND[best.dimension].toLowerCase()} filter would show ` +
+        `${best.gain} ${best.gain === 1 ? 'practice' : 'practices'}. It is the one narrowing this most.`
+      );
+    }
+
+    function paintChips(chosen: Record<Dimension, string[]>): void {
+      chips.replaceChildren();
+
+      for (const dimension of DIMENSIONS) {
+        for (const value of chosen[dimension]) {
+          const input = filters!.querySelector<HTMLInputElement>(
+            `input[name="${dimension}"][value="${CSS.escape(value)}"]`,
+          );
+          const label = input?.nextElementSibling?.textContent ?? value;
+
+          const chip = document.createElement('li');
+          chip.className = 'chip';
+
+          const kind = document.createElement('span');
+          kind.className = 'chip__kind';
+          kind.textContent = LEGEND[dimension];
+
+          const text = document.createElement('span');
+          text.textContent = label;
+
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.textContent = '×';
+          remove.setAttribute('aria-label', `Remove the ${LEGEND[dimension].toLowerCase()} filter ${label}`);
+          remove.addEventListener('click', () => {
+            if (input) input.checked = false;
+            apply(true);
+          });
+
+          chip.append(kind, text, remove);
+          chips.append(chip);
+        }
+      }
+    }
+
+    /** How many practices each option would leave, given everything else already chosen.
+     *  An option that would return nothing is disabled rather than hidden, so the shape of
+     *  the corpus stays visible. */
+    function paintTallies(chosen: Record<Dimension, string[]>): void {
+      for (const dimension of DIMENSIONS) {
+        for (const input of filters!.querySelectorAll<HTMLInputElement>(
+          `input[name="${dimension}"]`,
+        )) {
+          const probe = { ...chosen, [dimension]: [input.value] };
+          const total = cards.filter((card) => matches(card, probe)).length;
+
+          const tally = filters!.querySelector<HTMLElement>(
+            `[data-tally="${dimension}:${CSS.escape(input.value)}"]`,
+          );
+          if (tally) tally.textContent = String(total);
+
+          input.disabled = total === 0 && !input.checked;
+        }
+      }
+    }
+
+    function order(): void {
+      const by = sort.value;
+
+      const sorted = [...cards].sort((a, b) => {
+        if (by === 'activity') {
+          // Most recently confirmed first. A practice nobody has checked sorts last
+          // whatever its date, because this ordering is about attention rather than age.
+          const left = a.dataset.confirmed || '';
+          const right = b.dataset.confirmed || '';
+          if (left !== right) return right.localeCompare(left);
+        }
+
+        return (b.dataset.created ?? '').localeCompare(a.dataset.created ?? '');
+      });
+
+      for (const card of sorted) results.append(card);
+    }
+
+    function writeUrl(chosen: Record<Dimension, string[]>): void {
+      const params = new URLSearchParams();
+
+      for (const dimension of DIMENSIONS) {
+        if (chosen[dimension].length) params.set(dimension, chosen[dimension].join(','));
+      }
+      if (sort.value !== 'recent') params.set('sort', sort.value);
+
+      const query = params.toString();
+      window.history.replaceState(
+        {},
+        '',
+        query ? `${window.location.pathname}?${query}` : window.location.pathname,
+      );
+    }
+
+    function readUrl(): void {
+      const params = new URLSearchParams(window.location.search);
+      const dropped: string[] = [];
+
+      for (const dimension of DIMENSIONS) {
+        const values = (params.get(dimension) ?? '').split(',').filter(Boolean);
+        const offered = new Set<string>();
+
+        for (const input of filters!.querySelectorAll<HTMLInputElement>(
+          `input[name="${dimension}"]`,
+        )) {
+          offered.add(input.value);
+          input.checked = values.includes(input.value);
+        }
+
+        for (const value of values) {
+          if (!offered.has(value)) dropped.push(`${LEGEND[dimension].toLowerCase()} ${value}`);
+        }
+      }
+
+      // Said out loud rather than swallowed. Somebody following a link deserves to know
+      // that they are seeing a wider view than the person who sent it.
+      const notice = document.querySelector<HTMLElement>('[data-dropped]');
+      if (notice) {
+        notice.hidden = dropped.length === 0;
+        notice.textContent = dropped.length
+          ? `This link also filtered on ${dropped.join(', ')}, which nothing in the corpus ` +
+            `currently has. Those filters are not applied, so you are seeing more than the ` +
+            `person who sent it.`
+          : '';
+      }
+
+      const wanted = params.get('sort');
+      if (wanted === 'activity' || wanted === 'recent') sort.value = wanted;
+    }
+
+    filters.addEventListener('change', () => apply(true));
+    sort.addEventListener('change', () => apply(true));
+    clear.addEventListener('click', () => {
+      filters!.reset();
+      apply(true);
+    });
+
+    // Back and forward should move between filtered views, not out of the page.
+    window.addEventListener('popstate', () => {
+      readUrl();
+      apply(false);
+    });
+
+    readUrl();
+    apply(false);
+  }
+</script>
