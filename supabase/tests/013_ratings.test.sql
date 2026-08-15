@@ -200,7 +200,7 @@ select is(
 
 select throws_ok(
   $$ insert into public.propositions (author_id, statement, area)
-     values ('bbbb0000-0000-0000-0000-000000000001', 'Too short.', 'other') $$,
+     values ('bbbb0000-0000-0000-0000-000000000001', 'Maybe?', 'other') $$,
   '23514'::text, null::text,
   'a statement too short to be a claim is refused'
 );
