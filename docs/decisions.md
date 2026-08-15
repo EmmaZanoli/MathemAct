@@ -983,3 +983,25 @@ top-level comment returns the *first reply's* body. In `CommentThread.astro` tha
 offered Delete on somebody else's reply, decided the "already removed" state from the wrong
 row, and put an edit box in the wrong place — while reading, in review, exactly like working
 code. Every per-comment lookup uses `:scope >`.
+
+## 2026-08-15 — `auth_leaked_password_protection` is permanent, and the baseline is five
+
+The Security Advisor reported five warnings after the comments migration, against a
+recorded baseline of four. The fifth is `auth_leaked_password_protection`: Supabase's check
+of a new password against a breach corpus is disabled.
+
+It is a paid feature. Constraint 1 of this project is zero budget with no credit card, so
+it stays off and the warning is permanent. The baseline is now five and the rule becomes "a
+sixth warning means something new".
+
+It appeared between the migrate run at 17:26 and the one at 19:57 on the same day, with no
+Auth change in between beyond the minimum password length. The setting was never on — it
+could not have been — so what changed is the advisor, not the project. Worth recording
+because the obvious inference from the timing is the wrong one.
+
+What is actually lost: a length minimum rejects `hunter2` and accepts
+`correcthorsebatterystaple`, which is in every breach corpus there is. Nothing here closes
+that gap. A client-side check against Have I Been Pwned was considered and rejected —
+Supabase Auth validates the password, not our code, so a browser-side check is advisory
+only, and it would put a third-party request into the signup flow of an audience that
+reads its own network tab and was promised there are none.
