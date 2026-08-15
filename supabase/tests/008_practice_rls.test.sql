@@ -24,7 +24,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(28);
+select plan(31);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -333,12 +333,22 @@ select isnt(
 );
 
 -- ── Moderation ──────────────────────────────────────────────────────────────────────
+-- There is no moderator UPDATE policy on this table. Since 20260815200300 every decision
+-- goes through public.moderate(), which writes an audit row in the same transaction, and
+-- the direct update that used to do the same job matches no policy and so changes nothing.
+-- Both halves are asserted here, because a suite that checked only the first would still
+-- pass on the day somebody re-adds the policy "so the queue can be fixed quickly".
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
-update public.practices set status = 'published'
- where title = 'A perfectly ordinary submission';
+select lives_ok(
+  $$ select public.moderate(
+       'practice',
+       (select id from public.practices where title = 'A perfectly ordinary submission'),
+       'publish') $$,
+  'a moderator may publish a pending practice, through the audited path'
+);
 
 reset role;
 
@@ -346,13 +356,33 @@ select is(
   (select status::text from public.practices
     where title = 'A perfectly ordinary submission'),
   'published'::text,
-  'a moderator may publish a pending practice'
+  'and it is published'
 );
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
-update public.practices set status = 'hidden'
+select lives_ok(
+  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000005', 'hide',
+                            'Reproduces an unpublished referee report.') $$,
+  'a moderator may hide a published practice: the hide path works'
+);
+
+reset role;
+
+select is(
+  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  'hidden'::text,
+  'and it is hidden'
+);
+
+-- The same moderator, the same row, the unaudited way. No policy admits it, so it succeeds
+-- having changed nothing rather than raising — which is the correct shape here: an error
+-- would be indistinguishable from a bug, and the queue is the only route in either way.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+update public.practices set status = 'published'
  where id = '22222222-0000-0000-0000-000000000005';
 
 reset role;
@@ -360,13 +390,14 @@ reset role;
 select is(
   (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000005'),
   'hidden'::text,
-  'a moderator may hide a published practice: the hide path works'
+  'a direct update by a moderator changes nothing: the audit log cannot be stepped around'
 );
 
--- A moderator is still not an author. Reassigning a contribution would put somebody else's
--- name on work published under CC BY, so it is locked twice: no column grant, and a guard
--- that reverts it anyway. Both are asserted, because the second exists precisely for the
--- day somebody widens the first.
+-- Nobody is ever an author but the author. Reassigning a contribution would put somebody
+-- else's name on work published under CC BY, so it is locked twice: no column grant, and a
+-- guard that reverts it anyway. Both are asserted, because the second exists precisely for
+-- the day somebody widens the first. The column check runs before row level security, so
+-- this raises for the moderator even though no policy would have matched the row.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
@@ -380,20 +411,22 @@ select throws_ok(
 reset role;
 
 -- The realistic accident: somebody adding a feature writes `grant update on
--- public.practices to authenticated` because the column list was in the way.
+-- public.practices to authenticated` because the column list was in the way. The author's
+-- own pending practice is the row to try it on, because that is the one case where a
+-- policy does accept the update and only the guard stands between the grant and the harm.
 grant update on public.practices to authenticated;
 
 set local role authenticated;
-set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.practices set author_id = '11111111-0000-0000-0000-000000000005'
- where id = '22222222-0000-0000-0000-000000000005';
+update public.practices set author_id = '11111111-0000-0000-0000-000000000002'
+ where id = '22222222-0000-0000-0000-000000000002';
 
 reset role;
 
 select is(
-  (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000005'),
-  '11111111-0000-0000-0000-000000000002'::uuid,
+  (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  '11111111-0000-0000-0000-000000000001'::uuid,
   'and the guard reverts it even with the column grant wide open'
 );
 

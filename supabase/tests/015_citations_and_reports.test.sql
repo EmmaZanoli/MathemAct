@@ -19,7 +19,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(32);
+select plan(34);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -394,34 +394,43 @@ select is(
 reset role;
 
 -- A report that can be retracted after a moderator has read it makes the log incomplete in
--- exactly the cases that matter. No policy's USING clause matches, so this is silent.
+-- exactly the cases that matter. Since 20260815200300 the resolution columns have no UPDATE
+-- grant at all, so a direct write fails at the grant, before any policy is consulted — for
+-- the reporter and for the moderator alike. Resolving a report is an audited action and
+-- public.moderate() is the only route to it.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
 
-update public.reports set status = 'dismissed', resolved_at = now();
-
-reset role;
-
-select is(
-  (select status::text from public.reports limit 1),
-  'open'::text,
+select throws_ok(
+  $$ update public.reports set status = 'dismissed', resolved_at = now() $$,
+  '42501'::text, null::text,
   'a reporter cannot resolve their own report'
 );
+
+reset role;
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
-update public.reports
-   set status = 'actioned',
-       resolved_at = now(),
-       resolved_by = '11111111-0000-0000-0000-000000000005';
+select throws_ok(
+  $$ update public.reports set status = 'actioned', resolved_at = now(),
+            resolved_by = '11111111-0000-0000-0000-000000000005' $$,
+  '42501'::text, null::text,
+  'and neither can a moderator by hand: that would be a decision with no record of itself'
+);
+
+select lives_ok(
+  $$ select public.moderate('report', (select id from public.reports limit 1),
+                            'resolve_report', 'The comment has been hidden.') $$,
+  'a moderator closes it through the audited path'
+);
 
 reset role;
 
 select is(
-  (select status::text from public.reports limit 1),
-  'actioned'::text,
-  'a moderator can, and the resolution records a hand as well as a time'
+  (select resolved_by from public.reports limit 1),
+  '11111111-0000-0000-0000-000000000005'::uuid,
+  'and the resolution records a hand as well as a time'
 );
 
 select ok(

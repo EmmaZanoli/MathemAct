@@ -1005,3 +1005,118 @@ that gap. A client-side check against Have I Been Pwned was considered and rejec
 Supabase Auth validates the password, not our code, so a browser-side check is advisory
 only, and it would put a third-party request into the signup flow of an audience that
 reads its own network tab and was promised there are none.
+
+## 2026-08-16 — Moderation goes through one audited function, and the direct path is closed
+
+`public.moderate()` is SECURITY DEFINER, is the only thing that changes a row on a
+moderator's behalf, and writes to `public.moderation_actions` in the same transaction. The
+four moderator UPDATE policies on practices, propositions, comments and reports were dropped
+in the same push, and the resolution columns on `reports` lost their UPDATE grant as well.
+
+The alternative — keep the policies, write the audit row from the browser — would have made
+"every action writes an audit row" a property of our interface rather than of the database.
+The first person to open a console would be outside it. For an audience that reads its own
+network tab, a log that can be stepped around is worse than no log, because it invites trust
+it has not earned.
+
+Consequences worth knowing before changing anything here:
+
+- A moderator's direct `update public.practices set status = 'hidden'` now succeeds and
+  changes nothing. That silence is correct — an error would be indistinguishable from a bug
+  — and it is asserted in three test files precisely because it is surprising.
+- The moderator branches came out of all three column guards. They were unreachable (no
+  policy admits a moderator's update) and unnecessary (`public.moderate()` runs as the owner
+  and takes the trusted path), and leaving them would have meant that re-adding a policy in
+  some later migration silently restored self-approval.
+- `public.moderate()` authorises on `auth.uid()`, not `current_user`. This looks exactly like
+  the DEFINER trap recorded in CLAUDE.md and is its opposite: `current_user` inside a DEFINER
+  function is the owner, but `auth.uid()` is a JWT claim and is unaffected.
+
+## 2026-08-16 — A moderator cannot act on their own contributions
+
+Enforced in `public.moderate()` by name, for practices, propositions and comments, and backed
+by the absent moderator policies rather than only by the function.
+
+This is the rule that makes the queue mean something, and it has a cost worth stating: with
+one moderator, that moderator can never get their own submissions published. That is the
+argument for appointing two, which is now written into docs/moderation.md rather than assumed.
+
+Banning is restricted further: nobody with moderation standing can be banned from the screen,
+and no account can ban itself. One compromised session should not be able to disable the
+people who would notice.
+
+## 2026-08-16 — The moderation log is append-only for the owner too, with one exception
+
+A BEFORE UPDATE OR DELETE trigger on `public.moderation_actions` raises for every caller,
+including the role that owns the table. Absent grants stop a browser and stop nothing else;
+the realistic threat to an audit log is a migration written in a hurry, or a reason field
+with something in it somebody wishes were not.
+
+The exception is narrow and load-bearing: `actor_id` going from a value to null with every
+other column identical. That is the foreign key doing `ON DELETE SET NULL` when a moderator
+erases their own account, and without permitting it the log of a moderator's decisions would
+make that moderator undeletable — a table that quietly cancelled the erasure promise in the
+privacy notice.
+
+To remove a row for real, a migration must `ALTER TABLE ... DISABLE TRIGGER` explicitly,
+which leaves the fact in the repository where it belongs.
+
+## 2026-08-16 — An erasure records that it happened, not whose account it was
+
+`moderation_actions.target_id` is null exactly for `erase_account`, by CHECK constraint. The
+audit row says: on this date, this admin, acting on a standing request, erased an account.
+
+Recording the user id would preserve, in a table designed never to be edited, precisely the
+fact somebody asked us to forget — and it would outlive the `deletion_requests` row, which
+cascades away with the account. The parameter passed to `public.moderate()` is the id of the
+*request* rather than of the person, which is also what makes an admin unable to erase
+somebody who has not asked: the only way in is a row the account holder wrote themselves.
+
+## 2026-08-16 — "Request changes" writes to the practice, because there is nowhere else
+
+A note to an author has to reach them, and this site has no route to a person: no address any
+of our code may read, no server to send mail from, no inbox. So `practices.moderation_note`
+holds the current change request and the author reads it under "Your submissions" on their
+account page.
+
+The two alternatives were worse. A comment on the pending practice is visible to author and
+moderators today and to everybody the moment it is published — a private note that becomes
+public on acceptance is a trap. A message table is a second inbox nobody checks.
+
+One note at a time, cleared when the practice is published, because it then describes a
+version that was accepted. The history of who asked for what is in the log.
+
+This is only half a feature until there is an edit screen for a pending submission: an author
+who is sent back can read the note but cannot yet act on it. That is the next thing to build
+and it is listed as missing in docs/moderation.md rather than implied to work.
+
+## 2026-08-16 — /moderate/ ships as the 404 page, and that is manners rather than security
+
+The route reveals itself only after the signed-in account's own profile row comes back with a
+moderator role. Everyone else gets the not-found page, word for word.
+
+What it buys: no crawler indexing it, no shareable "you are not allowed" page, nothing
+confirming to a stranger that there is an area here worth attacking. What it does not buy:
+secrecy. The templates are in the page's HTML and the logic is in the bundle. The data is
+defended by row level security, which no browser talks its way past — a member running the
+same queries gets empty arrays.
+
+Stating both halves is the point. A gate described as security that is really courtesy is how
+somebody later decides row level security on the queue tables is redundant.
+
+`?fixtures` fills the queues with invented rows and skips the gate, so the screen can be
+worked on without a moderator account and without seeding production with rubbish. Both entry
+points are behind `import.meta.env.DEV`, which Vite replaces with `false` in a production
+build; the fixture data is dropped by dead-code elimination and the built bundle was grepped
+to confirm it.
+
+## 2026-08-16 — Expect a sixth Security Advisor warning, and it is `public.moderate`
+
+The accepted baseline was five, four of them `*_security_definer_function_executable`.
+`public.moderate()` is DEFINER and executable by `authenticated`, so the next migrate run
+should report one more of the same lint against it.
+
+It is DEFINER on purpose and for the reason the lint exists to question: it writes rows the
+caller may not write — the audit row above all, which has no INSERT grant to anybody. The
+authorisation is `auth.uid()` and is not weakened by DEFINER. The baseline is now six, and a
+seventh warning means something new.

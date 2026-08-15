@@ -431,6 +431,61 @@ export async function submitPractice(submission: Submission): Promise<Result<str
   }
 }
 
+// ── Your own submissions ──────────────────────────────────────────────────────────────
+
+export interface OwnSubmission {
+  readonly id: string;
+  readonly title: string;
+  readonly status: 'pending' | 'published' | 'hidden';
+  readonly createdAt: string;
+  /** A moderator has read this and asked for something to change. */
+  readonly note: string | null;
+  readonly noteAt: string | null;
+  readonly deletedAt: string | null;
+}
+
+/**
+ * What this account has submitted, in whatever state it is in.
+ *
+ * This exists because "request changes" has to reach a person. There is no address any of
+ * our code may read and no server to send mail from, so a moderator's note is written onto
+ * the practice it is about and the author reads it here — which is also the only place they
+ * can see that something was hidden, rather than discovering it by its absence.
+ *
+ * No policy is being worked around: practices_select_own already returns exactly these rows
+ * to their author and nothing else. The query is written with an explicit author filter
+ * anyway, because a filter that agrees with the policy documents it.
+ */
+export async function loadOwnSubmissions(userId: string): Promise<Result<OwnSubmission[]>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('practices')
+      .select('id, title, status, created_at, moderation_note, moderation_note_at, deleted_at')
+      .eq('author_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) return { ok: false, message: describe(error) };
+
+    return {
+      ok: true,
+      value: (data ?? []).map((row) => ({
+        id: row.id as string,
+        title: row.title as string,
+        status: row.status as OwnSubmission['status'],
+        createdAt: row.created_at as string,
+        note: (row.moderation_note as string | null) ?? null,
+        noteAt: (row.moderation_note_at as string | null) ?? null,
+        deletedAt: (row.deleted_at as string | null) ?? null,
+      })),
+    };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
 // ── Still works / no longer works ─────────────────────────────────────────────────────
 
 export type Verdict = 'still_works' | 'no_longer_works';

@@ -21,9 +21,20 @@ interface Props {
   description?: string;
   /** Set on the home page, where "MathemAct — MathemAct" would be absurd. */
   bareTitle?: boolean;
+  /**
+   * Keep this page out of search results. Set on /moderate/, which ships as the not-found
+   * page and reveals itself only to a moderator: an indexed 404 would defeat the point of
+   * not announcing it, and there is nothing on it a reader could want.
+   */
+  noindex?: boolean;
 }
 
-const { title, description = SITE.description, bareTitle = false } = Astro.props;
+const {
+  title,
+  description = SITE.description,
+  bareTitle = false,
+  noindex = false,
+} = Astro.props;
 
 const documentTitle = bareTitle ? title : `${title} — ${SITE.name}`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
@@ -43,6 +54,7 @@ const year = new Date().getFullYear();
     <title>{documentTitle}</title>
     <meta name="description" content={description} />
     <meta name="theme-color" content="#edf0f2" />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical.href} />
 
     {/* Preloaded before the font stylesheet is even parsed. These two faces are on every
