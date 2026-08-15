@@ -65,6 +65,7 @@ export interface NavLink {
  *  site is for; About explains it to someone who has already seen one. */
 export const NAV: readonly NavLink[] = [
   { label: 'Practices', href: '/practices/' },
+  { label: 'Propositions', href: '/propositions/' },
   { label: 'About', href: '/about/' },
 ];
 
@@ -72,6 +73,7 @@ export const NAV: readonly NavLink[] = [
  *  separately because one is an external link and the other is a mailto. */
 export const FOOTER_NAV: readonly NavLink[] = [
   { label: 'Practices', href: '/practices/' },
+  { label: 'Propositions', href: '/propositions/' },
   { label: 'About', href: '/about/' },
   { label: 'Code of conduct', href: '/code-of-conduct/' },
   { label: 'Privacy', href: '/privacy/' },

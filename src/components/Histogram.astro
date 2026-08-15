@@ -95,7 +95,6 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/propositions';
     display: grid;
     grid-template-columns: repeat(11, minmax(0, 1fr));
     gap: var(--space-3xs);
-    align-items: end;
   }
 
   .histogram__col {
@@ -106,6 +105,36 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/propositions';
     gap: var(--space-3xs);
     justify-items: center;
     text-align: center;
+  }
+
+  /* Every child is placed explicitly, and that is load-bearing rather than tidy. The "you"
+     and "median" markers are `hidden` in most columns, and a hidden child is removed from
+     the flow entirely — so with automatic placement the count would slide into row 1, the
+     bar into row 2, and each column would be laid out differently depending on which
+     markers it happened to carry. The result was eleven columns with their baselines at
+     eleven different heights. */
+  .histogram__you {
+    grid-row: 1;
+  }
+
+  .histogram__count {
+    grid-row: 2;
+  }
+
+  .histogram__bar {
+    grid-row: 3;
+  }
+
+  .histogram__tick {
+    grid-row: 4;
+  }
+
+  .histogram__anchor {
+    grid-row: 5;
+  }
+
+  .histogram__median {
+    grid-row: 6;
   }
 
   .histogram__bar {
