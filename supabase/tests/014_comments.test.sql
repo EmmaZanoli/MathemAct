@@ -23,7 +23,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(34);
+select plan(36);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -410,11 +410,31 @@ select is(
 );
 
 -- ── Moderation ──────────────────────────────────────────────────────────────────────
+-- The moderator UPDATE policy on this table was dropped in 20260815200300: hiding a comment
+-- goes through public.moderate(), which writes an audit row in the same transaction.
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
-update public.comments set status = 'hidden'
+select lives_ok(
+  $$ select public.moderate('comment', '44444444-0000-0000-0000-000000000005', 'hide',
+                            'Names a pseudonymous contributor.') $$,
+  'a moderator may hide a comment: the hide path works'
+);
+
+reset role;
+
+select is(
+  (select status::text from public.comments where id = '44444444-0000-0000-0000-000000000005'),
+  'hidden'::text,
+  'and it is hidden'
+);
+
+-- The unaudited way, which no policy admits any more: it succeeds and changes nothing.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+update public.comments set status = 'published'
  where id = '44444444-0000-0000-0000-000000000005';
 
 reset role;
@@ -422,12 +442,13 @@ reset role;
 select is(
   (select status::text from public.comments where id = '44444444-0000-0000-0000-000000000005'),
   'hidden'::text,
-  'a moderator may hide a comment: the hide path works'
+  'a direct update by a moderator changes nothing: the audit log cannot be stepped around'
 );
 
 -- Hiding preserves the text and the name, which is what makes it reviewable and
--- reversible. Editing somebody else's words under their name is not a moderation power,
--- and the guard reverts it silently.
+-- reversible. Editing somebody else's words under their name is not a moderation power in
+-- any tradition worth copying, and it is out of reach twice over: no policy accepts the
+-- update, and public.moderate() has no branch that touches a body.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 

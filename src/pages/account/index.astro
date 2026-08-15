@@ -115,6 +115,31 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     </p>
   </section>
 
+  <section class="section" data-submissions hidden>
+    <h2>Your submissions</h2>
+
+    <p class="field__hint">
+      Everything you have posted, in whatever state it is in. A submission waits for a
+      moderator before it joins the corpus; if one has been sent back, what to change is
+      here.
+    </p>
+
+    <ul class="submissions" data-submission-list role="list"></ul>
+  </section>
+
+  {/* Cloned per row. Authored here rather than built in script so that the scoped styles
+      below actually apply to it — Astro compiles them against elements in this file. */}
+  <template data-submission-template>
+    <li class="submission">
+      <p class="submission__title" data-title></p>
+      <p class="mono submission__meta" data-meta></p>
+      <div class="submission__note" data-note-block hidden>
+        <p class="submission__note-head">Changes asked for</p>
+        <p data-note></p>
+      </div>
+    </li>
+  </template>
+
   <section class="section">
     <h2>How you appear</h2>
 
@@ -169,7 +194,9 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 
 <script>
   import { readAuthErrorFromUrl } from '../../lib/auth';
-  import { verificationMonth } from '../../lib/format';
+  import { longDate, verificationMonth } from '../../lib/format';
+  import { loadOwnSubmissions } from '../../lib/practices';
+  import type { OwnSubmission } from '../../lib/practices';
   import { loadProfile, saveProfile } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import {
@@ -216,6 +243,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 
     userId = state.userId;
     void fill(state.userId);
+    void fillSubmissions(state.userId);
   });
 
   void startSession();
@@ -247,6 +275,53 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     }
 
     badges.hidden = false;
+  }
+
+  /**
+   * Your own practices, and any change a moderator has asked for.
+   *
+   * The section stays hidden when there is nothing in it. Somebody who has not posted yet
+   * does not need an empty box telling them so — the invitation to post is already above
+   * it — and a failure here leaves the section hidden rather than putting an error on a page
+   * whose main business is the profile form.
+   */
+  async function fillSubmissions(id: string): Promise<void> {
+    const result = await loadOwnSubmissions(id);
+    if (!result.ok || result.value.length === 0) return;
+
+    const section = query<HTMLElement>('[data-submissions]');
+    const list = query<HTMLElement>('[data-submission-list]');
+    const template = query<HTMLTemplateElement>('[data-submission-template]');
+
+    list.replaceChildren(
+      ...result.value.map((submission) => {
+        const item = template.content.cloneNode(true) as DocumentFragment;
+        const row = item.firstElementChild as HTMLElement;
+
+        query<HTMLElement>('[data-title]', row).textContent = submission.title;
+        query<HTMLElement>('[data-meta]', row).textContent =
+          `${stateOf(submission)} · posted ${longDate(submission.createdAt)}`;
+
+        if (submission.note) {
+          query<HTMLElement>('[data-note-block]', row).hidden = false;
+          query<HTMLElement>('[data-note]', row).textContent = submission.note;
+        }
+
+        return row;
+      }),
+    );
+
+    section.hidden = false;
+  }
+
+  /** The state in words rather than in the database's vocabulary. "Hidden" says what
+   *  happened; being moderated should be something you can discover rather than something
+   *  that silently happens to you. */
+  function stateOf(submission: OwnSubmission): string {
+    if (submission.deletedAt) return 'deleted by you';
+    if (submission.status === 'published') return 'published';
+    if (submission.status === 'hidden') return 'hidden by a moderator';
+    return submission.note ? 'sent back for changes' : 'waiting for review';
   }
 
   form.addEventListener('submit', async (event) => {
@@ -300,5 +375,42 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   .section h2 {
     padding-block-end: var(--space-2xs);
     border-block-end: var(--border);
+  }
+
+  .submissions {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .submission + .submission {
+    margin-block-start: var(--space-md);
+    padding-block-start: var(--space-md);
+    border-block-start: var(--border);
+  }
+
+  .submission__title {
+    font-weight: var(--weight-semibold);
+  }
+
+  .submission__meta {
+    margin-block-start: var(--space-3xs);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+  }
+
+  /* The moderator's note, set apart by the accent rule used for anything the site is
+     saying rather than quoting. */
+  .submission__note {
+    margin-block-start: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-inline-start: var(--border-width-thick) solid var(--accent);
+    background-color: var(--surface);
+  }
+
+  .submission__note-head {
+    font-size: var(--size-1);
+    font-weight: var(--weight-semibold);
   }
 </style>
