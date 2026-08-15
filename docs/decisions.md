@@ -794,3 +794,75 @@ implementation would be a second definition of "verified".
 The one thing the interface adds is the plainly worded note for an account over a year old.
 Its wording is deliberate: it says the tool has moved, which is a fact, rather than that the
 practice is wrong, which nobody has checked.
+
+## 2026-08-15 — The aggregate is a SECURITY DEFINER function under a security_invoker view
+
+Two requirements pull against each other and both are right. A rating row is readable only
+by the person who wrote it — individual ratings are never shown attributed to a name, and
+the sturdiest guarantee of that is that the row is unreadable. And the aggregate is readable
+by everyone.
+
+A plain view cannot do both. `security_invoker = on`, which every view in the exposed schema
+must have, makes the view read `public.ratings` as the caller — who can see exactly one row.
+The histogram would be a histogram of one.
+
+So the counting is in `public.rating_aggregate()`, SECURITY DEFINER, which returns a
+histogram, a median and three counts and has no argument by which it can be made to return a
+row, a user id, or a score attributable to anybody. It refuses hidden propositions. The view
+over it stays `security_invoker`, which still does real work: it joins `public.propositions`,
+so a hidden proposition's aggregate does not appear in a listing to somebody who cannot see
+the proposition.
+
+**The Security Advisor flags this**, twice — `anon_security_definer_function_executable` and
+the `authenticated` equivalent. Both are expected and accepted. It is flagging the pattern,
+not a mistake, and the pattern is the only way to satisfy both requirements. Four warnings
+is now the baseline; a fifth means something new.
+
+The honest caveat: on a proposition with one rating the aggregate *is* that person's score,
+and anyone who knows they rated it learns what they said. That is true of every aggregate
+ever computed. It is why the function refuses hidden propositions and why promotion needs
+several answers.
+
+## 2026-08-15 — The median is percentile_disc, and there is no mean
+
+`percentile_cont` interpolates: on an even number of raters it returns 6.5, which is not a
+point on an eleven-point scale and is arrived at by averaging the two middle values. That is
+a mean of a sort, and CLAUDE.md's rule is absolute. `percentile_disc` returns a value
+somebody actually chose.
+
+`013_ratings.test.sql` asserts the absence of a mean against the catalogue rather than
+against a list of objects, so it covers whatever gets added next: no function and no view in
+the exposed schema may contain `avg(`.
+
+The reason is worth restating because it is not squeamishness about statistics. On a
+bimodal distribution — which is what to expect on precisely the contested propositions — a
+mean reports mild agreement for a community that has split cleanly into two camps. It would
+smooth over the exact thing this corpus exists to make visible.
+
+## 2026-08-15 — The distribution is fetched, not built, so withholding it means something
+
+CLAUDE.md says not to reveal the aggregate to a reader until they have rated. If the
+histogram were built into the page and hidden with CSS, that would be a decoration
+view-source defeats. So the proposition page ships without it and fetches it once a rating
+exists.
+
+Be straight about what this is: it limits bandwagoning, it does not prevent access. The
+aggregate endpoint is public by design and anyone determined can query it. What it prevents
+is the ordinary reader forming a view after seeing where everybody else landed, which is
+where the effect actually comes from.
+
+An anonymous reader cannot rate, so they do not see the distribution either. That is
+deliberate — the rule is about who has formed a view before looking, not about who is
+logged in, and an exception there would be the loophole.
+
+## 2026-08-15 — A hidden grid child breaks automatic placement
+
+A second-order consequence of the `[hidden] { display: none !important }` fix from the
+reading work, and worth recording because it will happen again. Now that `hidden` really
+hides, a hidden grid child is removed from the flow entirely — so under automatic placement
+every following child shifts up a row.
+
+The histogram has a "you" marker and a "median" marker that are absent from nine of its
+eleven columns. Each column laid itself out according to which markers it happened to carry,
+and the result was eleven baselines at eleven different heights. Every child now has an
+explicit `grid-row`. Any grid whose children can be `hidden` needs the same.

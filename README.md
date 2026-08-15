@@ -34,7 +34,8 @@ publish it.
 | ✅ | Practices schema: RLS, tags, confirmations, staleness, rate limits |
 | ✅ | The submission form: twelve sections, draft autosave, one-transaction submit |
 | ✅ | Reading: listing with linkable filters, practice pages, author pages |
-| ⬜ | Moderation, propositions, nightly export, search |
+| ✅ | Propositions, the agreement scale, and the histogram — median, never a mean |
+| ⬜ | Moderation, nightly export, search |
 
 The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
 the dashboard configuration in [docs/auth.md](docs/auth.md). Without them they render a
@@ -140,11 +141,11 @@ production rather than a report after it.
 
 ### Database tests
 
-205 pgTAP assertions across twelve files in `supabase/tests/`, covering domain matching, the
+233 pgTAP assertions across thirteen files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every practice policy from both
 directions, the constraints that make a practice a report, the tombstone rule, the rate
-limits, and the submission RPC.
+limits, the submission RPC, and the agreement scale.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
 the feature works and says nothing about whether it is a door.
@@ -171,6 +172,7 @@ src/pages/              home, about, privacy, code of conduct, 404
 src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase
 src/pages/practices/    the listing, a practice, the submission form
 src/pages/authors/      one contributor's published practices
+src/pages/propositions/ the index, a proposition, and the suggest form
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
 src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)
 src/lib/                paths, site constants, status vocabulary, markdown, auth, session,
