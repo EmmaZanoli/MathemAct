@@ -72,6 +72,7 @@ change.
 | Confirm email | **on** | The institutional badge is derived from a *confirmed* address. Turning this off makes every badge worthless. |
 | Secure email change | on | Changing an address re-derives the badge; both addresses should have to agree. |
 | Minimum password length | **10** | Must match `LIMITS.password.min` in `src/lib/validation.ts`. `auth-config.yml` fails if they disagree — weekly, and on any change to that file. |
+| Prevent use of leaked passwords | **on** | Checks a new password against Have I Been Pwned's k-anonymity API, which never receives the password. Free, and the one password rule that catches the failure a length minimum does not: a long password that is already in a breach corpus. **Currently off** — the Security Advisor reports it as `auth_leaked_password_protection`, which is the fifth warning in the baseline of four. Turning it on brings the count back to four. |
 
 ### 3. Authentication → Attack Protection → CAPTCHA
 
