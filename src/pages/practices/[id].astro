@@ -14,10 +14,14 @@
  */
 import Base from '../../layouts/Base.astro';
 import Badges from '../../components/Badges.astro';
+import CommentThread from '../../components/CommentThread.astro';
 import CopyButton from '../../components/CopyButton.astro';
+import References from '../../components/References.astro';
 import StalenessNote from '../../components/StalenessNote.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
+import { referencesFrom, referencesTo } from '../../lib/citations';
+import { threadFor } from '../../lib/comments';
 import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
 import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/practice-schema';
@@ -39,6 +43,12 @@ if (!practice) return Astro.redirect(path('/practices/'));
 
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
 const authorName = practice.author?.displayName ?? 'Anonymous';
+
+const [thread, incoming, outgoing] = await Promise.all([
+  threadFor('practice', practice.id),
+  referencesTo('practice', practice.id),
+  referencesFrom('practice', practice.id),
+]);
 
 /**
  * A citation somebody can paste into a paper. Author, title, the corpus, the date it was
@@ -73,7 +83,10 @@ const metadata = [
     </p>
 
     <div class="practice">
-      <div class="practice__body">
+      {/* Everything a reader might want to quote is inside this element, and the quote
+          affordance looks for exactly that marker. The aside is outside it on purpose: a
+          citation string and a tag list are not passages. */}
+      <div class="practice__body" data-quotable>
         <header>
           <h1>{practice.title}</h1>
 
@@ -299,6 +312,16 @@ const metadata = [
         </div>
       </aside>
     </div>
+
+    <References incoming={incoming} outgoing={outgoing} />
+
+    <CommentThread
+      parentType="practice"
+      parentId={practice.id}
+      nodes={thread}
+      title={practice.title}
+      href={path(`/practices/${practice.id}/`)}
+    />
   </div>
 </Base>
 

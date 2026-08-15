@@ -141,11 +141,12 @@ production rather than a report after it.
 
 ### Database tests
 
-233 pgTAP assertions across thirteen files in `supabase/tests/`, covering domain matching, the
+299 pgTAP assertions across fifteen files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every practice policy from both
 directions, the constraints that make a practice a report, the tombstone rule, the rate
-limits, the submission RPC, and the agreement scale.
+limits, the submission RPC, the agreement scale, every comment policy including the nesting
+limit and what soft deletion destroys, and the citation and report queues.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
 the feature works and says nothing about whether it is a door.

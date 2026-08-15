@@ -866,3 +866,120 @@ The histogram has a "you" marker and a "median" marker that are absent from nine
 eleven columns. Each column laid itself out according to which markers it happened to carry,
 and the result was eleven baselines at eleven different heights. Every child now has an
 explicit `grid-row`. Any grid whose children can be `hidden` needs the same.
+
+## 2026-08-15 — Comments post immediately; practices wait
+
+Every other user-content table on this site starts `pending`. `public.comments` defaults to
+`published` and is moderated reactively, with the same `status` column and the same
+moderator hide policy as everything else.
+
+A practice is a contribution to a corpus and can wait for a volunteer to read it. A reply
+that appears a day after the thing it replies to is not a reply. Pre-moderating discussion
+on a site with volunteer moderators means no discussion.
+
+The trade is that something can be visible for a while before anyone acts on it. That is
+what the hide path, the report queue and the per-account daily limit are for, and all three
+exist before the first comment does.
+
+## 2026-08-15 — The comment edit window is in a trigger because permissive policies are OR'd
+
+This is the trap of the prompt, and it is not obvious in review.
+
+An author may edit a comment for 24 hours, and may delete one at any age. Two permissive
+UPDATE policies, therefore — and PostgreSQL ORs permissive policies together, both their
+USING clauses and their WITH CHECK clauses. With the window written into
+`comments_update_own`, an out-of-window edit still passes: it satisfies the *delete*
+policy's USING (the author's, undeleted), and then satisfies the *edit* policy's WITH CHECK
+(the author's, undeleted). The window would be decorative and would read, in the migration,
+exactly like a working rule.
+
+A BEFORE UPDATE trigger is the only single choke point an update has, so the window lives in
+`private.protect_comment_columns()` and raises 23514 with a finished sentence. The same
+place enforces the second half of the rule: the text freezes as soon as anybody replies,
+because people replied to the sentence in front of them.
+
+The general lesson: **a restriction cannot live in one permissive policy if another
+permissive policy on the same command would admit the row.** Restrictive policies or a
+trigger are the options; a trigger is the one that can also explain itself.
+
+## 2026-08-15 — Deleting a comment destroys the text, and there is no `deleted_by`
+
+CLAUDE.md says soft deletion "strips author attribution and hides the body". Prompt 10 says
+"replaced with a neutral marker". This implementation takes the stronger reading: on
+deletion the trigger sets `body` to the empty string and `author_id` to null, and a CHECK
+requires exactly that shape, so a half-finished deletion is not representable.
+
+The cost is real and worth naming: a comment that was reported and then deleted cannot be
+read by the moderator handling the report. The alternative is a table that retains text
+people asked to have removed, on a site whose privacy notice promises erasure works.
+Moderators who need the text intact should **hide** — hiding preserves everything and is the
+whole of the moderator power on this table.
+
+There is deliberately no `deleted_by` column, unlike `public.practices`. Only the author can
+delete a comment, so the column would record exactly the name the deletion just removed.
+
+The marker a reader sees is rendered from `deleted_at`, not stored. Storing "Removed by its
+author" as data would put English prose into the export and into every future consumer, as
+though somebody had written it.
+
+## 2026-08-15 — A citation's endpoints are pages; its provenance is comments
+
+`public.citations` links a practice or proposition to another. Comments are not endpoints —
+a graph in which every remark is a node is a graph nobody can read, and the useful question
+is "which accounts bear on this claim", not "which sentence did somebody quote".
+
+But a quotation nearly always comes from a comment or lands in one, so both ends carry an
+optional `*_comment_id` beside the page id. The graph stays coarse; the provenance stays
+exact, and a "referenced by" entry can link to the paragraph rather than the top of a long
+page. A trigger requires each comment id to belong to the page at its end, so the two halves
+cannot disagree.
+
+Two further rules do most of the work. A citation is visible only when **both** endpoints
+are — the `excerpt` column is a verbatim copy of the target's text, so a citation outliving
+its target being hidden would republish, on a third page, exactly the passage a moderator
+removed. And there is no UPDATE grant at all: immutability is a grant-level fact, so it
+holds even if somebody later adds a permissive policy without thinking.
+
+## 2026-08-15 — Citations are the one hard delete on the site
+
+Everything else here is soft-deleted, because everything else has replies hanging off it or
+attribution to preserve. A citation has neither: it is a link, its excerpt still exists at
+the target, and nothing is threaded under it. The citer may withdraw their own and a
+moderator may remove one whose excerpt should not be there.
+
+## 2026-08-15 — Comments render at build time; new ones show as source
+
+Everything in the corpus at build time arrives as sanitised HTML with its formulas already
+set. Anything posted since is fetched by the browser and shown as the plain text it was
+written as, marked "posted since this page was built".
+
+Rendering markdown in the browser would mean shipping a parser and a copy of KaTeX to every
+reader, and doing the sanitising in the one place an attacker controls. Neither is worth an
+hour's less latency on one remark.
+
+This is what sets the 24 hour edit window rather than a shorter one: a comment carrying TeX
+is first seen *set* at the next build, so a window shorter than one build cycle would mean
+nobody could ever fix a formula that came out wrong.
+
+## 2026-08-15 — `public.reports` added early, because a report control that files nothing is worse than none
+
+Prompt 10 asks for a report control on every comment. CLAUDE.md has always required the
+table; this is the minimum shape of it, built now so the control does something.
+
+It lives in `public` because a browser moderation UI will read it, which makes two policies
+the ones worth reviewing closely. A reporter reads their own reports and nobody else's —
+without that, the table is a list of who has complained about whom, readable by everyone it
+names. And nothing about a report is ever shown on the page: a visible report count turns
+reporting into a downvote.
+
+Reports cannot be withdrawn or edited by their author. The queue is a record of what was
+raised, and a report retractable after a moderator has read it makes the log incomplete in
+exactly the cases that matter.
+
+## 2026-08-15 — `:scope >` in the thread, and why it is not a style preference
+
+A comment element contains its replies, so `item.querySelector('[data-comment-body]')` on a
+top-level comment returns the *first reply's* body. In `CommentThread.astro` that would have
+offered Delete on somebody else's reply, decided the "already removed" state from the wrong
+row, and put an edit box in the wrong place — while reading, in review, exactly like working
+code. Every per-comment lookup uses `:scope >`.

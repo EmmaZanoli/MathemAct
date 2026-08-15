@@ -99,6 +99,41 @@ import { AREAS } from '../../lib/practice-schema';
     <form class="form" id="propose" novalidate>
       <FormStatus id="propose-status" />
 
+      {/* Only ever visible when somebody arrived here by selecting a passage and choosing
+          "cite this in a proposition". The claim is theirs to write; this is the evidence
+          they had in hand when they decided it was worth asking. */}
+      <div class="quote-strip" data-quote-strip hidden>
+        <p class="quote-strip__label meta">Responding to</p>
+        <blockquote class="quote-strip__text" data-quote-text></blockquote>
+        <p class="quote-strip__source">
+          from <a data-quote-source href="#"></a>
+        </p>
+
+        <div class="field">
+          <label class="field__label" for="bearing">
+            How this bears on the claim
+            <span class="field__optional">optional</span>
+          </label>
+          <div class="field__hint" id="bearing-hint">
+            <p>
+              One line, shown in that page's <strong>referenced by</strong> list — "the
+              case that prompted this", "an account that cuts the other way".
+            </p>
+          </div>
+          <input
+            class="field__control"
+            type="text"
+            id="bearing"
+            maxlength={500}
+            aria-describedby="bearing-hint"
+          />
+        </div>
+
+        <button class="link-button" type="button" data-quote-discard>
+          Propose without the reference
+        </button>
+      </div>
+
       <Field
         id="statement"
         label="The claim"
@@ -157,8 +192,10 @@ import { AREAS } from '../../lib/practice-schema';
 </Account>
 
 <script>
+  import { createCitation } from '../../lib/citations';
   import { proposeProposition } from '../../lib/propositions';
   import { loadProfile, mayPost } from '../../lib/profile';
+  import { clearPassage, getPassage, type Passage } from '../../lib/quote';
   import { startSession, subscribeToSession } from '../../lib/session';
   import {
     clearFieldErrors,
@@ -177,8 +214,33 @@ import { AREAS } from '../../lib/practice-schema';
   const submit = query<HTMLButtonElement>('button[type="submit"]', form);
   const statement = query<HTMLTextAreaElement>('#statement', form);
   const rationale = query<HTMLTextAreaElement>('#rationale', form);
+  const strip = query<HTMLElement>('[data-quote-strip]', form);
+  const bearing = query<HTMLInputElement>('#bearing', form);
 
   let userId: string | null = null;
+
+  // ── The carried passage ─────────────────────────────────────────────────────────────
+  // Read once, on load, rather than at submission time. Reading it later would attach a
+  // quotation somebody had cleared in another tab in between.
+  let attached: Passage | null = getPassage();
+
+  if (attached) {
+    strip.hidden = false;
+    query<HTMLElement>('[data-quote-text]', strip).textContent = attached.text;
+
+    const link = query<HTMLAnchorElement>('[data-quote-source]', strip);
+    link.textContent = attached.sourceTitle;
+    link.href = attached.commentId
+      ? `${attached.sourceHref}#comment-${attached.commentId}`
+      : attached.sourceHref;
+  }
+
+  query<HTMLButtonElement>('[data-quote-discard]', strip).addEventListener('click', () => {
+    clearPassage();
+    attached = null;
+    strip.hidden = true;
+    statement.focus();
+  });
 
   subscribeToSession((state) => {
     if (state.status !== 'signed-in') return;
@@ -245,10 +307,42 @@ import { AREAS } from '../../lib/practice-schema';
       return;
     }
 
-    showStatus(status, 'success', [
-      'Proposed. It is open for answers straight away.',
-      'It will appear in the listing after the next rebuild, which is nightly.',
-    ]);
+    // The reference is recorded second, against the proposition that now exists. A failure
+    // here leaves a proposed claim with no citation attached, which is a smaller loss than
+    // withdrawing something already written — and the message says which half went through.
+    let citationFailed: string | null = null;
+
+    if (attached) {
+      const linked = await createCitation(
+        {
+          sourceType: 'proposition',
+          sourceId: result.value,
+          targetType: attached.sourceType,
+          targetId: attached.sourceId,
+          targetCommentId: attached.commentId,
+          excerpt: attached.text,
+          context: bearing.value,
+        },
+        userId,
+      );
+
+      if (!linked.ok) citationFailed = linked.message;
+
+      clearPassage();
+      attached = null;
+      strip.hidden = true;
+    }
+
+    showStatus(
+      status,
+      citationFailed ? 'notice' : 'success',
+      citationFailed
+        ? [citationFailed, 'The proposition itself is proposed and open for answers.']
+        : [
+            'Proposed. It is open for answers straight away.',
+            'It will appear in the listing after the next rebuild, which is nightly.',
+          ],
+    );
     form.reset();
   });
 </script>

@@ -1,0 +1,418 @@
+/**
+ * Discussion: reading a thread at build time, and the four things a browser does to one.
+ *
+ * Same shape as src/lib/practices.ts — `readComments()` is the single swap point, reads
+ * happen during the build, writes happen in a browser — with one consequence that is worth
+ * stating plainly because it shows on screen.
+ *
+ * **Markdown and TeX are rendered at build time and nowhere else.** A comment that was in
+ * the corpus when the site was built arrives as sanitised HTML with its formulas already
+ * set. A comment posted since then is fetched by the browser and shown as the plain text it
+ * was written as, marked as such. The alternative is shipping a markdown parser and a copy
+ * of KaTeX to every reader, and doing the sanitising in the place an attacker controls.
+ * Neither is worth an hour's less latency on the rendering of one remark.
+ *
+ * So: this module returns *source text*. It never returns HTML, and nothing here should
+ * ever start doing so. CommentThread.astro is where source becomes markup, through
+ * src/lib/markdown.ts, at build time.
+ */
+import { getSupabase } from './supabase';
+
+export type ParentType = 'practice' | 'proposition';
+
+export interface CommentAuthor {
+  readonly id: string;
+  readonly displayName: string;
+  readonly isPseudonym: boolean;
+  readonly institution: {
+    readonly name: string;
+    readonly country: string;
+    readonly verifiedAt: string;
+  } | null;
+}
+
+export interface Comment {
+  readonly id: string;
+  readonly parentType: ParentType;
+  readonly parentId: string;
+  readonly inReplyTo: string | null;
+  /** Markdown source. Empty exactly when the comment has been deleted. */
+  readonly body: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  /** Set means the body is gone and so is the name. The node stays. */
+  readonly deletedAt: string | null;
+  /** Null for a deleted comment and for one whose author erased their account. */
+  readonly author: CommentAuthor | null;
+}
+
+/** A comment and the replies under it. There is no third level; the database refuses one. */
+export interface CommentNode {
+  readonly comment: Comment;
+  readonly replies: readonly Comment[];
+}
+
+// ── The swap point ────────────────────────────────────────────────────────────────────
+
+const EXPORTED = import.meta.glob<{ default: Comment[] }>('/data/comments.json', {
+  eager: true,
+});
+
+let cached: Comment[] | null = null;
+
+async function readComments(): Promise<Comment[]> {
+  if (cached) return cached;
+
+  const exported = Object.values(EXPORTED)[0]?.default;
+  if (exported) {
+    cached = exported;
+    return cached;
+  }
+
+  cached = await queryComments();
+  return cached;
+}
+
+const SELECT = [
+  'id,parent_type,parent_id,in_reply_to,body,created_at,updated_at,deleted_at',
+  'author:profiles!comments_author_id_fkey(id,display_name,is_pseudonym,institution_name,institution_country,institution_verified_at)',
+].join(',');
+
+/**
+ * Every readable comment, oldest first.
+ *
+ * Oldest first, unlike every listing on the site, because a discussion is read in the order
+ * it happened. A failure returns nothing rather than throwing: a paused project produces
+ * pages with no discussion on them, not a red build.
+ */
+async function queryComments(): Promise<Comment[]> {
+  const url = import.meta.env.PUBLIC_SUPABASE_URL;
+  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return [];
+
+  try {
+    const response = await fetch(
+      `${url}/rest/v1/comments?select=${encodeURIComponent(SELECT)}` +
+        '&status=eq.published&order=created_at.asc',
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+    );
+
+    if (!response.ok) return [];
+    return (await response.json()).map(toComment);
+  } catch {
+    return [];
+  }
+}
+
+interface RawComment {
+  id: string;
+  parent_type: ParentType;
+  parent_id: string;
+  in_reply_to: string | null;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+  author: {
+    id: string;
+    display_name: string;
+    is_pseudonym: boolean;
+    institution_name: string | null;
+    institution_country: string | null;
+    institution_verified_at: string | null;
+  } | null;
+}
+
+function toComment(row: RawComment): Comment {
+  return {
+    id: row.id,
+    parentType: row.parent_type,
+    parentId: row.parent_id,
+    inReplyTo: row.in_reply_to,
+    body: row.body,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+    author: row.author
+      ? {
+          id: row.author.id,
+          displayName: row.author.display_name,
+          isPseudonym: row.author.is_pseudonym,
+          institution:
+            row.author.institution_name &&
+            row.author.institution_country &&
+            row.author.institution_verified_at
+              ? {
+                  name: row.author.institution_name,
+                  country: row.author.institution_country,
+                  verifiedAt: row.author.institution_verified_at,
+                }
+              : null,
+        }
+      : null,
+  };
+}
+
+// ── What pages call ───────────────────────────────────────────────────────────────────
+
+/**
+ * One thread, as a list of top-level comments each carrying its replies.
+ *
+ * A reply whose parent is missing from the corpus — which the database makes impossible but
+ * a hand-edited export does not — is promoted to top level rather than dropped. Losing a
+ * remark is worse than showing it at the wrong indent.
+ */
+export async function threadFor(
+  parentType: ParentType,
+  parentId: string,
+): Promise<CommentNode[]> {
+  const all = (await readComments()).filter(
+    (comment) => comment.parentType === parentType && comment.parentId === parentId,
+  );
+
+  const ids = new Set(all.map((comment) => comment.id));
+  const roots = all.filter(
+    (comment) => comment.inReplyTo === null || !ids.has(comment.inReplyTo),
+  );
+
+  return roots.map((comment) => ({
+    comment,
+    replies: all.filter((reply) => reply.inReplyTo === comment.id),
+  }));
+}
+
+/** How many comments a thread has, deleted nodes included: the node is still a turn in the
+ *  conversation, and a count that dropped it would not match what is on the page. */
+export async function commentCount(
+  parentType: ParentType,
+  parentId: string,
+): Promise<number> {
+  return (await readComments()).filter(
+    (comment) => comment.parentType === parentType && comment.parentId === parentId,
+  ).length;
+}
+
+// ══ Writes ════════════════════════════════════════════════════════════════════════════
+
+export type Result<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly message: string };
+
+const UNAVAILABLE =
+  'The database cannot be reached right now. Your text is still in the box — try again in a few minutes.';
+
+/**
+ * Everything on this parent, read live.
+ *
+ * The page already carries the thread as it stood at the last build. This is the freshness
+ * overlay from CLAUDE.md: one query, and anything it returns that is not already on the
+ * page gets appended. Failure is silent, and the built thread stands — a day-old discussion
+ * is a great deal better than an error where a discussion should be.
+ */
+export async function loadThread(
+  parentType: ParentType,
+  parentId: string,
+): Promise<Result<Comment[]>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('comments')
+      .select(SELECT)
+      .eq('parent_type', parentType)
+      .eq('parent_id', parentId)
+      .order('created_at', { ascending: true });
+
+    if (error) return { ok: false, message: describe(error) };
+    return { ok: true, value: (data ?? []).map((row) => toComment(row as unknown as RawComment)) };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/** Returns the new comment's id, which the caller needs in order to attach a citation to
+ *  it — the quote affordance posts the comment first and links it second. */
+export async function postComment(
+  parentType: ParentType,
+  parentId: string,
+  authorId: string,
+  body: string,
+  inReplyTo: string | null,
+): Promise<Result<Comment>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('comments')
+      .insert({
+        parent_type: parentType,
+        parent_id: parentId,
+        author_id: authorId,
+        in_reply_to: inReplyTo,
+        body: body.trim(),
+      })
+      .select(SELECT)
+      .single();
+
+    if (error) return { ok: false, message: describe(error) };
+    return { ok: true, value: toComment(data as unknown as RawComment) };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/** Within 24 hours, and only while nobody has replied. Both limits are enforced by the
+ *  guard trigger, which raises prose that `describe()` passes through unchanged. */
+export async function editComment(id: string, body: string): Promise<Result<null>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { error } = await supabase
+      .from('comments')
+      .update({ body: body.trim() })
+      .eq('id', id);
+
+    if (error) return { ok: false, message: describe(error) };
+    return { ok: true, value: null };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/**
+ * Soft delete: the trigger empties the body and strips the name in the same statement.
+ * There is nothing kept to restore, and the interface has to say so before it is done.
+ */
+export async function deleteComment(id: string): Promise<Result<null>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { error } = await supabase
+      .from('comments')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) return { ok: false, message: describe(error) };
+    return { ok: true, value: null };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+// ── Reporting ─────────────────────────────────────────────────────────────────────────
+
+export type ReportSubject = 'practice' | 'proposition' | 'comment';
+
+export type ReportReason =
+  | 'off_topic'
+  | 'abusive'
+  | 'third_party_material'
+  | 'inaccurate'
+  | 'spam'
+  | 'other';
+
+/** The wording shown in the control. `third_party_material` is first among the specific
+ *  reasons because it is the hazard this site creates: the submission form asks people to
+ *  paste real conversations, and those contain other people's unpublished work. */
+export const REPORT_REASONS: readonly { value: ReportReason; label: string }[] = [
+  { value: 'third_party_material', label: "Contains someone else's unpublished work" },
+  { value: 'inaccurate', label: 'Says something about a tool that is not true' },
+  { value: 'abusive', label: 'Abusive, or breaches the code of conduct' },
+  { value: 'off_topic', label: 'Not about AI use in mathematical work' },
+  { value: 'spam', label: 'Spam' },
+  { value: 'other', label: 'Something else' },
+];
+
+export async function fileReport(
+  subjectType: ReportSubject,
+  subjectId: string,
+  reporterId: string,
+  reason: ReportReason,
+  detail: string,
+): Promise<Result<null>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { error } = await supabase.from('reports').insert({
+      subject_type: subjectType,
+      subject_id: subjectId,
+      reporter_id: reporterId,
+      reason,
+      detail: detail.trim() || null,
+    });
+
+    if (error) return { ok: false, message: describe(error) };
+    return { ok: true, value: null };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+// ── Turning a failure into a sentence ─────────────────────────────────────────────────
+
+/**
+ * **When a write fails unexpectedly, check the grants before the policies.** A table with
+ * no grant and a table whose policy matches no row are indistinguishable from a browser.
+ * Grants decide whether the endpoint exists; policies decide which rows it returns.
+ *
+ * Several of the rules on public.comments raise finished sentences on purpose — the edit
+ * window, the reply-freeze, the nesting limit — so 23514 passes the database's own wording
+ * through when it reads like prose. That is the whole reason those messages are written the
+ * way they are: the person who needs to read them is not the person who wrote the trigger.
+ */
+function describe(error: unknown): string {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : String((error as { message?: unknown })?.message ?? error ?? '');
+  const lower = message.toLowerCase();
+
+  switch (code) {
+    case '23514':
+      return looksLikeProse(message)
+        ? message
+        : 'A comment has to say something, and has to fit in 5,000 characters.';
+
+    case '23503':
+      return 'That comment is no longer available to reply to. Reload the page.';
+
+    case '23505':
+      return 'You have already reported this. One report per person — sending it twice is not a stronger signal.';
+
+    case '42501':
+      return 'This account cannot do that. It usually means the email address has not been confirmed yet — check the confirmation email.';
+
+    case '53400':
+      return looksLikeProse(message)
+        ? message
+        : 'You have reached what one account can post in a day. Try again tomorrow.';
+
+    case 'PGRST301':
+      return 'Your session has ended. Sign in again — your text is still in the box.';
+  }
+
+  if (
+    lower.includes('failed to fetch') ||
+    lower.includes('fetch failed') ||
+    lower.includes('networkerror') ||
+    lower.includes('load failed')
+  ) {
+    return UNAVAILABLE;
+  }
+
+  return 'That did not go through, and nothing was posted. If it keeps failing, the details are worth reporting.';
+}
+
+function looksLikeProse(message: string): boolean {
+  return /^[A-Z].*[.!?]$/.test(message.trim()) && !message.includes('_');
+}

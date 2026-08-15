@@ -14,11 +14,15 @@
  * usual one: this community's minority position is frequently the correct one.
  */
 import Base from '../../layouts/Base.astro';
+import CommentThread from '../../components/CommentThread.astro';
 import FormStatus from '../../components/FormStatus.astro';
 import Histogram from '../../components/Histogram.astro';
 import RatingScale from '../../components/RatingScale.astro';
+import References from '../../components/References.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
+import { referencesFrom, referencesTo } from '../../lib/citations';
+import { threadFor } from '../../lib/comments';
 import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
 import { areaLabel } from '../../lib/practice-schema';
@@ -33,13 +37,20 @@ const { id } = Astro.params;
 const proposition = await getProposition(id!);
 
 if (!proposition) return Astro.redirect(path('/propositions/'));
+
+const [thread, incoming, outgoing] = await Promise.all([
+  threadFor('proposition', proposition.id),
+  referencesTo('proposition', proposition.id),
+  referencesFrom('proposition', proposition.id),
+]);
 ---
 
 <Base title={proposition.statement} description={proposition.rationale ?? proposition.statement}>
   <div class="shell corpus proposition">
     <p class="breadcrumb"><a href={path('/propositions/')}>← All propositions</a></p>
 
-    <header>
+    {/* The statement and the rationale are quotable; the rating control is not. */}
+    <header data-quotable>
       <p class="proposition__label">
         <span class="meta">
           {proposition.status === 'active' ? 'Active proposition' : 'Proposed'}
@@ -78,7 +89,7 @@ if (!proposition) return Astro.redirect(path('/propositions/'));
 
     {
       proposition.rationale && (
-        <section class="field-block">
+        <section class="field-block" data-quotable>
           <span class="field-block__label">Why this was proposed</span>
           <p class="field-block__body">{proposition.rationale}</p>
         </section>
@@ -129,6 +140,16 @@ if (!proposition) return Astro.redirect(path('/propositions/'));
         <Histogram />
       </div>
     </section>
+
+    <References incoming={incoming} outgoing={outgoing} />
+
+    <CommentThread
+      parentType="proposition"
+      parentId={proposition.id}
+      nodes={thread}
+      title={proposition.statement}
+      href={path(`/propositions/${proposition.id}/`)}
+    />
   </div>
 </Base>
 

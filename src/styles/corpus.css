@@ -666,4 +666,284 @@
     letter-spacing: var(--tracking-wide);
     color: var(--ink-muted);
   }
+
+  /* ── References ──────────────────────────────────────────────────────────────────
+     What points here, and what this points at. Set apart from the page above it by a
+     rule and generous space, because it is a change of subject: everything above is one
+     document, and this is the rest of the corpus talking about it. */
+
+  .references {
+    margin-block-start: var(--space-xl);
+    padding-block-start: var(--space-lg);
+    border-block-start: var(--border);
+    max-width: var(--width-prose);
+  }
+
+  .references__group + .references__group {
+    margin-block-start: var(--space-lg);
+  }
+
+  .references__list {
+    margin: var(--space-sm) 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .reference {
+    padding-inline-start: var(--space-sm);
+    border-inline-start: var(--border);
+  }
+
+  /* Verbatim, and set to look it. A quotation that has been reformatted is not
+     evidence, so this is the one place on the site where the text is shown exactly as
+     stored and never run through the markdown pipeline. */
+  .reference__excerpt {
+    margin: 0 0 var(--space-2xs);
+    font-family: var(--font-serif);
+    font-size: var(--size-2);
+    color: var(--ink-muted);
+  }
+
+  .reference__excerpt p {
+    margin: 0;
+  }
+
+  .reference__source {
+    margin: 0;
+  }
+
+  .reference__kind {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    text-transform: lowercase;
+    color: var(--ink-muted);
+  }
+
+  .reference__context {
+    margin-block-start: var(--space-3xs);
+    font-size: var(--size-2);
+  }
+
+  /* ── The thread ──────────────────────────────────────────────────────────────────── */
+
+  .thread {
+    margin-block-start: var(--space-xl);
+    padding-block-start: var(--space-lg);
+    border-block-start: var(--border);
+    max-width: var(--width-prose);
+  }
+
+  .thread__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-sm);
+  }
+
+  .thread__head h2 {
+    margin: 0;
+  }
+
+  .thread__count {
+    color: var(--ink-muted);
+  }
+
+  .thread__list {
+    margin: var(--space-lg) 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: var(--space-lg);
+  }
+
+  .thread__list:empty {
+    margin: 0;
+  }
+
+  .thread__empty {
+    margin-block-start: var(--space-md);
+    max-width: var(--measure-narrow);
+    color: var(--ink-muted);
+  }
+
+  .comment {
+    display: grid;
+    gap: var(--space-2xs);
+  }
+
+  /* One level, and the indent says so. A left rule rather than padding alone, because at
+     one level of nesting the rule is what makes the relationship legible on a phone. */
+  .comment__replies {
+    margin: var(--space-md) 0 0;
+    padding-inline-start: var(--space-md);
+    border-inline-start: var(--border);
+    list-style: none;
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .comment__replies:empty {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  /* Arriving from a permalink has to look like arriving. Without this, a jump into a long
+     thread is indistinguishable from not having jumped. */
+  .comment--targeted {
+    outline: var(--border-width-thick) solid var(--accent);
+    outline-offset: var(--space-2xs);
+  }
+
+  .comment__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2xs) var(--space-sm);
+  }
+
+  .comment__who {
+    font-weight: var(--weight-semibold);
+  }
+
+  .comment__pseudonym {
+    font-weight: var(--weight-normal);
+    color: var(--ink-muted);
+  }
+
+  .comment__permalink {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+    text-decoration: none;
+  }
+
+  .comment__permalink:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
+  }
+
+  .comment__body {
+    max-width: var(--measure);
+  }
+
+  /* A comment posted since the last build. It has been through no markdown pipeline, so
+     it is shown as source, with its whitespace kept and its dollars unrendered. */
+  .comment__body--source {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  .comment__fresh {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+  }
+
+  .comment__removed {
+    font-style: italic;
+    color: var(--ink-muted);
+  }
+
+  .comment__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .comment__actions:empty {
+    display: none;
+  }
+
+  .comment__slot:empty {
+    display: none;
+  }
+
+  .comment__editor,
+  .comment__report {
+    margin-block-start: var(--space-sm);
+    padding: var(--space-sm);
+    border: var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .composer {
+    margin-block-start: var(--space-lg);
+  }
+
+  /* ── Quoting ─────────────────────────────────────────────────────────────────────── */
+
+  /* The passage carried from another page, shown above the box it will be posted with.
+     Nothing is ever attached without appearing here first. */
+  .quote-strip {
+    margin-block-end: var(--space-md);
+    padding: var(--space-sm);
+    border-inline-start: var(--border-width-thick) solid var(--accent);
+    background: var(--accent-wash);
+    display: grid;
+    gap: var(--space-2xs);
+  }
+
+  .quote-strip__label {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    text-transform: lowercase;
+    color: var(--ink-muted);
+  }
+
+  .quote-strip__text {
+    margin: 0;
+    font-family: var(--font-serif);
+  }
+
+  .quote-strip__source {
+    margin: 0;
+    font-size: var(--size-2);
+  }
+
+  /* A grid item stretches, and a stretched button centres its own label — so the discard
+     control ended up floating in the middle of the strip looking like a call to action. */
+  .quote-strip .link-button {
+    justify-self: start;
+  }
+}
+
+/* The selection popover, outside the layer and outside `.corpus`, because the script
+   appends it to document.body — a component's scoped styles would never reach it. It is
+   the one absolutely positioned thing on the site, and it does not animate, which makes
+   `prefers-reduced-motion` a non-question here rather than a media query. */
+.quote-pop {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  gap: var(--space-3xs);
+  padding: var(--space-3xs);
+  border: var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgb(15 21 25 / 18%);
+}
+
+.quote-pop__action {
+  padding: var(--space-3xs) var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--size-2);
+  cursor: pointer;
+}
+
+.quote-pop__action:hover {
+  background: var(--accent-wash);
+  color: var(--accent-strong);
 }

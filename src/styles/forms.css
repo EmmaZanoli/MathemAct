@@ -252,6 +252,26 @@
     color: var(--ink-muted);
   }
 
+  /* A button that reads as a link. Used where an action sits inside running content and a
+     row of bordered buttons under every comment would out-weigh the comment — Reply, Edit,
+     Delete, Report. It is a `button`, not an `a`, because it goes nowhere; the styling is
+     the only thing borrowed. The focus ring comes from the reset and is not touched here. */
+  .link-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--font-sans);
+    font-size: var(--size-2);
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    cursor: pointer;
+  }
+
+  .link-button:hover {
+    color: var(--accent-strong);
+  }
+
   /* ── Status ─────────────────────────────────────────────────────────────────────── */
   /* One live region per form. Errors say what went wrong and what to do about it, and
      never apologise; see the copy conventions in CLAUDE.md. */
