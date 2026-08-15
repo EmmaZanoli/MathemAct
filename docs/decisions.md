@@ -611,3 +611,67 @@ redirect allow-list, `mailer_autoconfirm` — and each is a few more lines. They
 for now because they would fail immediately against a project whose dashboard is still
 being set up, and a workflow that is red for a known reason quickly becomes a workflow
 nobody reads.
+
+## 2026-08-15 — profiles.confirmed_at exists because a policy cannot read auth.users
+
+"An authenticated, confirmed, non-banned user may insert" has no sound implementation
+without a column like this one. A policy is evaluated with the caller's privileges, and
+`authenticated` holds none on `auth.users` and no USAGE on the `private` schema, so it can
+neither read `email_confirmed_at` nor call a helper that does. The remaining route is the
+JWT's `user_metadata.email_verified`, which is written by the browser through
+`updateUser({ data })` — a policy trusting it would let anyone mark themselves confirmed,
+and it is the first thing anyone would try.
+
+So the fact is copied to where a policy can reach it, by the SECURITY DEFINER trigger that
+already reads `auth.users` to derive the badge. A timestamp saying an address was confirmed
+reveals nothing about what the address was.
+
+It is called `confirmed_at` rather than `email_confirmed_at` on purpose.
+`002_exposure.test.sql` asserts that no column in the exposed schema is named like an email
+address — a blunt instrument aimed at exactly this kind of well-meaning addition. Naming
+the column after the account rather than the address keeps that assertion doing its job
+instead of needing an exception carved into it.
+
+## 2026-08-15 — Erasure detaches: author_id is nullable, ON DELETE SET NULL
+
+Every other foreign key to a person in this schema cascades. This one does not, and the
+difference is the whole account erasure flow: the account goes, the profile goes, and the
+contribution stays in the corpus under CC BY without a name on it. A cascade here would
+make "delete my account" also mean "delete the discussion other people had about my work",
+which is not what anyone is asking for and not what the licence permits us to promise.
+
+`practice_confirmations.user_id` cascades, and the contrast is deliberate. A confirmation
+is one person's report rather than a durable contribution: an unattributed one could not be
+corrected, replaced, or counted against the one-per-person rule.
+
+## 2026-08-15 — The staleness window is a literal in the view, not a setting
+
+Every other threshold in this schema is a row in `private.settings`, changeable with one
+UPDATE. The twelve months that separates "verified" from "stale" is not, and the reason is
+the view's own security model: `security_invoker = on` means every name in it resolves with
+the caller's privileges, and anonymous callers have no USAGE on the private schema. A
+settings lookup would fail for exactly the readers the view exists to serve.
+
+Changing it is therefore a migration. That is the right weight for a number that changes
+the meaning of every tombstone on the site at once.
+
+## 2026-08-15 — An author may confirm their own practice
+
+This looks like a hole and is not. The most valuable confirmation anyone will ever file is
+an author returning to their own account a year later to report that it no longer
+reproduces — the single most likely source of a truthful `no_longer_works`. Forbidding
+self-confirmation would refuse precisely the report the staleness system exists to collect.
+The tombstone is not a popularity score, so there is nothing to inflate: it reflects the
+most recent verdict, whoever filed it.
+
+## 2026-08-15 — The status column grant is wide, and the policy is what narrows it
+
+`grant update (status, ...) on public.practices to authenticated` includes a column most
+callers must never write. It has to: moderators reach PostgREST as the same `authenticated`
+role as everybody else, so no column grant can distinguish them. The moderator policy and
+`private.protect_practice_columns()` are what actually restrict it, and both are asserted
+in `008_practice_rls.test.sql`.
+
+`author_id` is the contrast worth noticing. It has no column grant at all, so reassigning a
+practice fails with a permission error before any trigger runs — and the guard reverts it
+too, which the test proves by widening the grant and trying anyway.

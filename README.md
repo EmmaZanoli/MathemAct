@@ -30,7 +30,8 @@ form and moderation are still to come.
 | ✅ | Profiles, RLS, institutional badges derived server-side |
 | ✅ | ROR loader, 132,706 institutions, 116,985 domains |
 | ✅ | Sign up, confirm, sign in, reset, profile, erasure request |
-| ⬜ | Submission form, moderation, propositions, nightly export, search |
+| ✅ | Practices schema: RLS, tags, confirmations, staleness, rate limits |
+| ⬜ | Submission form, listings, moderation, propositions, nightly export, search |
 
 The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
 the dashboard configuration in [docs/auth.md](docs/auth.md). Without them they render a
@@ -136,9 +137,14 @@ production rather than a report after it.
 
 ### Database tests
 
-115 pgTAP assertions across seven files in `supabase/tests/`, covering domain matching, the
+187 pgTAP assertions across eleven files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
-is allowed to set, and who may file or read an erasure request.
+is allowed to set, who may file or read an erasure request, every practice policy from both
+directions, the constraints that make a practice a report, the tombstone rule, and the rate
+limits.
+
+Every policy is asserted from both sides. A test that only checks the allowed case proves
+the feature works and says nothing about whether it is a door.
 
 They run in CI rather than locally, because the primary development machine is a managed
 Windows laptop where WSL is blocked by group policy — there is no container runtime, so
