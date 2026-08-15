@@ -675,3 +675,63 @@ in `008_practice_rls.test.sql`.
 `author_id` is the contrast worth noticing. It has no column grant at all, so reassigning a
 practice fails with a permission error before any trigger runs — and the guard reverts it
 too, which the test proves by widening the grant and trying anyway.
+
+## 2026-08-15 — Submission is one RPC, because a deferred constraint made it one
+
+`practices` must record at least one tool, enforced by a DEFERRABLE INITIALLY DEFERRED
+constraint trigger. Deferred means at the end of the transaction, and PostgREST gives every
+request its own — so a browser inserting the practice and then its tools fails on the first
+request, at commit, before the tools exist. No ordering fixes it: the tools reference an id
+that does not exist until the practice is inserted. The form could not submit at all
+without `public.submit_practice`.
+
+It is **SECURITY INVOKER**, and that is the whole safety argument: it buys a transaction and
+nothing else. Every policy, grant, constraint and trigger that guards those tables directly
+still guards them through it, and `012_submit_practice.test.sql` asserts it — unconfirmed
+and banned accounts are refused by the *policy* rather than by the function, and `author_id`
+is `auth.uid()` rather than a parameter. A DEFINER function here would be a hole around all
+of it and would look exactly the same.
+
+`p_author_confidence` is `integer` although the column is `smallint`. Postgres will not
+implicitly narrow an integer literal while resolving which function to call, so a smallint
+parameter makes `submit_practice(..., 8, ...)` fail with "function does not exist" — which
+sends you looking for a missing migration rather than a missing cast.
+
+## 2026-08-15 — A transcript link may not stand alone
+
+CLAUDE.md's content model says a share link is never the only record: links expire, get
+revoked, and may breach provider terms. The schema was not enforcing it, so
+`practices_link_needs_excerpt` now does. A practice carrying a link and no excerpt is one
+whose evidence lives on somebody else's server, under terms they can change, for as long as
+they feel like hosting it — a hole in a corpus that is meant to be downloadable in full, and
+one nobody notices until the link is dead.
+
+The asymmetry is the rule: an excerpt with no link is ordinary and common. It is the link
+without an excerpt that is refused.
+
+## 2026-08-15 — The three outcomes are given identical weight, deliberately and structurally
+
+A corpus of only successes is worthless and reads as advertising, and failure modes are
+precisely what nobody publishes. `OutcomeChoice.astro` therefore fixes: identical size,
+border, padding and type for all three; the outcome colour on the tombstone glyph only, with
+labels in ink; every square open, because a new submission is unverified whatever its
+outcome; and a sentence underneath saying outright that all three are equally useful,
+because layout can imply a ranking however carefully it is balanced.
+
+These are constraints on any future change to that component, not observations about the
+current one.
+
+## 2026-08-15 — Draft autosave is per account, in localStorage
+
+Losing a half-written submission is how a contributor is lost. A well-structured account
+takes the better part of an hour, the audience is senior and busy, and somebody who loses
+one does not write it again — they conclude the site is not serious.
+
+Keyed by account id because a shared machine is a real thing in a mathematics department and
+one person's draft appearing in another's form would be both alarming and a disclosure.
+localStorage rather than the database because a draft is not content: not moderated, not
+exported, not published, and not anybody else's business — and because sending every
+keystroke to Postgres would put a rate limit and an egress quota in the path of typing.
+
+The draft is discarded only after the write is confirmed. Clearing it on submit would lose
+it to a failed request, which is the moment it is most needed.

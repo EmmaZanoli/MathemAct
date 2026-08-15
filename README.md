@@ -18,8 +18,8 @@ mathematics are part of the intended audience.
 
 ## Status
 
-Public site, identity layer, and account flows built. **No posting yet** — the submission
-form and moderation are still to come.
+Public site, identity layer, account flows, and the submission form built. **Nothing is
+readable yet** — listings, practice pages, and moderation are still to come.
 
 | | |
 |---|---|
@@ -31,7 +31,8 @@ form and moderation are still to come.
 | ✅ | ROR loader, 132,706 institutions, 116,985 domains |
 | ✅ | Sign up, confirm, sign in, reset, profile, erasure request |
 | ✅ | Practices schema: RLS, tags, confirmations, staleness, rate limits |
-| ⬜ | Submission form, listings, moderation, propositions, nightly export, search |
+| ✅ | The submission form: twelve sections, draft autosave, one-transaction submit |
+| ⬜ | Listings, practice pages, moderation, propositions, nightly export, search |
 
 The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
 the dashboard configuration in [docs/auth.md](docs/auth.md). Without them they render a
@@ -137,11 +138,11 @@ production rather than a report after it.
 
 ### Database tests
 
-187 pgTAP assertions across eleven files in `supabase/tests/`, covering domain matching, the
+205 pgTAP assertions across twelve files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every practice policy from both
-directions, the constraints that make a practice a report, the tombstone rule, and the rate
-limits.
+directions, the constraints that make a practice a report, the tombstone rule, the rate
+limits, and the submission RPC.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
 the feature works and says nothing about whether it is a door.
@@ -166,6 +167,7 @@ database monthly and reports what the matcher makes of real mathematics institut
 ```
 src/pages/              home, about, privacy, code of conduct, 404
 src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase
+src/pages/practices/    the submission form, and where a submission lands
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
 src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)
 src/lib/                paths, site constants, status vocabulary, markdown, auth, session,
