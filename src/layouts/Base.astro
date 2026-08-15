@@ -32,7 +32,11 @@ const year = new Date().getFullYear();
 ---
 
 <!doctype html>
-<html lang="en">
+{/* en-GB rather than en. The copy is British English throughout, and the tag is also what
+    a browser consults when it renders `<input type="date">` — an audience that is mostly
+    European should not be shown mm/dd/yyyy on the one field where a misread date silently
+    changes what a practice claims. */}
+<html lang="en-GB">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

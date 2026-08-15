@@ -420,7 +420,11 @@
     background-color: var(--surface);
   }
 
+  /* display: block is load-bearing. As an inline span, height: 100% resolves to nothing and
+     the bar is invisible — the track renders, the fill does not, and the indicator silently
+     reports no progress however much of the form is done. */
   .progress__bar {
+    display: block;
     height: 100%;
     background-color: var(--accent);
     transition: width var(--motion-base) var(--motion-ease);
@@ -484,10 +488,14 @@
     border: 0;
   }
 
+  /* align-content: start stops the inner rows stretching to fill the height the grid row
+     took from a taller neighbour, which otherwise floats one option's hint away from its
+     label while the one beside it sits tight. */
   .choice {
     display: grid;
     grid-template-columns: auto 1fr;
     align-items: start;
+    align-content: start;
     gap: 0 var(--space-2xs);
     padding: var(--space-2xs);
     border-radius: var(--radius-sm);
