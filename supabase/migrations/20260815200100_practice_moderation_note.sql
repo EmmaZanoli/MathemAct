@@ -16,11 +16,20 @@
 -- account page. One note at a time: it is the current state of the review, not a
 -- correspondence. The history of who asked for what is in public.moderation_actions.
 --
--- No grants are added for these columns. The moderation screen writes them through
+-- No UPDATE grant is added for these columns. The moderation screen writes them through
 -- public.moderate(), which runs as the table owner, so a browser role needs no privilege on
 -- them in either direction. An author who tried to clear the note gets a permission error
 -- rather than a silent no-op, which is the right way round for a column whose whole purpose
 -- is to say something the author might prefer gone.
+--
+-- Reading is a different matter and worth being exact about. `grant select on public.practices
+-- to anon, authenticated` is table-wide and covers columns added later, so these three are
+-- readable by anyone who can read the row. That is not a leak, because the only rows carrying
+-- a note are pending or hidden ones — which row level security shows to their author and to
+-- moderators and to nobody else — and publishing clears the note in the same statement that
+-- publishes. Two things follow for anyone changing this later: `request_changes` must keep
+-- refusing anything that is not pending, and the corpus query in src/lib/practices.ts must
+-- keep naming its columns explicitly rather than selecting `*`.
 
 alter table public.practices
   add column moderation_note    text,
