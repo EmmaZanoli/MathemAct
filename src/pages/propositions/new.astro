@@ -1,0 +1,254 @@
+---
+/**
+ * Suggesting a proposition.
+ *
+ * Most of this page is the guidance, and that is the right proportion. A badly formed
+ * proposition is worse than none: it collects ratings that cannot be interpreted, and once
+ * people have answered it the wording is fixed, so there is no fixing it afterwards. Ten
+ * seconds of reading here saves a claim that nobody can read an answer off.
+ *
+ * The three rules are the ones that actually go wrong — one claim, decidable, no
+ * conjunctions — and each is shown with a bad example beside a good one, because "avoid
+ * conjunctions" means nothing until you see the sentence it is warning you about.
+ */
+import Account from '../../layouts/Account.astro';
+import Field from '../../components/Field.astro';
+import FormStatus from '../../components/FormStatus.astro';
+import { path } from '../../lib/paths';
+import { AREAS } from '../../lib/practice-schema';
+---
+
+<Account
+  title="Suggest a proposition"
+  description="Propose a single claim about AI use in mathematics for the community to rate."
+  lead="One claim, in a sentence, that somebody could reasonably disagree with."
+  gate="required"
+>
+  <div class="panel" data-gate-unconfirmed hidden>
+    <p class="panel__heading">Confirm your email address first</p>
+    <p>
+      Proposing needs a confirmed address, for the same reason posting a practice does.
+      <a href={path('/account/confirm/')}>Get another confirmation link</a>.
+    </p>
+  </div>
+
+  <div data-propose-wrap hidden>
+    <div class="prose">
+      <h2>What makes a claim ratable</h2>
+
+      <dl class="guidance">
+        <dt>One claim, not two</dt>
+        <dd>
+          <p>
+            A rating attaches to the whole sentence. If it contains two claims, half the
+            disagreement is with one of them and there is no way to tell which — the number
+            that comes out means nothing.
+          </p>
+          <p class="guidance__example guidance__example--bad">
+            AI-assisted literature search should be disclosed in papers <strong>and</strong>
+            referees should be told which tools were used.
+          </p>
+          <p class="guidance__example guidance__example--good">
+            AI-assisted literature search should be disclosed in papers.
+          </p>
+        </dd>
+
+        <dt>Decidable, or normatively clear</dt>
+        <dd>
+          <p>
+            Either something that could be shown false, or a clear "should". A claim that is
+            neither collects answers to whatever each reader decided it meant.
+          </p>
+          <p class="guidance__example guidance__example--bad">
+            AI is changing mathematics.
+          </p>
+          <p class="guidance__example guidance__example--good">
+            A paper whose main lemma was found by a model should say so in the paper.
+          </p>
+        </dd>
+
+        <dt>No hedges, no conjunctions</dt>
+        <dd>
+          <p>
+            "Generally", "in most cases", "where appropriate" — each of these lets two people
+            agree on the words and disagree completely on the claim. Say the strong version
+            and let the scale record how far people are willing to go with you.
+          </p>
+          <p class="guidance__example guidance__example--bad">
+            In most cases it is generally advisable to check AI output where appropriate.
+          </p>
+          <p class="guidance__example guidance__example--good">
+            Every AI-generated proof step must be checked by a human before publication.
+          </p>
+        </dd>
+      </dl>
+
+      <p>
+        Propose the claim you think is <em>contested</em>, not the one everybody already
+        agrees with. A proposition that scores ten across the board records nothing; the
+        useful ones are those where the histogram comes out with two peaks.
+      </p>
+
+      <p class="field__hint">
+        Once anybody has answered it, the wording is fixed. People rated the sentence in
+        front of them, and rewording it afterwards would reassign their agreement to a claim
+        they never saw.
+      </p>
+    </div>
+
+    <form class="form" id="propose" novalidate>
+      <FormStatus id="propose-status" />
+
+      <Field
+        id="statement"
+        label="The claim"
+        type="textarea"
+        required
+        rows={3}
+        maxlength={200}
+        counter
+        hint="One sentence. Between 10 and 200 characters, which is the cap doing the work of keeping it to one claim."
+        example="Every AI-generated proof step must be checked by a human before publication."
+      />
+
+      <div class="field">
+        <span class="field__label" id="area-label">Area</span>
+        <fieldset class="choices" aria-labelledby="area-label">
+          <legend class="visually-hidden">Which kind of work this claim is about</legend>
+          {
+            AREAS.map((choice) => (
+              <label class="choice" for={`parea-${choice.value}`}>
+                <input
+                  class="choice__input"
+                  type="radio"
+                  id={`parea-${choice.value}`}
+                  name="area"
+                  value={choice.value}
+                />
+                <span>{choice.label}</span>
+              </label>
+            ))
+          }
+        </fieldset>
+        <p class="field__error" id="area-error" hidden></p>
+      </div>
+
+      <Field
+        id="rationale"
+        label="Why it is worth asking"
+        type="textarea"
+        rows={5}
+        maxlength={2000}
+        counter
+        hint="Optional, and read before anyone answers. The strongest case for the other side is more use here than the case for your own."
+      />
+
+      <div class="actions">
+        <button class="button button--primary" type="submit">Suggest it</button>
+        <a href={path('/propositions/')}>Back to the propositions</a>
+      </div>
+
+      <p class="field__hint">
+        It appears as <strong>proposed</strong> straight away, and becomes active once enough
+        members have answered it. A moderator can promote or withdraw one at any time.
+      </p>
+    </form>
+  </div>
+</Account>
+
+<script>
+  import { proposeProposition } from '../../lib/propositions';
+  import { loadProfile, mayPost } from '../../lib/profile';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import {
+    clearFieldErrors,
+    hideStatus,
+    query,
+    setBusy,
+    setFieldError,
+    showStatus,
+  } from '../../lib/forms';
+  import { validateRequiredText, validateOptionalText } from '../../lib/validation';
+  import type { Area } from '../../lib/practice-schema';
+
+  const form = query<HTMLFormElement>('#propose');
+  const wrap = query<HTMLElement>('[data-propose-wrap]');
+  const status = query<HTMLElement>('#propose-status');
+  const submit = query<HTMLButtonElement>('button[type="submit"]', form);
+  const statement = query<HTMLTextAreaElement>('#statement', form);
+  const rationale = query<HTMLTextAreaElement>('#rationale', form);
+
+  let userId: string | null = null;
+
+  subscribeToSession((state) => {
+    if (state.status !== 'signed-in') return;
+    if (userId === state.userId) return;
+
+    userId = state.userId;
+    void open(state.userId);
+  });
+
+  void startSession();
+
+  async function open(id: string): Promise<void> {
+    const profile = await loadProfile(id);
+
+    if (profile.ok && !mayPost(profile.value)) {
+      query<HTMLElement>('[data-gate-unconfirmed]').hidden = false;
+      return;
+    }
+
+    wrap.hidden = false;
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearFieldErrors(form);
+    hideStatus(status);
+
+    if (!userId) return;
+
+    const area = form.querySelector<HTMLInputElement>('input[name="area"]:checked')?.value;
+    const statementError =
+      validateRequiredText(statement.value, 200, 'A claim') ??
+      (statement.value.trim().length < 10
+        ? 'That is shorter than a claim. Say what you are asserting in a full sentence.'
+        : null);
+
+    setFieldError('statement', statementError, form);
+    setFieldError(
+      'rationale',
+      validateOptionalText(rationale.value, 2000, 'The rationale'),
+      form,
+    );
+
+    const areaError = query<HTMLElement>('#area-error', form);
+    areaError.textContent = area ? '' : 'Choose which kind of work this claim is about.';
+    areaError.hidden = Boolean(area);
+
+    if (statementError || !area) {
+      showStatus(status, 'error', 'The claim still needs work. See the notes below.');
+      return;
+    }
+
+    setBusy(submit, true, 'Suggesting…');
+    const result = await proposeProposition(
+      userId,
+      statement.value,
+      rationale.value,
+      area as Area,
+    );
+    setBusy(submit, false);
+
+    if (!result.ok) {
+      showStatus(status, 'error', result.message);
+      return;
+    }
+
+    showStatus(status, 'success', [
+      'Proposed. It is open for answers straight away.',
+      'It will appear in the listing after the next rebuild, which is nightly.',
+    ]);
+    form.reset();
+  });
+</script>

@@ -1,0 +1,266 @@
+---
+/**
+ * One proposition, and what the community made of it.
+ *
+ * The rule that shapes the whole page: **the distribution is not shown until the reader has
+ * answered.** Not hidden behind a click — absent from the page, fetched afterwards. Baking
+ * it into the HTML and hiding it with CSS would make bandwagon protection a decoration that
+ * view-source defeats.
+ *
+ * Worth being straight about what this is and is not. The aggregate endpoint is public by
+ * design and anyone determined can query it directly; what this prevents is the ordinary
+ * reader forming a view after seeing where everyone else landed, which is where the effect
+ * comes from. CLAUDE.md's reason for the rule is worth repeating because it is not the
+ * usual one: this community's minority position is frequently the correct one.
+ */
+import Base from '../../layouts/Base.astro';
+import FormStatus from '../../components/FormStatus.astro';
+import Histogram from '../../components/Histogram.astro';
+import RatingScale from '../../components/RatingScale.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { longDate } from '../../lib/format';
+import { path } from '../../lib/paths';
+import { areaLabel } from '../../lib/practice-schema';
+import { getProposition, listPropositions } from '../../lib/propositions';
+
+export async function getStaticPaths() {
+  const propositions = await listPropositions();
+  return propositions.map((proposition) => ({ params: { id: proposition.id } }));
+}
+
+const { id } = Astro.params;
+const proposition = await getProposition(id!);
+
+if (!proposition) return Astro.redirect(path('/propositions/'));
+---
+
+<Base title={proposition.statement} description={proposition.rationale ?? proposition.statement}>
+  <div class="shell corpus proposition">
+    <p class="breadcrumb"><a href={path('/propositions/')}>← All propositions</a></p>
+
+    <header>
+      <p class="proposition__label">
+        <span class="meta">
+          {proposition.status === 'active' ? 'Active proposition' : 'Proposed'}
+        </span>
+      </p>
+
+      {/* The statement is the page. Set as a blockquote because it is a claim being
+          reported rather than the site speaking. */}
+      <blockquote class="proposition__statement">
+        <p>{proposition.statement}</p>
+      </blockquote>
+
+      <ul class="card__facts" role="list">
+        <li>{areaLabel(proposition.area)}</li>
+        <li>
+          {
+            proposition.author ? (
+              <>
+                Proposed by {proposition.author.displayName}
+                {proposition.author.isPseudonym && ' (a pseudonym)'}
+              </>
+            ) : (
+              <span class="card__erased">Proposer since erased</span>
+            )
+          }
+        </li>
+        <li>
+          <span class="meta">
+            {proposition.activatedAt
+              ? `Active since ${longDate(proposition.activatedAt)}`
+              : `Proposed ${longDate(proposition.createdAt)}`}
+          </span>
+        </li>
+      </ul>
+    </header>
+
+    {
+      proposition.rationale && (
+        <section class="field-block">
+          <span class="field-block__label">Why this was proposed</span>
+          <p class="field-block__body">{proposition.rationale}</p>
+        </section>
+      )
+    }
+
+    <section class="rate" data-rate data-proposition-id={proposition.id}>
+      <h2>Where do you stand?</h2>
+
+      {/* Signed out. An anonymous reader cannot rate, so they cannot see the distribution
+          either — the rule is about who has formed a view before looking, not about who is
+          logged in, and making an exception here would be the loophole. */}
+      <div class="panel" data-rate-signedout hidden>
+        <p>
+          <a href={path('/account/sign-in/')}>Sign in</a> to answer this one. The distribution
+          appears once you have — you are asked what you think before you are told what
+          everybody else thinks.
+        </p>
+      </div>
+
+      <div class="panel" data-rate-unconfirmed hidden>
+        <p>
+          Rating needs a confirmed email address.
+          <a href={path('/account/confirm/')}>Get another confirmation link</a>.
+        </p>
+      </div>
+
+      <form class="form" data-rate-form hidden novalidate>
+        <RatingScale name="score" />
+
+        <div class="actions">
+          <button class="button button--primary" type="submit">Record my answer</button>
+        </div>
+
+        <FormStatus id="rate-status" />
+      </form>
+
+      {/* One sentence, and it says why rather than that. "You must rate to see results" is
+          a rule; this is a reason, and a reader who disagrees with it can at least argue
+          with the right thing. */}
+      <p class="rate__withheld" data-rate-withheld hidden>
+        The distribution is hidden until you have answered, so that what other people think
+        does not decide what you think.
+      </p>
+
+      <div data-aggregate-wrap hidden>
+        <h3>How people answered</h3>
+        <Histogram />
+      </div>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { renderHistogram } from '../../lib/histogram';
+  import { loadAggregate, loadMyRating, saveRating } from '../../lib/propositions';
+  import { loadProfile, mayPost } from '../../lib/profile';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
+
+  const root = query<HTMLElement>('[data-rate]');
+  const propositionId = root.dataset.propositionId!;
+
+  const signedOut = query<HTMLElement>('[data-rate-signedout]', root);
+  const unconfirmed = query<HTMLElement>('[data-rate-unconfirmed]', root);
+  const form = query<HTMLFormElement>('[data-rate-form]', root);
+  const withheld = query<HTMLElement>('[data-rate-withheld]', root);
+  const wrap = query<HTMLElement>('[data-aggregate-wrap]', root);
+  const histogram = query<HTMLElement>('[data-histogram]', root);
+  const status = query<HTMLElement>('#rate-status', root);
+  const submit = query<HTMLButtonElement>('button[type="submit"]', form);
+
+  let userId: string | null = null;
+  let iRated = false;
+  let myScore: number | null = null;
+
+  subscribeToSession((state) => {
+    if (state.status === 'loading') return;
+
+    if (state.status !== 'signed-in') {
+      userId = null;
+      signedOut.hidden = false;
+      form.hidden = true;
+      withheld.hidden = false;
+      return;
+    }
+
+    if (userId === state.userId) return;
+    userId = state.userId;
+    void open(state.userId);
+  });
+
+  void startSession();
+
+  async function open(id: string): Promise<void> {
+    const profile = await loadProfile(id);
+
+    if (profile.ok && !mayPost(profile.value)) {
+      unconfirmed.hidden = false;
+      withheld.hidden = false;
+      return;
+    }
+
+    form.hidden = false;
+
+    const mine = await loadMyRating(propositionId, id);
+    if (!mine.ok) {
+      showStatus(status, 'error', mine.message);
+      return;
+    }
+
+    iRated = mine.value.rated;
+    myScore = mine.value.score;
+
+    if (iRated) {
+      // Reflect the existing answer, so that editing starts from what they said rather than
+      // from nothing — which would read as never having answered.
+      const value = myScore === null ? 'none' : String(myScore);
+      const input = form.querySelector<HTMLInputElement>(`input[name="score"][value="${value}"]`);
+      if (input) input.checked = true;
+
+      submit.textContent = 'Update my answer';
+      await reveal();
+    } else {
+      withheld.hidden = false;
+    }
+  }
+
+  async function reveal(): Promise<void> {
+    const aggregate = await loadAggregate(propositionId);
+    if (!aggregate.ok) {
+      showStatus(status, 'error', aggregate.message);
+      return;
+    }
+
+    withheld.hidden = true;
+    wrap.hidden = false;
+    renderHistogram(histogram, aggregate.value, myScore, iRated);
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    hideStatus(status);
+
+    if (!userId) return;
+
+    const chosen = form.querySelector<HTMLInputElement>('input[name="score"]:checked')?.value;
+    if (chosen === undefined) {
+      showStatus(
+        status,
+        'error',
+        'Choose a point on the scale, or say that you have no opinion — that is a real answer and it is recorded as one.',
+      );
+      return;
+    }
+
+    // 'none' is the "no opinion / outside my expertise" answer and is stored as a null
+    // score on a real row. It is not the absence of a rating.
+    const score = chosen === 'none' ? null : Number(chosen);
+    const editing = iRated;
+
+    setBusy(submit, true, editing ? 'Updating…' : 'Recording…');
+    const result = await saveRating(propositionId, userId, score);
+    setBusy(submit, false);
+
+    if (!result.ok) {
+      showStatus(status, 'error', result.message);
+      return;
+    }
+
+    iRated = true;
+    myScore = score;
+    submit.textContent = 'Update my answer';
+
+    await reveal();
+
+    showStatus(
+      status,
+      'success',
+      editing
+        ? 'Rating updated.'
+        : 'Answer recorded. Yours is never shown next to your name — only the distribution is public.',
+    );
+  });
+</script>

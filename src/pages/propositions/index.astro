@@ -1,0 +1,125 @@
+---
+/**
+ * The propositions, split into what the community has taken up and what has been suggested.
+ *
+ * The split is the page's whole argument. An active proposition is one enough people
+ * bothered to answer that it became part of the record; a proposed one is somebody's
+ * suggestion that has not yet earned that. Listing them together would imply the site
+ * endorses every claim on it, and this site takes no position on any of them.
+ *
+ * No aggregate anywhere on this page, not even a count of raters. A listing that showed
+ * "42 raters, median 8" would tell a reader where the community landed before they had
+ * opened the question, which is exactly what the proposition page is careful not to do.
+ */
+import Base from '../../layouts/Base.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { longDate } from '../../lib/format';
+import { path } from '../../lib/paths';
+import { areaLabel } from '../../lib/practice-schema';
+import { listPropositions } from '../../lib/propositions';
+
+const propositions = await listPropositions();
+const active = propositions.filter((proposition) => proposition.status === 'active');
+const proposed = propositions.filter((proposition) => proposition.status === 'proposed');
+---
+
+<Base
+  title="Propositions"
+  description="Claims about how AI tools should be used in mathematics, and where the community stands on each."
+>
+  <div class="shell corpus">
+    <header class="corpus__header">
+      <h1>Propositions</h1>
+      <p class="corpus__lead">
+        Single claims that can be agreed with. Answer one and you are shown how everybody
+        else answered — in that order, deliberately.
+      </p>
+    </header>
+
+    <div class="prose">
+      <p>
+        MathemAct takes no position on any of these. What it records is the shape of the
+        disagreement: the full distribution and the median, never an average, because an
+        average reports mild agreement for a community that has split cleanly into two camps.
+      </p>
+    </div>
+
+    {
+      propositions.length === 0 ? (
+        <div class="empty">
+          <p class="empty__heading">No propositions yet.</p>
+          <p>
+            The first ones will come from members who noticed an argument worth settling —
+            or worth showing is not settled.
+          </p>
+          <p class="actions">
+            <a class="button button--primary" href={path('/propositions/new/')}>
+              Suggest a proposition
+            </a>
+          </p>
+        </div>
+      ) : (
+        <>
+          <section class="section">
+            <h2>Active</h2>
+            <p class="field__hint">
+              Enough people have answered these that they are part of the record.
+            </p>
+
+            {active.length === 0 ? (
+              <p class="field__hint">
+                None yet. A proposed one becomes active once enough members have answered it.
+              </p>
+            ) : (
+              <ul class="proposition-list" role="list">
+                {active.map((proposition) => (
+                  <li class="proposition-item">
+                    <a class="proposition-item__link" href={path(`/propositions/${proposition.id}/`)}>
+                      {proposition.statement}
+                    </a>
+                    <p class="card__facts proposition-item__facts">
+                      <span>{areaLabel(proposition.area)}</span>
+                      <span class="meta">Active since {longDate(proposition.activatedAt)}</span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section class="section">
+            <h2>Proposed</h2>
+            <p class="field__hint">
+              Suggested by a member and open for answers. Answering one is what promotes it.
+            </p>
+
+            {proposed.length === 0 ? (
+              <p class="field__hint">Nothing waiting.</p>
+            ) : (
+              <ul class="proposition-list" role="list">
+                {proposed.map((proposition) => (
+                  <li class="proposition-item">
+                    <a class="proposition-item__link" href={path(`/propositions/${proposition.id}/`)}>
+                      {proposition.statement}
+                    </a>
+                    <p class="card__facts proposition-item__facts">
+                      <span>{areaLabel(proposition.area)}</span>
+                      <span class="meta">Proposed {longDate(proposition.createdAt)}</span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <p class="actions">
+            <a class="button button--primary" href={path('/propositions/new/')}>
+              Suggest a proposition
+            </a>
+          </p>
+        </>
+      )
+    }
+  </div>
+</Base>

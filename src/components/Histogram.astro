@@ -1,0 +1,193 @@
+---
+/**
+ * The distribution of answers to one proposition.
+ *
+ * A histogram and a median, and no mean — the whole reason CLAUDE.md insists on this shape
+ * is that the mean of an 11-point bipolar scale is misleading exactly when the distribution
+ * is bimodal, and bimodal is what to expect on the contested propositions. A single number
+ * would report "6.2, mild agreement" for a community that had split cleanly into two camps.
+ * The bars are the finding; the median is a summary of them that cannot invent a middle
+ * nobody occupies.
+ *
+ * Accessibility, which is most of the work here
+ * ---------------------------------------------
+ * The bars are `aria-hidden` and a real `<table>` carries the same numbers, visually
+ * hidden. That is not a courtesy: a bar chart conveys its content entirely through height
+ * and position, both of which are unavailable to a screen reader, and a chart with an
+ * `aria-label` saying "histogram of ratings" tells somebody nothing they can act on.
+ *
+ * Nothing is carried by colour alone. The reader's own answer is marked with the word
+ * "you" above its bar and a thicker border; the median is marked with the word "median"
+ * under its column and a rule. Both survive being printed in grey, and both are in the
+ * table.
+ *
+ * Rendered empty and filled by script: the aggregate is deliberately not in the page source
+ * until the reader has answered. See the header of src/lib/propositions.ts.
+ */
+import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/propositions';
+---
+
+<div class="histogram" data-histogram hidden>
+  {/* The plot is decoration over data the table below states properly. */}
+  <div class="histogram__plot" aria-hidden="true">
+    {
+      SCALE_POINTS.map((point) => (
+        <div class="histogram__col" data-col={point}>
+          <span class="histogram__you" data-you hidden>you</span>
+          <span class="histogram__count" data-count>0</span>
+          <span class="histogram__bar" data-bar style="--height: 0%" />
+          <span class="histogram__tick">{point}</span>
+          <span class="histogram__anchor">{SCALE_ANCHORS[point] ?? ''}</span>
+          <span class="histogram__median" data-median hidden>median</span>
+        </div>
+      ))
+    }
+  </div>
+
+  <table class="visually-hidden" data-histogram-table>
+    <caption>How people answered, by score</caption>
+    <thead>
+      <tr>
+        <th scope="col">Score</th>
+        <th scope="col">People</th>
+        <th scope="col">Notes</th>
+      </tr>
+    </thead>
+    <tbody data-histogram-rows></tbody>
+  </table>
+
+  {/* Coverage is its own number, per CLAUDE.md, because a median over four opinions out of
+      forty raters means something very different from a median over thirty-eight. */}
+  <dl class="histogram__counts" data-histogram-counts>
+    <div>
+      <dt>Median</dt>
+      <dd data-stat="median">—</dd>
+    </div>
+    <div>
+      <dt>Gave a score</dt>
+      <dd data-stat="opinions">0</dd>
+    </div>
+    <div>
+      <dt>No opinion</dt>
+      <dd data-stat="no-opinion">0</dd>
+    </div>
+    <div>
+      <dt>Coverage</dt>
+      <dd data-stat="coverage">—</dd>
+    </div>
+  </dl>
+
+  <p class="histogram__note">
+    No average is shown, and none is computed. On an eleven-point scale a mean reports mild
+    agreement for a community that has split into two camps, which is the case this corpus
+    exists to make visible rather than to smooth over.
+  </p>
+</div>
+
+<style>
+  .histogram {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .histogram__plot {
+    display: grid;
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+    gap: var(--space-3xs);
+    align-items: end;
+  }
+
+  .histogram__col {
+    display: grid;
+    /* you · count · bar · tick · anchor · median. Fixed rows so every column's tick sits on
+       the same line however tall its bar is. */
+    grid-template-rows: 1.2em 1.2em 8rem auto 2.4em 1.2em;
+    gap: var(--space-3xs);
+    justify-items: center;
+    text-align: center;
+  }
+
+  .histogram__bar {
+    align-self: end;
+    width: 100%;
+    height: var(--height);
+    min-height: 2px;
+    background-color: var(--accent);
+  }
+
+  /* The reader's own answer. A thicker ink outline as well as the word above it — the
+     colour is the same accent as every other bar on purpose, because a second colour here
+     would be a fourth meaning for colour on a site that has already spent three. */
+  .histogram__col[data-mine] .histogram__bar {
+    outline: var(--border-width-thick) solid var(--ink);
+    outline-offset: 1px;
+  }
+
+  .histogram__you,
+  .histogram__median {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .histogram__you {
+    color: var(--ink);
+    font-weight: var(--weight-semibold);
+  }
+
+  .histogram__median {
+    padding-block-start: 2px;
+    border-block-start: var(--border-width-thick) solid var(--ink);
+    color: var(--ink);
+    align-self: start;
+    width: 100%;
+  }
+
+  .histogram__count {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    color: var(--ink-muted);
+  }
+
+  .histogram__tick {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+  }
+
+  .histogram__anchor {
+    font-size: var(--size-0);
+    line-height: var(--leading-snug);
+    color: var(--ink-muted);
+    text-wrap: balance;
+  }
+
+  .histogram__counts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--space-sm);
+    margin: 0;
+    padding-block-start: var(--space-sm);
+    border-block-start: var(--border);
+  }
+
+  .histogram__counts dt {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .histogram__counts dd {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--size-4);
+  }
+
+  .histogram__note {
+    max-width: var(--measure);
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+</style>

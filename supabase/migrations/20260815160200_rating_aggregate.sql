@@ -56,10 +56,23 @@ security definer
 set search_path = ''
 as $$
   select
-    array(
-      select count(*) filter (where r.score = s)::integer
-        from generate_series(0, 10) as g(s)
-    ),
+    -- Written out rather than generated. A `select ... from generate_series(0, 10)`
+    -- subquery here references r.score from the enclosing aggregate query, where it is
+    -- ungrouped, and Postgres rejects it: "subquery uses ungrouped column from outer
+    -- query". Eleven lines that are obviously correct beat a clever one that is not.
+    array[
+      count(*) filter (where r.score = 0)::integer,
+      count(*) filter (where r.score = 1)::integer,
+      count(*) filter (where r.score = 2)::integer,
+      count(*) filter (where r.score = 3)::integer,
+      count(*) filter (where r.score = 4)::integer,
+      count(*) filter (where r.score = 5)::integer,
+      count(*) filter (where r.score = 6)::integer,
+      count(*) filter (where r.score = 7)::integer,
+      count(*) filter (where r.score = 8)::integer,
+      count(*) filter (where r.score = 9)::integer,
+      count(*) filter (where r.score = 10)::integer
+    ],
     -- FILTER rather than relying on how the ordered-set aggregate treats nulls. Being
     -- explicit costs nothing and the alternative is a median that silently includes the
     -- people who declined to give one.

@@ -498,6 +498,131 @@
     overflow-wrap: break-word;
   }
 
+  /* ── Propositions ───────────────────────────────────────────────────────────────── */
+
+  .proposition {
+    --shell-width: var(--width-prose);
+  }
+
+  .proposition > * + * {
+    margin-block-start: var(--space-xl);
+  }
+
+  .proposition__label {
+    margin-block-end: var(--space-2xs);
+  }
+
+  /* The claim is the page. Serif, large, and quoted — it is a statement being reported
+     rather than the site speaking, and the distinction matters on a site that takes no
+     position on any of them. */
+  .proposition__statement {
+    max-width: var(--measure);
+    margin: 0;
+    padding-inline-start: var(--space-md);
+    border-inline-start: var(--border-width-thick) solid var(--accent);
+  }
+
+  .proposition__statement p {
+    font-family: var(--font-serif);
+    font-size: var(--size-6);
+    line-height: var(--leading-snug);
+    text-wrap: pretty;
+  }
+
+  .proposition-list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .proposition-item {
+    padding-block: var(--space-md);
+    border-block-start: var(--border);
+  }
+
+  .proposition-item__link {
+    display: block;
+    max-width: var(--measure);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: var(--size-4);
+    line-height: var(--leading-snug);
+    text-decoration-color: var(--rule);
+    text-wrap: pretty;
+  }
+
+  .proposition-item__link:hover {
+    color: var(--accent-strong);
+    text-decoration-color: currentColor;
+  }
+
+  .proposition-item__facts {
+    margin-block-start: var(--space-2xs);
+  }
+
+  .rate > * + * {
+    margin-block-start: var(--space-lg);
+  }
+
+  /* The one sentence that says why the distribution is not on screen yet. A rule and a
+     surface rather than a colour: it is an explanation, not a warning. */
+  .rate__withheld {
+    max-width: var(--measure);
+    padding: var(--space-sm) var(--space-md);
+    border-inline-start: var(--border-width-thick) solid var(--rule);
+    background-color: var(--surface);
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  /* ── Proposition guidance ───────────────────────────────────────────────────────── */
+
+  .guidance dt {
+    margin-block-start: var(--space-md);
+    font-weight: var(--weight-semibold);
+  }
+
+  .guidance dd {
+    margin-inline-start: 0;
+  }
+
+  .guidance dd > * + * {
+    margin-block-start: var(--space-2xs);
+  }
+
+  /* Bad and good examples are told apart by a word and a rule weight, never by the outcome
+     colours — those mean one thing on this site and borrowing them here would spend them. */
+  .guidance__example {
+    max-width: var(--measure);
+    padding: var(--space-2xs) var(--space-sm);
+    border-inline-start: var(--border-width-thick) solid var(--rule);
+    background-color: var(--surface);
+    font-size: var(--size-2);
+  }
+
+  .guidance__example::before {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+
+  .guidance__example--bad::before {
+    content: 'Not ratable';
+  }
+
+  .guidance__example--good::before {
+    content: 'Ratable';
+  }
+
+  .guidance__example--good {
+    border-inline-start-color: var(--ink);
+  }
+
   /* ── Confirmations ──────────────────────────────────────────────────────────────── */
 
   .confirm {
