@@ -1,0 +1,106 @@
+---
+/**
+ * Repeatable rows of tool, version, and date of use. At least one is required.
+ *
+ * All three parts of a row are required, and the date is the reason this is structured at
+ * all: a practice written against a 2025 model is misleading by 2026, and the tombstone on
+ * every listing is derived from the most recent date here. "GPT, sometime last year" is not
+ * a reproducible claim about anything.
+ *
+ * The datalist suggests and never constrains. A closed list of tools would be out of date
+ * within a month, and the accounts worth having are frequently the ones using something
+ * nobody thought to list.
+ *
+ * The first row is server-rendered rather than created by script, so the section is usable
+ * the moment the page paints and does not depend on JavaScript having run to show a field.
+ */
+import { COMMON_TOOLS, EARLIEST_TOOL_USE, PRACTICE_LIMITS } from '../lib/practice-schema';
+
+const today = new Date().toISOString().slice(0, 10);
+---
+
+<div class="tools" data-tools>
+  <ul class="tools__list" data-tool-list role="list"></ul>
+
+  {/* The row that every other row is cloned from. `hidden` on a <template> is redundant
+      but harmless, and makes the intent obvious to anyone reading the DOM. */}
+  <template data-tool-template>
+    <li class="tool-row">
+      <div class="tool-row__fields">
+        <div class="field">
+          <label class="field__label" data-label-for="name">Tool</label>
+          <input
+            class="field__control"
+            type="text"
+            data-tool-name
+            list="common-tools"
+            maxlength={PRACTICE_LIMITS.toolName}
+            placeholder="Lean"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="field">
+          <label class="field__label" data-label-for="version">Version</label>
+          <input
+            class="field__control"
+            type="text"
+            data-tool-version
+            maxlength={PRACTICE_LIMITS.toolVersion}
+            placeholder="4.9.0"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="field">
+          <label class="field__label" data-label-for="used-on">Date used</label>
+          <input
+            class="field__control"
+            type="date"
+            data-tool-date
+            min={EARLIEST_TOOL_USE}
+            max={today}
+          />
+        </div>
+
+        <button class="button button--quiet tool-row__remove" type="button" data-tool-remove>
+          Remove
+        </button>
+      </div>
+
+      <p class="field__error" data-tool-error hidden></p>
+    </li>
+  </template>
+
+  <datalist id="common-tools">
+    {COMMON_TOOLS.map((tool) => <option value={tool}></option>)}
+  </datalist>
+
+  <div class="actions">
+    <button class="button" type="button" data-tool-add>Add another tool</button>
+  </div>
+
+  <p class="field__hint">
+    A session that used one model in March and a proof assistant in June is two rows. If a
+    tool has no version number, say how you reached it — <span class="meta"
+      >web app, undated</span
+    > is more use than an empty field.
+  </p>
+</div>
+
+<style>
+  .tools {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .tools__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+</style>

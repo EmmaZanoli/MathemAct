@@ -1,0 +1,77 @@
+---
+/**
+ * Where a submission lands.
+ *
+ * Somebody has just spent ten minutes writing carefully, pressed a button, and watched
+ * everything they wrote disappear from the screen. The job of this page is to make that
+ * feel like an arrival rather than a loss: say what happened, say what happens next, say
+ * when, and say what to do if they want to change something.
+ *
+ * It is deliberately specific about the wait. "Pending review" with no timescale reads as
+ * "possibly never", and a volunteer queue that takes a few days is fine as long as nobody
+ * has to guess.
+ */
+import Account from '../../layouts/Account.astro';
+import { path } from '../../lib/paths';
+import { LICENCE, SITE } from '../../lib/site';
+---
+
+<Account
+  title="Submitted"
+  description="What happens to a practice after it is submitted."
+  lead="It is in the queue. Nothing else is needed from you."
+  gate="required"
+>
+  <div class="prose">
+    <h2>What happens next</h2>
+
+    <ul class="tombstone-list">
+      <li>
+        A volunteer moderator reads it. Moderation here is careful and slow rather than
+        instant — expect <strong>a few days</strong>, not minutes, and longer over a
+        holiday.
+      </li>
+      <li>
+        When it is published it appears in the listings, sorted by recency, with an open
+        tombstone: nobody has confirmed yet that it still works.
+      </li>
+      <li>
+        Nothing about it is public until then. It is visible to you and to moderators, and
+        to nobody else.
+      </li>
+      <li>
+        Published accounts are licensed <a href={LICENCE.url} rel="license">{LICENCE.name}</a>.
+        You keep copyright and are credited under whatever name your profile shows.
+      </li>
+    </ul>
+
+    <h2>If you want to change it</h2>
+
+    <p>
+      A pending submission can still be edited — the database allows its author to change it
+      right up until a moderator publishes it. The screen for doing that is not built yet,
+      so for the moment the way to amend or withdraw one is to write to <a
+        href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a
+      >. Say which submission and what you want changed.
+    </p>
+
+    <p>
+      After it is published the text is fixed, which is deliberate: people confirm that a
+      practice still works, and those confirmations would otherwise attest to a version
+      nobody can read any more. Deleting a published practice is always possible.
+    </p>
+
+    <h2>The most useful thing you could do now</h2>
+
+    <p>
+      Post a second one about something that <em>did not</em> work. Accounts of failure are
+      the ones nobody publishes and the ones this corpus is short of — and they are usually
+      quicker to write, because you already know where it went wrong.
+    </p>
+  </div>
+
+  <div class="actions">
+    <a class="button button--primary" href={path('/practices/new/')}>Post another</a>
+    <a class="button" href={path('/account/')}>Back to your profile</a>
+  </div>
+</Account>

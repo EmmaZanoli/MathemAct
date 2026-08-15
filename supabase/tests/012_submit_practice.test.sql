@@ -11,7 +11,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(16);
+select plan(18);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -33,14 +33,14 @@ update public.profiles set is_banned = true
 select ok(
   not has_function_privilege('anon', 'public.submit_practice(text, public.practice_area, '
     'public.practice_task_type, jsonb, text, text, public.practice_outcome, text, text, '
-    'boolean, text, text, text, integer, boolean, boolean, smallint, text[])', 'EXECUTE'),
+    'boolean, text, text, text, integer, boolean, boolean, integer, text[])', 'EXECUTE'),
   'anon cannot execute submit_practice'
 );
 
 select ok(
   has_function_privilege('authenticated', 'public.submit_practice(text, public.practice_area, '
     'public.practice_task_type, jsonb, text, text, public.practice_outcome, text, text, '
-    'boolean, text, text, text, integer, boolean, boolean, smallint, text[])', 'EXECUTE'),
+    'boolean, text, text, text, integer, boolean, boolean, integer, text[])', 'EXECUTE'),
   'authenticated can'
 );
 
@@ -171,6 +171,28 @@ select throws_ok(
   'and so is the third-party material confirmation'
 );
 
+-- A share link is supplementary and never the only record: links expire, are revoked, and
+-- may breach provider terms, while the excerpt is ours and is what the export carries.
+select throws_ok(
+  $$ select public.submit_practice(
+       'A link and nothing else', 'research', 'other',
+       '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
+       'a', 'b', 'worked', 'c', 'd', true,
+       null, 'https://example.org/shared') $$,
+  '23514'::text, null::text,
+  'a transcript link with no excerpt is refused: the link is never the only record'
+);
+
+-- The asymmetry is the rule. An excerpt with no link is ordinary.
+select lives_ok(
+  $$ select public.submit_practice(
+       'An excerpt and no link', 'research', 'other',
+       '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
+       'a', 'b', 'worked', 'c', 'd', true,
+       'user: is this true?') $$,
+  'while an excerpt with no link is perfectly ordinary'
+);
+
 reset role;
 
 -- ── All or nothing ──────────────────────────────────────────────────────────────────
@@ -195,7 +217,7 @@ reset role;
 
 select is(
   (select count(*)::int from public.practices),
-  1,
+  2,
   'and leaves no half-written practice behind'
 );
 

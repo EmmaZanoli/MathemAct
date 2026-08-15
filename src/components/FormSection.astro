@@ -1,0 +1,51 @@
+---
+/**
+ * One numbered section of the submission form.
+ *
+ * Numbered because the twelve are a fixed shape, stated in CLAUDE.md's content model, and a
+ * researcher deciding whether to start is entitled to see how many there are and what they
+ * ask for. This is the one place on the site where numbered markers are correct: CLAUDE.md
+ * forbids `01 / 02 / 03` where the content is not a sequence, and here it genuinely is.
+ *
+ * The square beside the heading fills when the section has an answer. It is the same glyph
+ * as the tombstone, used for the same reason — it encodes something true rather than
+ * decorating — and it is drawn in CSS because U+25A0 is outside our font subsets.
+ *
+ * Styling lives in forms.css. Slotted content carries the *page's* scope attribute rather
+ * than this file's, so a scoped `.form-section > *` here would compile to a selector
+ * matching none of what the page puts inside.
+ */
+interface Props {
+  id: string;
+  number: number;
+  title: string;
+  /** Required sections say nothing; optional ones say so, in words rather than a symbol. */
+  optional?: boolean;
+  /** One line under the heading, where the section needs framing the fields cannot give. */
+  lead?: string;
+}
+
+const { id, number, title, optional = false, lead } = Astro.props;
+---
+
+<section
+  class="form-section"
+  id={`section-${id}`}
+  data-section={id}
+  data-optional={optional ? '' : undefined}
+  aria-labelledby={`heading-${id}`}
+>
+  <div class="form-section__head">
+    <span class="form-section__mark" aria-hidden="true"></span>
+    <span class="form-section__number" aria-hidden="true">{number} / 12</span>
+
+    <h2 class="form-section__title" id={`heading-${id}`}>
+      {title}
+      {optional && <span class="form-section__optional">optional</span>}
+    </h2>
+
+    {lead && <p class="form-section__lead">{lead}</p>}
+  </div>
+
+  <slot />
+</section>

@@ -30,6 +30,26 @@ export interface Profile {
   readonly bio: string;
   /** Null when the confirmed address did not match a registry record. */
   readonly institution: Institution | null;
+  /**
+   * Whether this account has confirmed its email address, and whether it is banned. Both
+   * are system-owned and read-only here; they exist on this table so that row level
+   * security can require a confirmed, unbanned account without any policy needing to read
+   * auth.users. The interface reads them for the same reason the policies do — so it can
+   * explain the refusal before somebody spends ten minutes on a form that will be
+   * rejected.
+   *
+   * `confirmedAt` is a timestamp about the account, not about the address. There is no
+   * email address anywhere in this type and there never will be.
+   */
+  readonly confirmedAt: string | null;
+  readonly isBanned: boolean;
+}
+
+/** Whether this account may post. The same three conditions as the insert policy on
+ *  public.practices, in the same order, so the interface and the database agree about who
+ *  is turned away and why. */
+export function mayPost(profile: Profile): boolean {
+  return profile.confirmedAt !== null && !profile.isBanned;
 }
 
 export interface DeletionRequest {
@@ -68,11 +88,13 @@ interface ProfileRow {
   institution_name: string | null;
   institution_country: string | null;
   institution_verified_at: string | null;
+  confirmed_at: string | null;
+  is_banned: boolean;
 }
 
 const PROFILE_COLUMNS =
   'id, display_name, is_pseudonym, bio, institution_ror_id, institution_name, ' +
-  'institution_country, institution_verified_at';
+  'institution_country, institution_verified_at, confirmed_at, is_banned';
 
 function toProfile(row: ProfileRow): Profile {
   // The institution columns are all-or-nothing in the database, enforced by a CHECK. This
@@ -98,6 +120,8 @@ function toProfile(row: ProfileRow): Profile {
           verifiedAt: row.institution_verified_at as string,
         }
       : null,
+    confirmedAt: row.confirmed_at,
+    isBanned: row.is_banned,
   };
 }
 

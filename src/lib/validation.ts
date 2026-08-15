@@ -86,3 +86,121 @@ export function validatePassword(value: string): string | null {
 
   return null;
 }
+
+// ── Practices ─────────────────────────────────────────────────────────────────────────
+// Each of these mirrors a CHECK constraint in
+// supabase/migrations/20260815100200_practices.sql and _100300_practice_tools.sql. Same
+// direction as everything above: the constraint is the truth, this is the convenience.
+//
+// Messages name the field and say what to do. None of them says "invalid".
+
+/** Required text: present after trimming, and inside the cap. */
+export function validateRequiredText(
+  value: string,
+  max: number,
+  field: string,
+): string | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) return `${field} is required.`;
+  if (trimmed.length > max) {
+    return `Shorten ${field.toLowerCase()} to ${max} characters or fewer. It is currently ${trimmed.length}.`;
+  }
+
+  return null;
+}
+
+export function validateOptionalText(
+  value: string,
+  max: number,
+  field: string,
+): string | null {
+  if (value.length > max) {
+    return `Shorten ${field.toLowerCase()} to ${max} characters or fewer. It is currently ${value.length}.`;
+  }
+
+  return null;
+}
+
+/**
+ * The field the whole corpus rests on, so it gets its own message rather than the generic
+ * required-text one. Somebody who left it blank has usually not understood that it is not
+ * optional, and telling them the character count does not address that.
+ */
+export function validateVerification(value: string, max: number): string | null {
+  if (!value.trim()) {
+    return 'Say how you checked the result. This field is what separates an account somebody can rely on from one that records that something felt right — there is no version of a practice without it.';
+  }
+
+  return validateOptionalText(value, max, 'The verification');
+}
+
+/** Shape only, matching practices_transcript_url_shape. Whether a link resolves is not
+ *  something a constraint or a form can know. */
+export function validateTranscriptUrl(value: string, max: number): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (!/^https?:\/\/\S+$/.test(trimmed)) {
+    return 'A transcript link has to start with http:// or https://. Leave it empty if you do not have one — the excerpt above is the part that matters.';
+  }
+
+  if (trimmed.length > max) {
+    return `That link is longer than ${max} characters, which is longer than any share link should be. Check it is the link you meant.`;
+  }
+
+  return null;
+}
+
+export interface ToolInput {
+  name: string;
+  version: string;
+  usedOn: string;
+}
+
+/**
+ * One tool row. Version and date are as required as the name: "GPT" with no version and no
+ * date is not a reproducible claim about anything, and the staleness signal on every
+ * listing is derived from the date.
+ */
+export function validateTool(
+  tool: ToolInput,
+  limits: { name: number; version: number },
+  earliest: string,
+): string | null {
+  if (!tool.name.trim()) return 'Name the tool, or remove the row.';
+  if (tool.name.trim().length > limits.name) {
+    return `Shorten the tool name to ${limits.name} characters or fewer.`;
+  }
+
+  if (!tool.version.trim()) {
+    return 'Give the version. If the tool does not have one, say how you reached it — "web app, undated" is more use than nothing.';
+  }
+  if (tool.version.trim().length > limits.version) {
+    return `Shorten the version to ${limits.version} characters or fewer.`;
+  }
+
+  if (!tool.usedOn) return 'Give the date you used it. Listings sort by it, and it is what makes a practice visibly stale later.';
+
+  // Compared as strings. Both are ISO yyyy-mm-dd, which sorts lexicographically, and this
+  // avoids the timezone question a Date comparison would raise for no benefit.
+  const today = new Date().toISOString().slice(0, 10);
+  if (tool.usedOn > today) return 'That date is in the future. Listings sort by recency, so a future date would sit at the top of every page until it arrives.';
+  if (tool.usedOn < earliest) return `That date is before ${earliest.slice(0, 4)}, which is almost certainly a mistyped year.`;
+
+  return null;
+}
+
+export function validateTimeSpent(value: string, max: number): string | null {
+  if (!value.trim()) return null;
+
+  const minutes = Number(value);
+  if (!Number.isInteger(minutes) || minutes < 1) {
+    return 'Give the time in whole minutes, or leave it empty.';
+  }
+  if (minutes > max) {
+    return `That is more than ${Math.round(max / 60 / 24)} days of continuous work. Check the units — the field is in minutes.`;
+  }
+
+  return null;
+}

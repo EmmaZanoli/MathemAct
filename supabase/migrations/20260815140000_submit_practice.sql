@@ -43,7 +43,13 @@ create function public.submit_practice(
   p_time_spent_minutes             integer  default null,
   p_was_published                  boolean  default null,
   p_was_disclosed                  boolean  default null,
-  p_author_confidence              smallint default null,
+  -- integer, although the column is smallint. Postgres will not implicitly narrow an
+  -- integer literal to smallint while resolving which function to call, so a smallint
+  -- parameter makes `submit_practice(..., 8, ...)` fail with "function does not exist" --
+  -- a message that sends you looking for a missing migration rather than a missing cast.
+  -- The assignment cast to the column happens on INSERT, where it is unambiguous, and the
+  -- range is checked there by practices_author_confidence_range.
+  p_author_confidence              integer  default null,
   p_tag_codes                      text[]   default '{}'
 )
 returns uuid

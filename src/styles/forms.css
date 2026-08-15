@@ -123,6 +123,46 @@
     display: none;
   }
 
+  /* Live character count. Muted until the field is close to its cap, then ink — never a
+     colour, because "you are near a limit" is not one of the three outcome meanings and
+     nothing else on this site is allowed to borrow them. */
+  .field__counter {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .field__counter[data-near] {
+    color: var(--ink);
+    font-weight: var(--weight-semibold);
+  }
+
+  /* A worked example, collapsed. Long enough to be genuinely useful, which is exactly why
+     it is not sitting between the label and the input. */
+  .field__example {
+    max-width: var(--measure);
+    font-size: var(--size-2);
+  }
+
+  .field__example > summary {
+    color: var(--accent);
+    cursor: pointer;
+  }
+
+  .field__example > summary:hover {
+    color: var(--accent-strong);
+  }
+
+  .field__example > p {
+    margin-block-start: var(--space-2xs);
+    padding: var(--space-2xs) var(--space-xs);
+    border-inline-start: var(--border-width-thick) solid var(--rule);
+    color: var(--ink-muted);
+    /* Examples of stepwise method are written with newlines and have to keep them. */
+    white-space: pre-line;
+  }
+
   /* ── Checkbox ───────────────────────────────────────────────────────────────────── */
 
   .checkbox {
@@ -273,6 +313,206 @@
     font-family: var(--font-mono);
     font-size: var(--size-1);
     letter-spacing: var(--tracking-wide);
+  }
+
+  /* ── The submission form ────────────────────────────────────────────────────────── */
+  /* One scrolling page with twelve numbered sections, not a wizard. Researchers want to
+     see the whole shape of the ask before they start, and a wizard hides how much is left
+     while making it impossible to answer field nine before field four. */
+
+  .practice-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xl);
+    max-width: var(--width-prose);
+  }
+
+  .form-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    scroll-margin-top: 6rem;
+  }
+
+  .form-section__head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: baseline;
+    gap: var(--space-2xs);
+    padding-block-end: var(--space-2xs);
+    border-block-end: var(--border);
+  }
+
+  /* The section marker: a square that fills when the section has an answer. The same glyph
+     as the tombstone and used for the same reason — it encodes something true rather than
+     decorating. Drawn in CSS, never typed: U+25A0 is outside our font subsets. */
+  .form-section__mark {
+    width: var(--tombstone-size);
+    height: var(--tombstone-size);
+    align-self: center;
+    border: 1.5px solid var(--rule);
+  }
+
+  .form-section[data-complete] .form-section__mark {
+    border-color: var(--ink);
+    background-color: var(--ink);
+  }
+
+  .form-section__number {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+  }
+
+  .form-section__title {
+    grid-column: 2;
+    font-size: var(--size-5);
+  }
+
+  .form-section__optional {
+    margin-inline-start: var(--space-2xs);
+    color: var(--ink-muted);
+    font-family: var(--font-sans);
+    font-size: var(--size-2);
+    font-weight: var(--weight-normal);
+    letter-spacing: 0;
+  }
+
+  .form-section__lead {
+    grid-column: 2;
+    max-width: var(--measure);
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  /* ── Progress ───────────────────────────────────────────────────────────────────── */
+  /* Sticky, because the point of it is to answer "how much is left" at any scroll
+     position. It reports sections rather than fields: "4 of 12" is a number somebody
+     deciding whether to start can use. */
+
+  .progress {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2xs) var(--space-md);
+    margin-block-end: var(--space-lg);
+    padding-block: var(--space-2xs);
+    border-block-end: var(--border);
+    /* Opaque: the form scrolls underneath it. */
+    background-color: var(--ground);
+  }
+
+  .progress__count {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  .progress__track {
+    flex: 1 1 8rem;
+    height: 4px;
+    border: var(--border);
+    background-color: var(--surface);
+  }
+
+  .progress__bar {
+    height: 100%;
+    background-color: var(--accent);
+    transition: width var(--motion-base) var(--motion-ease);
+  }
+
+  /* ── Draft state ────────────────────────────────────────────────────────────────── */
+
+  .draft {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-sm);
+    font-size: var(--size-2);
+    color: var(--ink-muted);
+  }
+
+  .draft__state {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  /* ── Tool rows ──────────────────────────────────────────────────────────────────── */
+
+  .tool-row {
+    padding: var(--space-sm);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface);
+  }
+
+  .tool-row__fields {
+    display: grid;
+    grid-template-columns: 2fr 1fr auto auto;
+    align-items: end;
+    gap: var(--space-2xs) var(--space-sm);
+  }
+
+  .tool-row__remove {
+    padding-block: var(--space-3xs);
+    font-size: var(--size-2);
+  }
+
+  @media (max-width: 40rem) {
+    .tool-row__fields {
+      grid-template-columns: 1fr;
+      align-items: stretch;
+    }
+  }
+
+  /* ── Choice lists ───────────────────────────────────────────────────────────────── */
+  /* Area and task type: radio lists with a one-line explanation each. Not a <select>,
+     because a select hides nine of ten options and the explanations with them. */
+
+  .choices {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: var(--space-3xs) var(--space-sm);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .choice {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    gap: 0 var(--space-2xs);
+    padding: var(--space-2xs);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+
+  .choice:hover {
+    background-color: var(--surface);
+  }
+
+  .choice:has(input:focus-visible) {
+    outline: var(--focus-ring);
+    outline-offset: 0;
+  }
+
+  .choice__input {
+    margin: 0;
+    margin-block-start: 0.32em;
+    accent-color: var(--accent);
+  }
+
+  .choice__hint {
+    grid-column: 2;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
   }
 
   /* ── Turnstile ──────────────────────────────────────────────────────────────────── */

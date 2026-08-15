@@ -27,6 +27,12 @@ interface Props {
   rows?: number;
   value?: string;
   placeholder?: string;
+  /** Show a live character count against `maxlength`. A cap you discover by being rejected
+   *  is a cap that cost you the paragraph you had just written. */
+  counter?: boolean;
+  /** A worked example, shown under the hint in a disclosure. Long enough to be useful, so
+   *  it is collapsed by default rather than sitting between the label and the input. */
+  example?: string;
 }
 
 const {
@@ -40,6 +46,8 @@ const {
   rows = 4,
   value = '',
   placeholder,
+  counter = false,
+  example,
 } = Astro.props;
 
 const hintId = `${id}-hint`;
@@ -69,6 +77,15 @@ const describedBy = [hasHint ? hintId : null, errorId].filter(Boolean).join(' ')
   }
 
   {
+    example && (
+      <details class="field__example">
+        <summary>Show an example</summary>
+        <p>{example}</p>
+      </details>
+    )
+  }
+
+  {
     type === 'textarea' ? (
       <textarea
         class="field__control"
@@ -94,6 +111,17 @@ const describedBy = [hasHint ? hintId : null, errorId].filter(Boolean).join(' ')
         placeholder={placeholder}
         aria-describedby={describedBy}
       />
+    )
+  }
+
+  {
+    counter && maxlength && (
+      /* aria-live is deliberately absent. A counter that announced itself on every
+         keystroke would make the field unusable with a screen reader; the cap is stated in
+         the hint, and the error on submission says the number. */
+      <p class="field__counter" data-counter-for={id} data-max={maxlength}>
+        <span data-counter-value>0</span> / {maxlength}
+      </p>
     )
   }
 

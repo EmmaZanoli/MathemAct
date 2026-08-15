@@ -1,0 +1,916 @@
+---
+/**
+ * The submission form. The most important flow in the product.
+ *
+ * One scrolling page with twelve numbered sections and a progress indicator, not a wizard.
+ * Researchers want to see the whole shape of the ask before they start — a wizard hides how
+ * much is left, makes it impossible to answer section nine before section four, and turns
+ * "is this worth my time" into a question you can only answer by starting.
+ *
+ * Structure is the feature. Every field that constrains what an author can write is what
+ * makes the corpus comparable in five years instead of a pile of prose, so the caps are
+ * visible rather than discovered by rejection, and each field says in one line what it is
+ * for. This is closer to CONSORT or PRISMA than to a message board, and it is meant to be.
+ *
+ * Ten minutes is the target for a researcher who has the session in front of them.
+ */
+import Account from '../../layouts/Account.astro';
+import Field from '../../components/Field.astro';
+import FormSection from '../../components/FormSection.astro';
+import FormStatus from '../../components/FormStatus.astro';
+import OutcomeChoice from '../../components/OutcomeChoice.astro';
+import ToolRows from '../../components/ToolRows.astro';
+import TagPicker from '../../components/TagPicker.astro';
+import ConfidenceScale from '../../components/ConfidenceScale.astro';
+import { path } from '../../lib/paths';
+import { LICENCE, SITE } from '../../lib/site';
+import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practice-schema';
+---
+
+<Account
+  title="Post a practice"
+  description="Record how you used an AI tool in mathematical work, in a form that can be read as evidence."
+  lead="Twelve sections. If you have the session in front of you it takes about ten minutes, and your draft is saved as you go."
+  gate="required"
+>
+  {/* Shown instead of the form when the account may not post. The same three conditions as
+      the insert policy on public.practices, checked here so nobody discovers them after
+      writing a submission. */}
+  <div class="panel" data-gate-unconfirmed hidden>
+    <p class="panel__heading">Confirm your email address first</p>
+    <p>
+      Posting needs a confirmed address. It is what the institutional badge is derived from,
+      and it is the only thing standing between the moderation queue and anyone with a
+      script.
+    </p>
+    <p class="actions">
+      <a class="button button--primary" href={path('/account/confirm/')}>
+        Get another confirmation link
+      </a>
+    </p>
+  </div>
+
+  <div class="panel" data-gate-banned hidden>
+    <p class="panel__heading">This account cannot post</p>
+    <p>
+      If you think that is a mistake, write to <a href={`mailto:${SITE.contactEmail}`}
+        >{SITE.contactEmail}</a
+      > and it will be looked at by a person.
+    </p>
+  </div>
+
+  <div data-form-wrapper hidden>
+    <div class="progress">
+      <span class="progress__count" data-progress-count>0 of 12 sections</span>
+      <span class="progress__track">
+        <span class="progress__bar" data-progress-bar style="width: 0%"></span>
+      </span>
+      <span class="draft__state" data-draft-state></span>
+    </div>
+
+    <form class="practice-form" id="practice" novalidate>
+      <FormStatus id="practice-status" />
+
+      <FormSection id="title" number={1} title="Title">
+        <Field
+          id="title"
+          label="One line saying what you did"
+          required
+          maxlength={PRACTICE_LIMITS.title}
+          counter
+          hint={FIELD_COPY.title.hint}
+          example={FIELD_COPY.title.example}
+        />
+      </FormSection>
+
+      <FormSection id="area" number={2} title="Area">
+        <fieldset class="choices">
+          <legend class="visually-hidden">What kind of work was this</legend>
+          {
+            AREAS.map((choice) => (
+              <label class="choice" for={`area-${choice.value}`}>
+                <input
+                  class="choice__input"
+                  type="radio"
+                  id={`area-${choice.value}`}
+                  name="area"
+                  value={choice.value}
+                />
+                <span>{choice.label}</span>
+                <span class="choice__hint">{choice.hint}</span>
+              </label>
+            ))
+          }
+        </fieldset>
+        <p class="field__error" id="area-error" hidden></p>
+      </FormSection>
+
+      <FormSection
+        id="task-type"
+        number={3}
+        title="Task type"
+        lead="What the tool was asked to do. This is the axis the corpus is most often grouped by, so it is worth a moment."
+      >
+        <fieldset class="choices">
+          <legend class="visually-hidden">What the tool was asked to do</legend>
+          {
+            TASK_TYPES.map((choice) => (
+              <label class="choice" for={`task-${choice.value}`}>
+                <input
+                  class="choice__input"
+                  type="radio"
+                  id={`task-${choice.value}`}
+                  name="task_type"
+                  value={choice.value}
+                />
+                <span>{choice.label}</span>
+                <span class="choice__hint">{choice.hint}</span>
+              </label>
+            ))
+          }
+        </fieldset>
+        <p class="field__error" id="task_type-error" hidden></p>
+      </FormSection>
+
+      <FormSection
+        id="tools"
+        number={4}
+        title="Tools used"
+        lead="Name, version, and the date you used it. At least one. The date is what lets a listing show that an account has gone stale."
+      >
+        <ToolRows />
+      </FormSection>
+
+      <FormSection id="aim" number={5} title="What you were trying to do">
+        <Field
+          id="aim"
+          label="The problem, in a few sentences"
+          type="textarea"
+          required
+          rows={4}
+          maxlength={PRACTICE_LIMITS.aim}
+          counter
+          hint={FIELD_COPY.aim.hint}
+          example={FIELD_COPY.aim.example}
+        />
+      </FormSection>
+
+      <FormSection id="method" number={6} title="What you actually did">
+        <Field
+          id="method"
+          label="Stepwise"
+          type="textarea"
+          required
+          rows={10}
+          maxlength={PRACTICE_LIMITS.method}
+          counter
+          hint={FIELD_COPY.method.hint}
+          example={FIELD_COPY.method.example}
+        />
+      </FormSection>
+
+      <FormSection id="outcome" number={7} title="Outcome">
+        <OutcomeChoice name="outcome" />
+        <p class="field__error" id="outcome-error" hidden></p>
+
+        <Field
+          id="outcome_notes"
+          label="What happened"
+          type="textarea"
+          required
+          rows={5}
+          maxlength={PRACTICE_LIMITS.outcomeNotes}
+          counter
+          hint={FIELD_COPY.outcomeNotes.hint}
+          example={FIELD_COPY.outcomeNotes.example}
+        />
+      </FormSection>
+
+      <FormSection id="verification" number={8} title="How you verified correctness">
+        <Field
+          id="verification"
+          label="How you checked"
+          type="textarea"
+          required
+          rows={6}
+          maxlength={PRACTICE_LIMITS.verification}
+          counter
+          example={FIELD_COPY.verification.example}
+        >
+          <Fragment slot="hint">
+            <p>{FIELD_COPY.verification.hint}</p>
+            <p>
+              <strong>This one has no skip and no "not applicable".</strong> An account
+              without it records that something felt right, which is not a finding. With it,
+              a reader knows what standard of checking was actually applied — and that is
+              the thing a mathematician needs in order to judge whether to trust the rest.
+            </p>
+            <p>
+              If the answer is that you did not check, say so. That is a real and useful
+              answer, and considerably more useful than a plausible-sounding one.
+            </p>
+          </Fragment>
+        </Field>
+      </FormSection>
+
+      <FormSection
+        id="transcript"
+        number={9}
+        title="Transcript"
+        lead="The excerpt is the record. A share link is supplementary — links expire, are revoked, and may breach the provider's terms."
+      >
+        <Field
+          id="transcript_excerpt"
+          label="Paste the part that matters"
+          type="textarea"
+          rows={8}
+          maxlength={PRACTICE_LIMITS.transcriptExcerpt}
+          counter
+          hint={FIELD_COPY.transcriptExcerpt.hint}
+        />
+
+        <Field
+          id="transcript_url"
+          label="Share link"
+          type="text"
+          maxlength={PRACTICE_LIMITS.transcriptUrl}
+          hint="Optional, and only alongside an excerpt. Never on its own."
+        />
+
+        <div class="checkbox">
+          <input
+            class="checkbox__input"
+            type="checkbox"
+            id="third_party_confirmed"
+            name="third_party_confirmed"
+          />
+          <label class="checkbox__label" for="third_party_confirmed">
+            I have removed other people's unpublished material from what I pasted
+          </label>
+          <p class="checkbox__hint">
+            Transcripts pick things up. A referee report you were discussing, a preprint
+            somebody sent you, a student's draft, an unpublished argument from a seminar —
+            none of that is yours to post, and everything here is published under {
+              LICENCE.name
+            } for anyone to copy. Read back over the excerpt before you tick this.
+          </p>
+          <p class="field__error" id="third_party_confirmed-error" hidden></p>
+        </div>
+      </FormSection>
+
+      <FormSection id="caveats" number={10} title="Caveats" optional>
+        <Field
+          id="caveats"
+          label="What you would do differently"
+          type="textarea"
+          rows={4}
+          maxlength={PRACTICE_LIMITS.caveats}
+          counter
+          hint={FIELD_COPY.caveats.hint}
+          example={FIELD_COPY.caveats.example}
+        />
+      </FormSection>
+
+      <FormSection id="tags" number={11} title="Subject areas" optional>
+        <TagPicker />
+      </FormSection>
+
+      <FormSection
+        id="counting"
+        number={12}
+        title="So this can be counted"
+        optional
+        lead="Researchers studying how mathematicians actually use these tools will read this corpus as data. These four answers are what let them. Skip any that do not apply."
+      >
+        <Field
+          id="time_spent_minutes"
+          label="Time spent, in minutes"
+          type="text"
+          hint="Roughly. 90 for an hour and a half. Counting the checking, not only the asking."
+        />
+
+        <fieldset class="choices">
+          <legend class="field__label">Did this work end up published?</legend>
+          <label class="choice" for="published-yes">
+            <input class="choice__input" type="radio" id="published-yes" name="was_published" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="choice" for="published-notyet">
+            <input class="choice__input" type="radio" id="published-notyet" name="was_published" value="notyet" checked />
+            <span>Not yet, or not applicable</span>
+          </label>
+          <label class="choice" for="published-no">
+            <input class="choice__input" type="radio" id="published-no" name="was_published" value="no" />
+            <span>No, and I do not expect it to be</span>
+          </label>
+        </fieldset>
+
+        {/* Only meaningful once something is published, and the database says so too:
+            practices_disclosure_needs_publication refuses a disclosure answer without a
+            publication. Hidden rather than disabled, because a disabled control that never
+            becomes enabled reads as broken. */}
+        <fieldset class="choices" data-disclosure hidden>
+          <legend class="field__label">Was the AI use disclosed in the paper?</legend>
+          <label class="choice" for="disclosed-yes">
+            <input class="choice__input" type="radio" id="disclosed-yes" name="was_disclosed" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="choice" for="disclosed-no">
+            <input class="choice__input" type="radio" id="disclosed-no" name="was_disclosed" value="no" />
+            <span>No</span>
+          </label>
+          <label class="choice" for="disclosed-none">
+            <input class="choice__input" type="radio" id="disclosed-none" name="was_disclosed" value="" checked />
+            <span>I would rather not say</span>
+          </label>
+        </fieldset>
+
+        <div class="field">
+          <span class="field__label" id="confidence-label">
+            How confident are you in the result?
+          </span>
+          <p class="field__hint">
+            Your own judgement, not a claim about the tool. It is what lets a reader weigh
+            an account against one from somebody who was sure.
+          </p>
+          <div aria-labelledby="confidence-label">
+            <ConfidenceScale name="author_confidence" />
+          </div>
+        </div>
+      </FormSection>
+
+      <div class="draft">
+        <button class="button button--primary" type="submit">Submit for review</button>
+        <button class="button button--quiet" type="button" data-discard>Discard draft</button>
+        <span class="draft__state" data-draft-state></span>
+      </div>
+
+      <p class="field__hint">
+        Submissions are read by a volunteer moderator before they appear. Everything
+        published here is licensed <a href={LICENCE.url} rel="license">{LICENCE.name}</a>;
+        you keep copyright and are credited.
+      </p>
+    </form>
+  </div>
+</Account>
+
+<script>
+  import { loadTags, submitPractice, type SubmissionTool } from '../../lib/practices';
+  import { loadProfile, mayPost } from '../../lib/profile';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import { debounce, discardDraft, loadDraft, saveDraft, savedAtLabel } from '../../lib/draft';
+  import { path } from '../../lib/paths';
+  import {
+    clearFieldErrors,
+    hideStatus,
+    query,
+    setBusy,
+    setFieldError,
+    showStatus,
+  } from '../../lib/forms';
+  import {
+    EARLIEST_TOOL_USE,
+    PRACTICE_LIMITS,
+    SECTIONS,
+  } from '../../lib/practice-schema';
+  import type { Area, TaskType } from '../../lib/practice-schema';
+  import type { Outcome } from '../../lib/status';
+  import {
+    validateOptionalText,
+    validateRequiredText,
+    validateTimeSpent,
+    validateTool,
+    validateTranscriptUrl,
+    validateVerification,
+  } from '../../lib/validation';
+
+  const form = query<HTMLFormElement>('#practice');
+  const wrapper = query<HTMLElement>('[data-form-wrapper]');
+  const status = query<HTMLElement>('#practice-status');
+  const submit = query<HTMLButtonElement>('button[type="submit"]', form);
+  const discardButton = query<HTMLButtonElement>('[data-discard]');
+
+  const toolList = query<HTMLUListElement>('[data-tool-list]');
+  const toolTemplate = query<HTMLTemplateElement>('[data-tool-template]');
+  const addToolButton = query<HTMLButtonElement>('[data-tool-add]');
+
+  const tagOptions = query<HTMLFieldSetElement>('[data-tag-options]');
+  const tagTemplate = query<HTMLTemplateElement>('[data-tag-template]');
+  const tagSearch = query<HTMLInputElement>('[data-tag-search]');
+  const tagStatus = query<HTMLElement>('[data-tag-status]');
+  const tagChosen = query<HTMLElement>('[data-tag-chosen]');
+
+  const disclosure = query<HTMLFieldSetElement>('[data-disclosure]');
+  const progressCount = query<HTMLElement>('[data-progress-count]');
+  const progressBar = query<HTMLElement>('[data-progress-bar]');
+  const draftStates = document.querySelectorAll<HTMLElement>('[data-draft-state]');
+
+  let userId: string | null = null;
+  let toolSeq = 0;
+
+  // ── Who may see the form ────────────────────────────────────────────────────────────
+
+  subscribeToSession((state) => {
+    if (state.status !== 'signed-in') return;
+    if (userId === state.userId) return;
+
+    userId = state.userId;
+    void openForm(state.userId);
+  });
+
+  void startSession();
+
+  async function openForm(id: string): Promise<void> {
+    const result = await loadProfile(id);
+
+    if (!result.ok) {
+      showStatus(status, 'error', result.message);
+      wrapper.hidden = false;
+      return;
+    }
+
+    const profile = result.value;
+
+    if (profile.isBanned) {
+      query<HTMLElement>('[data-gate-banned]').hidden = false;
+      return;
+    }
+
+    if (!mayPost(profile)) {
+      query<HTMLElement>('[data-gate-unconfirmed]').hidden = false;
+      return;
+    }
+
+    wrapper.hidden = false;
+    restoreDraft(id);
+    void fillTags();
+    refresh();
+  }
+
+  // ── Tool rows ───────────────────────────────────────────────────────────────────────
+  // Ids are assigned on clone so that every label is bound to its own input. A template
+  // cannot carry them: they have to be unique per row, and a duplicated `for` points every
+  // label at the first row's field.
+
+  function addToolRow(values?: SubmissionTool): HTMLLIElement {
+    const row = toolTemplate.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+    toolSeq += 1;
+
+    for (const part of ['name', 'version', 'used-on'] as const) {
+      const label = row.querySelector<HTMLLabelElement>(`[data-label-for="${part}"]`)!;
+      const input = row.querySelector<HTMLInputElement>(
+        part === 'used-on' ? '[data-tool-date]' : `[data-tool-${part}]`,
+      )!;
+
+      const id = `tool-${part}-${toolSeq}`;
+      input.id = id;
+      label.htmlFor = id;
+    }
+
+    if (values) {
+      row.querySelector<HTMLInputElement>('[data-tool-name]')!.value = values.name;
+      row.querySelector<HTMLInputElement>('[data-tool-version]')!.value = values.version;
+      row.querySelector<HTMLInputElement>('[data-tool-date]')!.value = values.usedOn;
+    }
+
+    row.querySelector<HTMLButtonElement>('[data-tool-remove]')!.addEventListener('click', () => {
+      // The last row is emptied rather than removed. A section with no fields at all reads
+      // as broken, and at least one tool is required in any case.
+      if (toolList.children.length === 1) {
+        for (const input of row.querySelectorAll<HTMLInputElement>('input')) input.value = '';
+      } else {
+        row.remove();
+      }
+      refresh();
+    });
+
+    toolList.append(row);
+    return row;
+  }
+
+  addToolButton.addEventListener('click', () => {
+    const row = addToolRow();
+    row.querySelector<HTMLInputElement>('[data-tool-name]')?.focus();
+    refresh();
+  });
+
+  function readTools(): SubmissionTool[] {
+    return [...toolList.children]
+      .map((row) => ({
+        name: row.querySelector<HTMLInputElement>('[data-tool-name]')?.value ?? '',
+        version: row.querySelector<HTMLInputElement>('[data-tool-version]')?.value ?? '',
+        usedOn: row.querySelector<HTMLInputElement>('[data-tool-date]')?.value ?? '',
+      }))
+      .filter((tool) => tool.name.trim() || tool.version.trim() || tool.usedOn);
+  }
+
+  // ── Tags ────────────────────────────────────────────────────────────────────────────
+
+  async function fillTags(): Promise<void> {
+    const result = await loadTags();
+
+    if (!result.ok) {
+      tagStatus.textContent =
+        'The subject categories could not be loaded. You can submit without them and they can be added later.';
+      return;
+    }
+
+    for (const tag of result.value) {
+      const option = tagTemplate.content.firstElementChild!.cloneNode(true) as HTMLLabelElement;
+      const input = option.querySelector<HTMLInputElement>('.tag__input')!;
+
+      input.value = tag.code;
+      input.name = 'tags';
+      input.id = `tag-${tag.code}`;
+      option.htmlFor = input.id;
+      option.querySelector('.tag__code')!.textContent = tag.code;
+      option.querySelector('.tag__label')!.textContent = tag.label;
+      option.dataset.search = `${tag.code} ${tag.label}`.toLowerCase();
+
+      input.addEventListener('change', () => {
+        describeChosenTags();
+        refresh();
+      });
+
+      tagOptions.append(option);
+    }
+
+    tagStatus.hidden = true;
+    tagOptions.hidden = false;
+    applyDraftTags();
+    describeChosenTags();
+  }
+
+  tagSearch.addEventListener('input', () => {
+    const needle = tagSearch.value.trim().toLowerCase();
+
+    for (const option of tagOptions.querySelectorAll<HTMLLabelElement>('.tag')) {
+      // A chosen tag stays visible however the search is narrowed. Hiding something
+      // somebody has selected is how a form silently loses an answer.
+      const chosen = option.querySelector<HTMLInputElement>('.tag__input')!.checked;
+      option.hidden = !chosen && needle.length > 0 && !option.dataset.search!.includes(needle);
+    }
+  });
+
+  function chosenTags(): string[] {
+    return [...tagOptions.querySelectorAll<HTMLInputElement>('.tag__input:checked')].map(
+      (input) => input.value,
+    );
+  }
+
+  function describeChosenTags(): void {
+    const chosen = chosenTags();
+    tagChosen.textContent = chosen.length
+      ? `Chosen: ${chosen.join(', ')}`
+      : 'No categories chosen.';
+  }
+
+  // ── The disclosure question ─────────────────────────────────────────────────────────
+  // Only asked once something is published, matching the CHECK constraint that refuses a
+  // disclosure answer without a publication.
+
+  function syncDisclosure(): void {
+    const published =
+      form.querySelector<HTMLInputElement>('input[name="was_published"]:checked')?.value;
+    const show = published === 'yes';
+
+    disclosure.hidden = !show;
+    if (!show) {
+      form.querySelector<HTMLInputElement>('#disclosed-none')!.checked = true;
+    }
+  }
+
+  // ── Counters and progress ───────────────────────────────────────────────────────────
+
+  function syncCounters(): void {
+    for (const counter of form.querySelectorAll<HTMLElement>('[data-counter-for]')) {
+      const field = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        `#${CSS.escape(counter.dataset.counterFor!)}`,
+      );
+      if (!field) continue;
+
+      const max = Number(counter.dataset.max);
+      const used = field.value.length;
+
+      counter.querySelector('[data-counter-value]')!.textContent = String(used);
+      if (used > max * 0.9) counter.setAttribute('data-near', '');
+      else counter.removeAttribute('data-near');
+    }
+  }
+
+  /** Whether a section has an answer. Deliberately generous — this drives a progress
+   *  indicator, not the submission, and a bar that only moved on a fully valid section
+   *  would sit at zero while somebody typed. */
+  function sectionAnswered(id: string): boolean {
+    switch (id) {
+      case 'title':
+        return Boolean(value('title'));
+      case 'area':
+        return Boolean(checked('area'));
+      case 'task-type':
+        return Boolean(checked('task_type'));
+      case 'tools':
+        return readTools().some((tool) => tool.name.trim() && tool.version.trim() && tool.usedOn);
+      case 'aim':
+        return Boolean(value('aim'));
+      case 'method':
+        return Boolean(value('method'));
+      case 'outcome':
+        return Boolean(checked('outcome')) && Boolean(value('outcome_notes'));
+      case 'verification':
+        return Boolean(value('verification'));
+      case 'transcript':
+        return form.querySelector<HTMLInputElement>('#third_party_confirmed')!.checked;
+      case 'caveats':
+        return Boolean(value('caveats'));
+      case 'tags':
+        return chosenTags().length > 0;
+      case 'counting':
+        return Boolean(value('time_spent_minutes')) || Boolean(checked('author_confidence'));
+      default:
+        return false;
+    }
+  }
+
+  function refresh(): void {
+    syncCounters();
+    syncDisclosure();
+
+    let done = 0;
+
+    for (const section of SECTIONS) {
+      const element = document.querySelector<HTMLElement>(`[data-section="${section.id}"]`);
+      if (!element) continue;
+
+      const answered = sectionAnswered(section.id);
+      if (answered) done += 1;
+      element.toggleAttribute('data-complete', answered);
+    }
+
+    progressCount.textContent = `${done} of ${SECTIONS.length} sections`;
+    progressBar.style.width = `${Math.round((done / SECTIONS.length) * 100)}%`;
+  }
+
+  // ── Draft ───────────────────────────────────────────────────────────────────────────
+
+  interface Draft {
+    fields: Record<string, string>;
+    checks: Record<string, boolean>;
+    tools: SubmissionTool[];
+    tags: string[];
+  }
+
+  const TEXT_FIELDS = [
+    'title', 'aim', 'method', 'outcome_notes', 'verification',
+    'transcript_excerpt', 'transcript_url', 'caveats', 'time_spent_minutes',
+  ];
+  const RADIO_GROUPS = ['area', 'task_type', 'outcome', 'was_published', 'was_disclosed', 'author_confidence'];
+
+  let pendingDraftTags: string[] = [];
+
+  function collectDraft(): Draft {
+    const fields: Record<string, string> = {};
+    for (const name of TEXT_FIELDS) fields[name] = value(name);
+    for (const name of RADIO_GROUPS) fields[name] = checked(name) ?? '';
+
+    return {
+      fields,
+      checks: {
+        third_party_confirmed: form.querySelector<HTMLInputElement>('#third_party_confirmed')!.checked,
+      },
+      tools: readTools(),
+      tags: chosenTags(),
+    };
+  }
+
+  function restoreDraft(id: string): void {
+    const envelope = loadDraft<Draft>(id);
+
+    if (!envelope) {
+      addToolRow();
+      return;
+    }
+
+    const draft = envelope.value;
+
+    for (const [name, text] of Object.entries(draft.fields ?? {})) {
+      if (TEXT_FIELDS.includes(name)) {
+        const field = form.querySelector<HTMLInputElement>(`#${CSS.escape(name)}`);
+        if (field) field.value = text;
+      } else if (text) {
+        const radio = form.querySelector<HTMLInputElement>(
+          `input[name="${name}"][value="${CSS.escape(text)}"]`,
+        );
+        if (radio) radio.checked = true;
+      }
+    }
+
+    if (draft.checks?.third_party_confirmed) {
+      form.querySelector<HTMLInputElement>('#third_party_confirmed')!.checked = true;
+    }
+
+    const tools = draft.tools?.length ? draft.tools : [undefined];
+    for (const tool of tools) addToolRow(tool);
+
+    // The tag list has not been fetched yet, so the chosen ones are held until it has.
+    pendingDraftTags = draft.tags ?? [];
+
+    showStatus(status, 'notice', [
+      `A draft from ${new Date(envelope.savedAt).toLocaleString('en-GB')} has been restored.`,
+      'Carry on where you left off, or discard it at the bottom of the form.',
+    ]);
+  }
+
+  function applyDraftTags(): void {
+    for (const code of pendingDraftTags) {
+      const input = tagOptions.querySelector<HTMLInputElement>(`#${CSS.escape(`tag-${code}`)}`);
+      if (input) input.checked = true;
+    }
+    pendingDraftTags = [];
+  }
+
+  const persist = debounce(() => {
+    if (!userId) return;
+
+    const savedAt = saveDraft(userId, collectDraft());
+    for (const element of draftStates) {
+      element.textContent = savedAt
+        ? `Draft saved ${savedAtLabel(savedAt)}`
+        : 'Draft not saved — this browser is blocking storage';
+    }
+  }, 800);
+
+  form.addEventListener('input', () => {
+    refresh();
+    persist();
+  });
+
+  form.addEventListener('change', () => {
+    refresh();
+    persist();
+  });
+
+  discardButton.addEventListener('click', () => {
+    if (!userId) return;
+    if (!window.confirm('Discard this draft? Everything you have written here will be gone.')) {
+      return;
+    }
+
+    discardDraft(userId);
+    form.reset();
+    toolList.replaceChildren();
+    addToolRow();
+    for (const input of tagOptions.querySelectorAll<HTMLInputElement>('.tag__input')) {
+      input.checked = false;
+    }
+
+    describeChosenTags();
+    for (const element of draftStates) element.textContent = 'Draft discarded';
+    hideStatus(status);
+    refresh();
+  });
+
+  // ── Submission ──────────────────────────────────────────────────────────────────────
+
+  function value(name: string): string {
+    return form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${CSS.escape(name)}`)?.value.trim() ?? '';
+  }
+
+  function checked(name: string): string | undefined {
+    return form.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value || undefined;
+  }
+
+  /** yes / no / not-yet, where "not yet" is genuinely unknown rather than false. */
+  function tristate(name: string): boolean | null {
+    const answer = checked(name);
+    if (answer === 'yes') return true;
+    if (answer === 'no') return false;
+    return null;
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearFieldErrors(form);
+    hideStatus(status);
+
+    if (!userId) {
+      showStatus(status, 'error', 'Your session has ended. Sign in again — your draft is saved in this browser.');
+      return;
+    }
+
+    const tools = readTools();
+    const problems: { id: string; error: string | null }[] = [
+      { id: 'title', error: validateRequiredText(value('title'), PRACTICE_LIMITS.title, 'A title') },
+      { id: 'aim', error: validateRequiredText(value('aim'), PRACTICE_LIMITS.aim, 'The aim') },
+      { id: 'method', error: validateRequiredText(value('method'), PRACTICE_LIMITS.method, 'The method') },
+      { id: 'outcome_notes', error: validateRequiredText(value('outcome_notes'), PRACTICE_LIMITS.outcomeNotes, 'The outcome notes') },
+      { id: 'verification', error: validateVerification(value('verification'), PRACTICE_LIMITS.verification) },
+      { id: 'transcript_excerpt', error: validateOptionalText(value('transcript_excerpt'), PRACTICE_LIMITS.transcriptExcerpt, 'The transcript excerpt') },
+      { id: 'transcript_url', error: validateTranscriptUrl(value('transcript_url'), PRACTICE_LIMITS.transcriptUrl) },
+      { id: 'caveats', error: validateOptionalText(value('caveats'), PRACTICE_LIMITS.caveats, 'The caveats') },
+      { id: 'time_spent_minutes', error: validateTimeSpent(value('time_spent_minutes'), PRACTICE_LIMITS.timeSpentMinutes) },
+    ];
+
+    // The rule the database also enforces: a share link is never the only record.
+    if (value('transcript_url') && !value('transcript_excerpt')) {
+      problems.push({
+        id: 'transcript_excerpt',
+        error: 'Paste an excerpt as well. Share links expire and get revoked, so a link on its own would leave nothing behind.',
+      });
+    }
+
+    let firstBad: string | null = null;
+
+    for (const problem of problems) {
+      setFieldError(problem.id, problem.error, form);
+      if (problem.error && !firstBad) firstBad = problem.id;
+    }
+
+    // Choices, which have no Field wrapper and so are marked by hand.
+    const groups: [string, string | undefined, string][] = [
+      ['area', checked('area'), 'Choose the kind of work this was.'],
+      ['task_type', checked('task_type'), 'Choose what the tool was asked to do.'],
+      ['outcome', checked('outcome'), 'Say what happened. All three answers are equally welcome.'],
+    ];
+
+    for (const [name, answer, message] of groups) {
+      const target = form.querySelector<HTMLElement>(`#${name}-error`)!;
+      target.textContent = answer ? '' : message;
+      target.hidden = Boolean(answer);
+      if (!answer && !firstBad) firstBad = `section-${name.replace('_', '-')}`;
+    }
+
+    const confirmedThirdParty = form.querySelector<HTMLInputElement>('#third_party_confirmed')!.checked;
+    const thirdPartyError = form.querySelector<HTMLElement>('#third_party_confirmed-error')!;
+    thirdPartyError.textContent = confirmedThirdParty
+      ? ''
+      : 'Confirm you have removed other people\'s unpublished material. Everything here is published for anyone to copy.';
+    thirdPartyError.hidden = confirmedThirdParty;
+    if (!confirmedThirdParty && !firstBad) firstBad = 'third_party_confirmed';
+
+    const toolErrors = tools.map((tool) =>
+      validateTool(tool, { name: PRACTICE_LIMITS.toolName, version: PRACTICE_LIMITS.toolVersion }, EARLIEST_TOOL_USE),
+    );
+
+    [...toolList.children].forEach((row, index) => {
+      const target = row.querySelector<HTMLElement>('[data-tool-error]')!;
+      const message = toolErrors[index] ?? null;
+      target.textContent = message ?? '';
+      target.hidden = !message;
+    });
+
+    if (!tools.length) {
+      showStatus(status, 'error', 'Record at least one tool, with its version and the date you used it. The date is what lets a listing show later that an account has gone stale.');
+      document.querySelector('#section-tools')?.scrollIntoView({ block: 'start' });
+      return;
+    }
+
+    if (firstBad || toolErrors.some(Boolean)) {
+      const target =
+        document.querySelector<HTMLElement>(`#${CSS.escape(firstBad ?? 'section-tools')}`) ??
+        document.querySelector<HTMLElement>('#section-tools');
+
+      showStatus(status, 'error', 'Some sections still need an answer. They are marked below.');
+      target?.scrollIntoView({ block: 'center' });
+      if (firstBad && !firstBad.startsWith('section-')) {
+        form.querySelector<HTMLElement>(`#${CSS.escape(firstBad)}`)?.focus();
+      }
+      return;
+    }
+
+    setBusy(submit, true, 'Submitting…');
+
+    const result = await submitPractice({
+      title: value('title'),
+      area: checked('area') as Area,
+      taskType: checked('task_type') as TaskType,
+      tools,
+      aim: value('aim'),
+      method: value('method'),
+      outcome: checked('outcome') as Outcome,
+      outcomeNotes: value('outcome_notes'),
+      verification: value('verification'),
+      transcriptExcerpt: value('transcript_excerpt'),
+      transcriptUrl: value('transcript_url'),
+      caveats: value('caveats'),
+      thirdPartyMaterialConfirmed: confirmedThirdParty,
+      timeSpentMinutes: value('time_spent_minutes') ? Number(value('time_spent_minutes')) : null,
+      wasPublished: tristate('was_published'),
+      wasDisclosed: tristate('was_published') === true ? tristate('was_disclosed') : null,
+      authorConfidence: checked('author_confidence') ? Number(checked('author_confidence')) : null,
+      tagCodes: chosenTags(),
+    });
+
+    setBusy(submit, false);
+
+    if (!result.ok) {
+      showStatus(status, 'error', result.message);
+      return;
+    }
+
+    // Only now. A draft discarded before the write was confirmed would be a draft lost to
+    // a failed request.
+    discardDraft(userId);
+    window.location.assign(path('/practices/submitted/'));
+  });
+</script>
