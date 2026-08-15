@@ -1,0 +1,432 @@
+-- Who may read and write a practice.
+--
+-- Every rule is asserted from both directions. A policy test that only checks the allowed
+-- case proves the feature works and says nothing about whether it is a door: the negative
+-- assertions below are the ones that would fail if a policy were loosened, and they are
+-- the reason this file is longer than the migration it tests.
+--
+-- Two behaviours here look like bugs and are not, so they are asserted explicitly rather
+-- than left for someone to rediscover:
+--
+--   An author publishing their own practice succeeds and changes nothing. The guard trigger
+--   reverts `status` before row level security evaluates the new row, so the WITH CHECK
+--   then passes on a row that is still pending. A silent revert, matching how
+--   public.profiles already behaves.
+--
+--   An author editing their own *published* practice raises 42501. Here the guard reverts
+--   the text but leaves `deleted_at` null, and no policy's WITH CHECK accepts that row.
+--
+-- Fixtures are created as the table owner, which the guards trust. Every assertion runs
+-- under `set local role`, because what is being tested is what a browser can do.
+
+begin;
+
+create extension if not exists pgtap with schema extensions;
+set local search_path to extensions, public, pg_catalog;
+
+select plan(27);
+
+-- ── People ──────────────────────────────────────────────────────────────────────────
+
+insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+values
+  ('11111111-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'author@example.org', '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('11111111-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'bystander@example.org', '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('11111111-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'unconfirmed@example.org', '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('11111111-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'banned@example.org', '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('11111111-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'moderator@example.org', '{}'::jsonb, '{}'::jsonb, now(), now());
+
+-- Everyone but the third confirms their address, which is what sets profiles.confirmed_at.
+update auth.users set email_confirmed_at = now()
+ where id <> '11111111-0000-0000-0000-000000000003';
+
+update public.profiles set is_banned = true
+ where id = '11111111-0000-0000-0000-000000000004';
+
+update public.profiles set role = 'moderator'
+ where id = '11111111-0000-0000-0000-000000000005';
+
+-- Confirming the fixtures are what they claim to be, before anything is asserted about
+-- them. A test suite where the setup silently failed reports a great many passes.
+select is(
+  (select count(*)::int from public.profiles where confirmed_at is not null),
+  4,
+  'four of the five fixtures have a confirmed account'
+);
+
+-- ── Practices ───────────────────────────────────────────────────────────────────────
+
+insert into public.practices (
+  id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
+  verification, third_party_material_confirmed, deleted_at, deleted_by
+) values
+  ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001',
+   'published', 'Check a lemma with a proof assistant', 'research', 'proof_checking',
+   'Confirm a lemma I could not see a gap in.', 'Stated it in Lean and closed the goals.',
+   'worked', 'It found a missing hypothesis.', 'Lean accepted the proof.', true, null, null),
+
+  ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001',
+   'pending', 'Draft an exposition of a spectral sequence', 'writing', 'exposition',
+   'Produce a readable account for a seminar.', 'Asked for a draft, then rewrote it.',
+   'partial', 'Structure was usable, details were not.', 'Checked every claim by hand.',
+   true, null, null),
+
+  ('22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001',
+   'hidden', 'A practice a moderator has hidden', 'research', 'other',
+   'Something.', 'Something else.', 'failed', 'It did not work.',
+   'Checked against a textbook.', true, null, null),
+
+  ('22222222-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001',
+   'published', 'A practice its author has deleted', 'research', 'other',
+   'Something.', 'Something else.', 'worked', 'It worked.',
+   'Checked by hand.', true, now(), '11111111-0000-0000-0000-000000000001'),
+
+  ('22222222-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000002',
+   'published', 'Search the literature for a counterexample', 'research', 'literature_search',
+   'Find whether the statement is already known false.', 'Asked for references, checked each.',
+   'partial', 'Two of five references were invented.', 'Looked up every reference on MathSciNet.',
+   true, null, null);
+
+-- ── Reading ─────────────────────────────────────────────────────────────────────────
+
+set local role anon;
+
+select is(
+  (select count(*)::int from public.practices),
+  2,
+  'anon sees only published, undeleted practices'
+);
+
+select is_empty(
+  $$ select id from public.practices where status <> 'published' $$,
+  'anon sees nothing pending or hidden'
+);
+
+select is_empty(
+  $$ select id from public.practices where deleted_at is not null $$,
+  'anon sees nothing soft-deleted, even though it is published'
+);
+
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
+
+select is(
+  (select count(*)::int from public.practices),
+  2,
+  'another member sees the published corpus and no more'
+);
+
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+select is(
+  (select count(*)::int from public.practices),
+  5,
+  'an author sees their own work in every state, plus the published corpus'
+);
+
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+select is(
+  (select count(*)::int from public.practices),
+  5,
+  'a moderator sees everything, including deleted rows a report might be about'
+);
+
+reset role;
+
+-- ── Writing: who may post at all ────────────────────────────────────────────────────
+
+set local role anon;
+
+select throws_ok(
+  $$ insert into public.practices
+       (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
+        verification, third_party_material_confirmed)
+     values ('11111111-0000-0000-0000-000000000001', 'From nowhere', 'research', 'other',
+             'a', 'b', 'worked', 'c', 'd', true) $$,
+  '42501'::text, null::text,
+  'anon cannot post a practice'
+);
+
+reset role;
+
+-- The account exists and is signed in; it has simply never confirmed its address. This is
+-- the case profiles.confirmed_at was added for.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
+
+select throws_ok(
+  $$ insert into public.practices
+       (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
+        verification, third_party_material_confirmed)
+     values ('11111111-0000-0000-0000-000000000003', 'Unconfirmed', 'research', 'other',
+             'a', 'b', 'worked', 'c', 'd', true) $$,
+  '42501'::text, null::text,
+  'an unconfirmed account cannot post'
+);
+
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000004","role":"authenticated"}';
+
+select throws_ok(
+  $$ insert into public.practices
+       (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
+        verification, third_party_material_confirmed)
+     values ('11111111-0000-0000-0000-000000000004', 'Banned', 'research', 'other',
+             'a', 'b', 'worked', 'c', 'd', true) $$,
+  '42501'::text, null::text,
+  'a banned account cannot post'
+);
+
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
+
+select throws_ok(
+  $$ insert into public.practices
+       (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
+        verification, third_party_material_confirmed)
+     values ('11111111-0000-0000-0000-000000000001', 'Under a false name', 'research', 'other',
+             'a', 'b', 'worked', 'c', 'd', true) $$,
+  '42501'::text, null::text,
+  'a member cannot post under somebody else''s name'
+);
+
+-- Refused by the column grant, before any policy is consulted.
+select throws_ok(
+  $$ insert into public.practices
+       (author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
+        verification, third_party_material_confirmed)
+     values ('11111111-0000-0000-0000-000000000002', 'published', 'Self-published',
+             'research', 'other', 'a', 'b', 'worked', 'c', 'd', true) $$,
+  '42501'::text, null::text,
+  'nobody can post something already published: status has no INSERT grant'
+);
+
+-- The allowed case. No `id` in the column list, because it has no INSERT grant either:
+-- the row identifies itself. A client that needs the new id asks for it back.
+insert into public.practices
+  (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
+   verification, third_party_material_confirmed)
+values ('11111111-0000-0000-0000-000000000002',
+        'A perfectly ordinary submission', 'learning', 'proof_drafting',
+        'Understand a proof I had been stuck on.', 'Asked for the outline, filled it in.',
+        'worked', 'The outline was right.', 'Rederived every step myself.', true);
+
+reset role;
+
+select is(
+  (select status::text from public.practices
+    where title = 'A perfectly ordinary submission'),
+  'pending'::text,
+  'a confirmed member may post, and what they post starts pending'
+);
+
+-- ── Writing: editing your own ───────────────────────────────────────────────────────
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+update public.practices
+   set title = 'Draft an exposition of a spectral sequence, revised'
+ where id = '22222222-0000-0000-0000-000000000002';
+
+reset role;
+
+select is(
+  (select title from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  'Draft an exposition of a spectral sequence, revised'::text,
+  'an author may edit their own practice while it is pending'
+);
+
+-- Publishing your own. Succeeds, and changes nothing: the guard reverts status before row
+-- level security sees the row, so the WITH CHECK passes on a row that is still pending.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+update public.practices set status = 'published'
+ where id = '22222222-0000-0000-0000-000000000002';
+
+reset role;
+
+select is(
+  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  'pending'::text,
+  'an author cannot publish their own practice; the guard reverts it silently'
+);
+
+-- Editing a published one. No policy accepts the resulting row, so this is an error rather
+-- than a silent no-op.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+select throws_ok(
+  $$ update public.practices set title = 'Rewriting history'
+      where id = '22222222-0000-0000-0000-000000000001' $$,
+  '42501'::text, null::text,
+  'an author cannot edit their own practice once it is published'
+);
+
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
+
+update public.practices set title = 'Hijacked'
+ where id = '22222222-0000-0000-0000-000000000001';
+
+reset role;
+
+select isnt(
+  (select title from public.practices where id = '22222222-0000-0000-0000-000000000001'),
+  'Hijacked'::text,
+  'a member cannot edit somebody else''s practice'
+);
+
+-- ── Soft deletion ───────────────────────────────────────────────────────────────────
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+update public.practices
+   set deleted_at = now(), deleted_by = '11111111-0000-0000-0000-000000000001'
+ where id = '22222222-0000-0000-0000-000000000001';
+
+reset role;
+
+select isnt(
+  (select deleted_at from public.practices where id = '22222222-0000-0000-0000-000000000001'),
+  null::timestamptz,
+  'an author may soft-delete their own practice after it is published'
+);
+
+-- Restoring is a moderation action. No policy's USING clause matches a deleted row for its
+-- author, so this is a silent no-op rather than an error.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+update public.practices set deleted_at = null, deleted_by = null
+ where id = '22222222-0000-0000-0000-000000000001';
+
+reset role;
+
+select isnt(
+  (select deleted_at from public.practices where id = '22222222-0000-0000-0000-000000000001'),
+  null::timestamptz,
+  'an author cannot restore a practice they deleted'
+);
+
+-- ── Moderation ──────────────────────────────────────────────────────────────────────
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+update public.practices set status = 'published'
+ where title = 'A perfectly ordinary submission';
+
+reset role;
+
+select is(
+  (select status::text from public.practices
+    where title = 'A perfectly ordinary submission'),
+  'published'::text,
+  'a moderator may publish a pending practice'
+);
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+update public.practices set status = 'hidden'
+ where id = '22222222-0000-0000-0000-000000000005';
+
+reset role;
+
+select is(
+  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  'hidden'::text,
+  'a moderator may hide a published practice: the hide path works'
+);
+
+-- A moderator is still not an author. Reassigning a contribution would put somebody else's
+-- name on work published under CC BY.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+update public.practices set author_id = '11111111-0000-0000-0000-000000000005'
+ where id = '22222222-0000-0000-0000-000000000005';
+
+reset role;
+
+select is(
+  (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  '11111111-0000-0000-0000-000000000002'::uuid,
+  'not even a moderator can move a practice onto another author'
+);
+
+-- ── No hard delete, for anyone ──────────────────────────────────────────────────────
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+select throws_ok(
+  $$ delete from public.practices where id = '22222222-0000-0000-0000-000000000002' $$,
+  '42501'::text, null::text,
+  'an author cannot hard-delete their own practice'
+);
+
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+select throws_ok(
+  $$ delete from public.practices where id = '22222222-0000-0000-0000-000000000001' $$,
+  '42501'::text, null::text,
+  'nor can a moderator: there is no DELETE grant on this table at all'
+);
+
+reset role;
+
+select ok(
+  not has_table_privilege('authenticated', 'public.practices', 'DELETE'),
+  'the absent DELETE grant is the reason, not an absent policy'
+);
+
+-- ── Erasure detaches rather than destroys ───────────────────────────────────────────
+-- The account goes; the contribution stays in the corpus without a name on it. This is the
+-- promise the privacy notice makes, and ON DELETE SET NULL is the whole of its
+-- implementation.
+
+delete from auth.users where id = '11111111-0000-0000-0000-000000000002';
+
+select is(
+  (select count(*)::int from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  1,
+  'erasing an account leaves the practices it contributed in place'
+);
+
+select is(
+  (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  null::uuid,
+  'and strips the attribution from them'
+);
+
+select * from finish();
+
+rollback;
