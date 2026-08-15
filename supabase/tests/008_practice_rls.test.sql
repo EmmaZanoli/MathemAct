@@ -24,7 +24,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(27);
+select plan(28);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -364,7 +364,25 @@ select is(
 );
 
 -- A moderator is still not an author. Reassigning a contribution would put somebody else's
--- name on work published under CC BY.
+-- name on work published under CC BY, so it is locked twice: no column grant, and a guard
+-- that reverts it anyway. Both are asserted, because the second exists precisely for the
+-- day somebody widens the first.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
+
+select throws_ok(
+  $$ update public.practices set author_id = '11111111-0000-0000-0000-000000000005'
+      where id = '22222222-0000-0000-0000-000000000005' $$,
+  '42501'::text, null::text,
+  'not even a moderator can reassign a practice: author_id has no column grant'
+);
+
+reset role;
+
+-- The realistic accident: somebody adding a feature writes `grant update on
+-- public.practices to authenticated` because the column list was in the way.
+grant update on public.practices to authenticated;
+
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
@@ -376,7 +394,7 @@ reset role;
 select is(
   (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000005'),
   '11111111-0000-0000-0000-000000000002'::uuid,
-  'not even a moderator can move a practice onto another author'
+  'and the guard reverts it even with the column grant wide open'
 );
 
 -- ── No hard delete, for anyone ──────────────────────────────────────────────────────

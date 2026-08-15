@@ -71,14 +71,16 @@ insert into public.practice_confirmations (practice_id, user_id, verdict, create
 
 -- ── The trap ────────────────────────────────────────────────────────────────────────
 
+-- Cast, not string-compare: a boolean reloption reads back exactly as written, so the
+-- migration's `security_invoker = on` is the string 'on' rather than 'true'.
 select ok(
   coalesce(
     (select o.option_value
        from pg_options_to_table(
               (select c.reloptions from pg_class c
                 where c.oid = 'public.practice_staleness'::regclass)) o
-      where o.option_name = 'security_invoker'),
-    'false') = 'true',
+      where o.option_name = 'security_invoker')::boolean,
+    false),
   'the staleness view is security_invoker'
 );
 

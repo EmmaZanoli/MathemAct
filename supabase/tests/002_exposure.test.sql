@@ -194,17 +194,21 @@ select is_empty(
 -- A view has no row level security of its own and runs with its creator's privileges
 -- unless told otherwise, so an ordinary view over a user-content table hands pending and
 -- hidden rows to anonymous callers while looking entirely correct in review.
+-- Cast rather than string-compare. Postgres stores a boolean reloption exactly as it was
+-- written, so `with (security_invoker = on)` reads back as 'on' and a test looking for
+-- 'true' reports a correctly protected view as a leak. That is the worst way for a
+-- security assertion to be wrong: it cries wolf until somebody relaxes it.
 select is_empty(
   $$ select c.relname
        from pg_class c
        join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public'
         and c.relkind = 'v'
-        and coalesce(
+        and not coalesce(
               (select o.option_value
                  from pg_options_to_table(c.reloptions) o
-                where o.option_name = 'security_invoker'),
-              'false') <> 'true' $$,
+                where o.option_name = 'security_invoker')::boolean,
+              false) $$,
   'every view in the exposed schema is security_invoker'
 );
 

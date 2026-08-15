@@ -129,6 +129,12 @@ select throws_ok(
 -- ── At least one tool ───────────────────────────────────────────────────────────────
 -- The check is deferred, so it fires at commit or when constraints are made immediate.
 -- This whole file is one transaction that ends in a rollback, so it has to be forced.
+--
+-- Each block puts the mode back explicitly afterwards. SET CONSTRAINTS lasts for the rest
+-- of the transaction, and relying on ROLLBACK TO SAVEPOINT to undo it is relying on a
+-- subtlety: the mode survived the rollback here, so the *next* delete fired its check
+-- immediately and took the script down five assertions early. Two words of SQL beat
+-- knowing which way that goes.
 
 savepoint no_tools;
 
@@ -145,6 +151,7 @@ select throws_ok(
 );
 
 rollback to savepoint no_tools;
+set constraints all deferred;
 
 savepoint with_tools;
 
@@ -163,6 +170,7 @@ select lives_ok(
 );
 
 rollback to savepoint with_tools;
+set constraints all deferred;
 
 -- Removing the last tool from a practice that still exists is the other half of the rule.
 savepoint last_tool;
@@ -177,6 +185,7 @@ select throws_ok(
 );
 
 rollback to savepoint last_tool;
+set constraints all deferred;
 
 select throws_ok(
   $$ insert into public.practice_tools (practice_id, tool_name, tool_version, used_on)
