@@ -35,26 +35,47 @@ interface Props {
   institution?: { name: string; country: string; verifiedAt: string } | null;
   /** Render hidden, for a page that fills the details in from the browser. */
   pending?: boolean;
+  /**
+   * One line, institutional only, for a comment header.
+   *
+   * Registered is omitted in this form because in a discussion it is implied — you cannot
+   * post without a confirmed address — and a bordered card repeated down every comment
+   * would be the loudest thing on the page. The wording is identical, which is the whole
+   * reason this is a variant of this component rather than a line written somewhere else:
+   * what a badge claims is settled in exactly one file.
+   */
+  compact?: boolean;
 }
 
-const { institution = null, pending = false } = Astro.props;
+const { institution = null, pending = false, compact = false } = Astro.props;
 
 const detail = institution
   ? `${institution.name}, ${institution.country} (${verificationMonth(institution.verifiedAt)})`
   : '';
 ---
 
-<ul class="badges" role="list" data-badges hidden={pending}>
-  <li class="badge">
-    <span class="badge__tier">Registered</span>
-    <span class="badge__detail">Email address confirmed</span>
-  </li>
+{
+  compact ? (
+    institution && (
+      <p class="badge-line">
+        <span class="badge-line__tier">Institutional email verified</span>
+        <span class="badge-line__detail">{detail}</span>
+      </p>
+    )
+  ) : (
+    <ul class="badges" role="list" data-badges hidden={pending}>
+      <li class="badge">
+        <span class="badge__tier">Registered</span>
+        <span class="badge__detail">Email address confirmed</span>
+      </li>
 
-  <li class="badge" data-badge="institutional" hidden={!institution}>
-    <span class="badge__tier">Institutional email verified</span>
-    <span class="badge__detail badge__detail--mono" data-badge-detail>{detail}</span>
-  </li>
-</ul>
+      <li class="badge" data-badge="institutional" hidden={!institution}>
+        <span class="badge__tier">Institutional email verified</span>
+        <span class="badge__detail badge__detail--mono" data-badge-detail>{detail}</span>
+      </li>
+    </ul>
+  )
+}
 
 <style>
   .badges {
@@ -103,5 +124,28 @@ const detail = institution
   .badge__detail--mono {
     font-family: var(--font-mono);
     font-size: var(--size-1);
+  }
+
+  /* The compact form. Same claim, one line, no card: a thread of twenty comments each
+     carrying a bordered badge would read as a directory rather than a discussion. The tier
+     is still labelled, because "Universität Bonn" on its own is the implication this
+     project exists not to make. */
+  .badge-line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3xs) var(--space-2xs);
+    margin: 0;
+    font-size: var(--size-0);
+    color: var(--ink-muted);
+  }
+
+  .badge-line__tier {
+    font-family: var(--font-mono);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+
+  .badge-line__detail {
+    font-family: var(--font-mono);
   }
 </style>
