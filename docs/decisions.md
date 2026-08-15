@@ -735,3 +735,62 @@ keystroke to Postgres would put a rate limit and an egress quota in the path of 
 
 The draft is discarded only after the write is confirmed. Clearing it on submit would lose
 it to a failed request, which is the moment it is most needed.
+
+## 2026-08-15 — Reading is built, not fetched
+
+prompts/8.md says to query Supabase for now, and `readCorpus()` does — over PostgREST, with
+the publishable key, **during the build** rather than from a reader's browser. Four reasons,
+and the last one is the one that settles it:
+
+- The read/write split in CLAUDE.md exists so a traffic spike never touches the egress
+  quota. Client-side reads spend egress per reader.
+- The free tier pauses a project after about a week of inactivity. A site whose pages are
+  files keeps serving; a site that fetches its content does not.
+- A reader waits for a round trip before seeing anything, on every page.
+- **Astro needs the ids at build time to generate `/practices/<id>/` at all**, and GitHub
+  Pages has no SPA fallback. Fetching would mean one page with a query parameter, and a
+  corpus meant to be cited needs real URLs.
+
+`readCorpus()` is the single swap point. It already prefers a committed
+`data/practices.json` and falls back to querying; when the nightly export exists the
+fallback goes and no page changes. A failed query returns an empty corpus rather than
+throwing, so a paused project produces a site with no practices rather than a red build.
+
+## 2026-08-15 — `[hidden]` needs `!important`, and this cost three shipped bugs
+
+The browser's own `[hidden] { display: none }` is in the *user-agent* stylesheet, which any
+author rule outranks. So the moment a component sets `display: flex` on a class,
+`element.hidden = true` silently stops working on it.
+
+It had already shipped three times, each presenting as an unrelated logic bug: listing
+filters that updated the count, the chips and the tallies while hiding no cards; the account
+deletion form left visible underneath the request it had just filed; and the disclosure
+question on the submission form shown for practices that were never published. All three
+were one line of CSS.
+
+`base.css` now carries `[hidden] { display: none !important }` — not wrapped in `:where()`,
+and the only `!important` in the project. It has to beat component scoped styles, which are
+unlayered and otherwise win.
+
+## 2026-08-15 — Filters are URL state, and a stale link says so
+
+Filters are query parameters so a filtered view can be linked in an email or cited in a
+paper. That only means something if the link still shows what the sender saw, so a URL
+naming a value the corpus no longer has — a retired tag, a tool nobody uses any more — is
+reported rather than dropped: "you are seeing more than the person who sent it."
+
+Silently ignoring it is the tempting behaviour and the wrong one. It widens a cited view
+without either party finding out, which is the specific failure a citable URL exists to
+prevent.
+
+## 2026-08-15 — The staleness rule is read, never recomputed
+
+Every tombstone on the site comes from `public.practice_staleness`. Nothing in TypeScript
+derives one, and `StalenessNote.astro` only decides how to *say* what the view already
+computed. The same answer has to appear in a listing, on a practice page, in the nightly
+export, and in whatever a researcher runs against the dumped corpus; a second
+implementation would be a second definition of "verified".
+
+The one thing the interface adds is the plainly worded note for an account over a year old.
+Its wording is deliberate: it says the tool has moved, which is a fact, rather than that the
+practice is wrong, which nobody has checked.

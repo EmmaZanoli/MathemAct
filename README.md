@@ -18,8 +18,9 @@ mathematics are part of the intended audience.
 
 ## Status
 
-Public site, identity layer, account flows, and the submission form built. **Nothing is
-readable yet** — listings, practice pages, and moderation are still to come.
+Public site, identity layer, account flows, the submission form, and reading built.
+**Nothing is moderated yet** — no submission can reach the corpus until a moderator can
+publish it.
 
 | | |
 |---|---|
@@ -32,7 +33,8 @@ readable yet** — listings, practice pages, and moderation are still to come.
 | ✅ | Sign up, confirm, sign in, reset, profile, erasure request |
 | ✅ | Practices schema: RLS, tags, confirmations, staleness, rate limits |
 | ✅ | The submission form: twelve sections, draft autosave, one-transaction submit |
-| ⬜ | Listings, practice pages, moderation, propositions, nightly export, search |
+| ✅ | Reading: listing with linkable filters, practice pages, author pages |
+| ⬜ | Moderation, propositions, nightly export, search |
 
 The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
 the dashboard configuration in [docs/auth.md](docs/auth.md). Without them they render a
@@ -167,7 +169,8 @@ database monthly and reports what the matcher makes of real mathematics institut
 ```
 src/pages/              home, about, privacy, code of conduct, 404
 src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase
-src/pages/practices/    the submission form, and where a submission lands
+src/pages/practices/    the listing, a practice, the submission form
+src/pages/authors/      one contributor's published practices
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
 src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)
 src/lib/                paths, site constants, status vocabulary, markdown, auth, session,
