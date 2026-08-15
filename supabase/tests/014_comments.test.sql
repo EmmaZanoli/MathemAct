@@ -96,8 +96,11 @@ values
    '11111111-0000-0000-0000-000000000002', null,
    'A remark a moderator has since hidden.', 'hidden', now()),
 
+  -- Authored by 1, not by 2. The reader who tries to reply to this below has to be somebody
+  -- who genuinely cannot see it: an author can always read their own comment, whatever has
+  -- happened to the practice it hangs off, so making this 2's own would test nothing.
   ('44444444-0000-0000-0000-000000000004', 'practice', '22222222-0000-0000-0000-000000000003',
-   '11111111-0000-0000-0000-000000000002', null,
+   '11111111-0000-0000-0000-000000000001', null,
    'A remark on a practice that is no longer visible.', 'published', now()),
 
   ('44444444-0000-0000-0000-000000000005', 'proposition', '33333333-0000-0000-0000-000000000001',
