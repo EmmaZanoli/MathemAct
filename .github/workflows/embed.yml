@@ -1,0 +1,109 @@
+# Compute sentence embeddings for published practices and commit data/embeddings.json.
+#
+# Model: sentence-transformers/all-MiniLM-L6-v2 (Apache 2.0, ~90 MB download, cached).
+# The model runs on CPU inside the GitHub-hosted runner — no API keys, no paid service.
+#
+# Schedule: Monday 04:17 UTC, well after the nightly export (03:17 UTC) so practices.json
+# is already fresh. Also dispatchable manually and on push to any embed.py change.
+#
+# Commit detection: stage data/embeddings.json, diff --cached excluding the generatedAt
+# timestamp (which changes every run) — commit only when practice vectors actually changed.
+# Then ask deploy.yml to rebuild, same pattern as export.yml.
+name: Embed
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'  # Monday 04:17 UTC
+  workflow_dispatch:
+    inputs:
+      allow_shrink:
+        description: 'Allow embeddings to shrink (practices removed)'
+        type: boolean
+        default: false
+  push:
+    paths:
+      - 'scripts/embed.py'
+
+permissions:
+  contents: write
+  actions: write
+
+# One embed at a time; never cancel in progress (a partial commit would be inconsistent).
+concurrency:
+  group: embed
+  cancel-in-progress: false
+
+jobs:
+  embed:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history not needed; fetch the working tree only.
+          fetch-depth: 1
+
+      - name: Verify export credentials
+        run: |
+          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
+            echo "::error::SUPABASE_DB_URL is not set — cannot verify. Set it in repository secrets."
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache model weights
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          # Key includes the model name so a model change invalidates the cache.
+          key: hf-all-MiniLM-L6-v2-${{ runner.os }}
+
+      - name: Install Python dependencies
+        run: pip install --quiet sentence-transformers numpy
+
+      - name: Run embed script
+        run: |
+          ARGS=""
+          if [ "${{ inputs.allow_shrink }}" = "true" ]; then
+            ARGS="--allow-shrink"
+          fi
+          python scripts/embed.py $ARGS
+
+      - name: Detect content change
+        id: changed
+        run: |
+          git add data/embeddings.json
+
+          # diff --cached but ignore lines containing "generatedAt" — the timestamp
+          # changes on every run even when the practice vectors are identical.
+          if git diff --cached --unified=0 -- data/embeddings.json \
+               | grep -v '"generatedAt"' \
+               | grep -q '^[+-]'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit embeddings
+        if: steps.changed.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update practice embeddings
+
+          all-MiniLM-L6-v2 (Apache 2.0), int8 quantised, $(date -u +%Y-%m-%d)"
+
+      - name: Push
+        if: steps.changed.outputs.changed == 'true'
+        run: git push
+
+      - name: Trigger deploy
+        if: steps.changed.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run deploy.yml --ref main

@@ -26,6 +26,7 @@ import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
 import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/practice-schema';
 import { getPractice, listPractices } from '../../lib/practices';
+import { findRelated } from '../../lib/related';
 import { LICENCE, SITE } from '../../lib/site';
 
 export async function getStaticPaths() {
@@ -49,6 +50,8 @@ const [thread, incoming, outgoing] = await Promise.all([
   referencesTo('practice', practice.id),
   referencesFrom('practice', practice.id),
 ]);
+
+const related = findRelated(practice);
 
 /**
  * A citation somebody can paste into a paper. Author, title, the corpus, the date it was
@@ -86,7 +89,10 @@ const metadata = [
       {/* Everything a reader might want to quote is inside this element, and the quote
           affordance looks for exactly that marker. The aside is outside it on purpose: a
           citation string and a tag list are not passages. */}
-      <div class="practice__body" data-quotable>
+      <div class="practice__body" data-quotable data-pagefind-body>
+        {/* Pagefind filter metadata. The type filter uses an explicit value; area and
+            task_type read from the element's text content. */}
+        <span data-pagefind-filter="type:practice" hidden></span>
         <header>
           <h1>{practice.title}</h1>
 
@@ -95,8 +101,8 @@ const metadata = [
           </div>
 
           <ul class="card__facts practice__facts" role="list">
-            <li>{areaLabel(practice.area)}</li>
-            <li>{taskTypeLabel(practice.taskType)}</li>
+            <li data-pagefind-filter="area">{areaLabel(practice.area)}</li>
+            <li data-pagefind-filter="task_type">{taskTypeLabel(practice.taskType)}</li>
             <li><span class="meta">Posted {longDate(practice.createdAt)}</span></li>
           </ul>
         </header>
@@ -192,7 +198,7 @@ const metadata = [
         {/* Filled in from the browser: the tally on this page is as old as the last build,
             and "three people say this no longer works" is exactly the kind of number a
             reader acts on. */}
-        <section class="field-block" id="confirmations">
+        <section class="field-block" id="confirmations" data-pagefind-ignore>
           <span class="field-block__label">Does this still work?</span>
 
           <div class="confirm" data-confirm data-practice-id={practice.id}>
@@ -301,6 +307,22 @@ const metadata = [
           )
         }
 
+        {
+          related.length > 0 && (
+            <div class="aside__block">
+              <span class="aside__label">Related practices</span>
+              <ul class="related-list" role="list">
+                {related.map((r) => (
+                  <li class="related-item">
+                    <a href={path(`/practices/${r.id}/`)}>{r.title}</a>
+                    <span class="related-item__reason">{r.reason}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        }
+
         <div class="aside__block citation">
           <span class="aside__label">Cite this</span>
           <p class="field__hint">
@@ -315,13 +337,15 @@ const metadata = [
 
     <References incoming={incoming} outgoing={outgoing} />
 
-    <CommentThread
-      parentType="practice"
-      parentId={practice.id}
-      nodes={thread}
-      title={practice.title}
-      href={path(`/practices/${practice.id}/`)}
-    />
+    <div data-pagefind-ignore>
+      <CommentThread
+        parentType="practice"
+        parentId={practice.id}
+        nodes={thread}
+        title={practice.title}
+        href={path(`/practices/${practice.id}/`)}
+      />
+    </div>
   </div>
 </Base>
 
@@ -482,5 +506,28 @@ const metadata = [
     font-family: var(--font-mono);
     font-size: var(--size-1);
     letter-spacing: var(--tracking-wide);
+  }
+
+  .related-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .related-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    font-size: var(--size-2);
+  }
+
+  .related-item__reason {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
   }
 </style>

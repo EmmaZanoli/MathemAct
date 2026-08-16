@@ -1197,3 +1197,56 @@ the set already visible in the corpus.
 The limit worth stating rather than hiding: erasure removes an account from every future
 export and cannot remove it from a commit already in the history, or from a copy anybody has
 downloaded. data/README.md says so in as many words, and the privacy notice now says it too.
+
+## 2026-08-16 — Pagefind for full-text search
+
+Pagefind indexes the generated HTML after `astro build`, writing a self-contained index
+under `dist/pagefind/`. The JS API (not the default UI) is used so that results can be
+grouped by content type and connected to the existing filter vocabulary. The index covers
+everything in the built output; `/moderate/` is excluded automatically because that page
+carries `<meta name="robots" content="noindex">` and Pagefind respects it.
+
+The pagefind bundle (~7 KB JS entry, index shards lazy-loaded) is imported at runtime on
+the search page only. It is not on the critical path for any reading page.
+
+## 2026-08-16 — Embeddings computed locally on CPU, not via an API
+
+`sentence-transformers/all-MiniLM-L6-v2` (Apache 2.0, 384 dimensions) runs inside the
+GitHub-hosted runner on CPU. No API key, no external call, no per-token cost. The model
+is ~90 MB; it is cached between runs by `actions/cache` on the HuggingFace hub path.
+
+Embeddings are stored as int8 (0–255 per dimension, encoded as base64) — one byte instead
+of four per float, about 75% size reduction. The linear map over [-1, 1] introduces at
+most ±0.004 error per dimension; negligible for cosine similarity at the 0.70–0.85
+thresholds used here.
+
+## 2026-08-16 — The "related practices" reason is rule-based, not generated
+
+The one-line reason on each related practice is derived from shared metadata (task type,
+tags, area) in a fixed priority order, not from model output or any generated text. The
+words are always taken from the practice's own fields. This is the constraint the prompt
+named: "the words shown are always the author's own". A generated summary of why two
+practices are similar would risk mischaracterising the author's stated position, which
+for a named mathematician in a citable corpus would be a serious problem.
+
+## 2026-08-16 — Near-duplicate detection uses transformers.js from jsDelivr CDN
+
+The submission form loads `@xenova/transformers` from jsDelivr on blur of the title or
+aim fields — lazily, only when the user is actively writing. jsDelivr is not an analytics
+service and does not track users across sites; it is a legitimate asset CDN for npm
+packages. The form page already loads Turnstile from Cloudflare, so an additional
+CDN request for an optional feature is consistent with what the page already does.
+
+The model weights (Xenova/all-MiniLM-L6-v2, ~23 MB quantized) download from HuggingFace
+Hub on first use and are cached in the browser's IndexedDB afterwards. The download is
+not on the critical path: it happens in the background after the first blur event. If
+anything fails — CDN unreachable, model download fails, browser incompatibility — the
+warning simply does not appear. Submission is never blocked.
+
+## 2026-08-16 — Embed workflow runs weekly, not nightly
+
+Computing embeddings for every export would add ~90 MB of model download and ~30 seconds
+of CPU to a job that already runs nightly. Weekly on Monday morning (after the nightly
+export has committed fresh practices.json) is a reasonable tradeoff: the related practices
+and near-duplicate suggestions are allowed to be a week stale. The moderation queue catches
+true duplicates before they are published anyway.

@@ -83,6 +83,21 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
         />
       </FormSection>
 
+      {/* Near-duplicate warning. Filled by the duplicate-detection script on blur of
+          #title or #aim; hidden by default and never blocks submission. The link is a
+          discovery aid, not a gate — a practice that reaches the same conclusion a
+          different way is still worth recording. */}
+      <div class="panel duplicate-warning" data-duplicate-warning hidden role="alert" aria-live="polite">
+        <p>
+          <strong>Similar practice found.</strong> Before submitting, check whether your
+          experience overlaps with:
+        </p>
+        <p>
+          <a class="duplicate-warning__link" data-duplicate-link href="" target="_blank" rel="noopener noreferrer"></a>
+        </p>
+        <p class="field__hint">This is a suggestion only and does not block submission.</p>
+      </div>
+
       <FormSection id="area" number={2} title="Area">
         <fieldset class="choices">
           <legend class="visually-hidden">What kind of work was this</legend>
@@ -914,3 +929,163 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
     window.location.assign(path('/practices/submitted/'));
   });
 </script>
+
+<script>
+  /**
+   * Near-duplicate detection.
+   *
+   * On blur of #title: pre-warm — start fetching data/embeddings.json and loading
+   * the sentence embedding model, so that by the time the user reaches #aim the model
+   * is (probably) ready.
+   *
+   * On blur of #aim: embed title + aim with Xenova/all-MiniLM-L6-v2 (the browser-side
+   * ONNX conversion of sentence-transformers/all-MiniLM-L6-v2) and compare against the
+   * stored corpus embeddings. If the closest match exceeds 0.85 cosine similarity, show
+   * a non-blocking link to that practice.
+   *
+   * The model is loaded from jsDelivr and the weights download from HuggingFace on first
+   * use; both are cached by the browser afterwards. Every failure path is silent — the
+   * warning either appears or it does not; it never blocks or errors the form.
+   *
+   * The words in the warning are always the author's own (the linked practice's title).
+   * Nothing is generated.
+   */
+
+  const titleInput = document.querySelector<HTMLInputElement>('#title');
+  const aimInput = document.querySelector<HTMLTextAreaElement>('#aim');
+  const warning = document.querySelector<HTMLElement>('[data-duplicate-warning]');
+  const link = warning?.querySelector<HTMLAnchorElement>('[data-duplicate-link]');
+
+  if (titleInput && aimInput && warning && link) {
+    // Capture non-nullable references for use inside async closures, where TypeScript's
+    // control-flow narrowing does not follow across function boundaries.
+    const titleEl = titleInput;
+    const aimEl = aimInput;
+    const warningEl = warning;
+    const linkEl = link;
+
+    const BASE = import.meta.env.BASE_URL as string;
+    const THRESHOLD = 0.85;
+    const TRANSFORMERS_CDN =
+      'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js';
+
+    type StoredEntry = { id: string; title: string; v: string };
+
+    let storedEntries: StoredEntry[] | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let pipelineRef: any = null;
+    let loadingPipeline = false;
+
+    async function prewarm(): Promise<void> {
+      // Fetch embeddings and load model in parallel; both are cached after first run.
+      void fetchEmbeddings();
+      void loadPipeline();
+    }
+
+    async function fetchEmbeddings(): Promise<void> {
+      if (storedEntries !== null) return;
+      try {
+        const res = await fetch(`${BASE}data/embeddings.json`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) { storedEntries = []; return; }
+        const json = await res.json();
+        storedEntries = json.practices ?? [];
+      } catch {
+        storedEntries = [];
+      }
+    }
+
+    async function loadPipeline(): Promise<void> {
+      if (pipelineRef || loadingPipeline) return;
+      loadingPipeline = true;
+      try {
+        // @vite-ignore: CDN URL resolved at runtime; not bundled.
+        const mod = await import(/* @vite-ignore */ TRANSFORMERS_CDN);
+        // env: disable local model resolution; weights always from HuggingFace.
+        mod.env.allowLocalModels = false;
+        pipelineRef = await mod.pipeline(
+          'feature-extraction',
+          'Xenova/all-MiniLM-L6-v2',
+          { quantized: true },
+        );
+      } catch {
+        /* Degrade silently */
+      }
+      loadingPipeline = false;
+    }
+
+    function dequantize(b64: string): Float32Array {
+      const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const f = new Float32Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) f[i] = bytes[i] / 255 * 2 - 1;
+      return f;
+    }
+
+    function dot(a: Float32Array, b: Float32Array): number {
+      let s = 0;
+      for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+      return s;
+    }
+
+    function norm(v: Float32Array): number { return Math.sqrt(dot(v, v)); }
+
+    function cosine(a: Float32Array, b: Float32Array): number {
+      const na = norm(a), nb = norm(b);
+      return na === 0 || nb === 0 ? 0 : dot(a, b) / (na * nb);
+    }
+
+    async function check(): Promise<void> {
+      const title = titleEl.value.trim();
+      const aim = aimEl.value.trim();
+      const text = title ? `${title} ${aim}` : aim;
+
+      if (text.length < 20) { warningEl.hidden = true; return; }
+
+      await fetchEmbeddings();
+      if (!storedEntries || storedEntries.length === 0) return;
+
+      await loadPipeline();
+      if (!pipelineRef) return;
+
+      try {
+        const output = await pipelineRef(text, { pooling: 'mean', normalize: true });
+        const vec = output.data as Float32Array;
+
+        let bestId = '';
+        let bestTitle = '';
+        let bestSim = 0;
+
+        for (const e of storedEntries) {
+          const sim = cosine(vec, dequantize(e.v));
+          if (sim > bestSim) { bestSim = sim; bestId = e.id; bestTitle = e.title; }
+        }
+
+        if (bestSim > THRESHOLD) {
+          linkEl.href = `${BASE}practices/${bestId}/`;
+          linkEl.textContent = bestTitle;
+          warningEl.hidden = false;
+        } else {
+          warningEl.hidden = true;
+        }
+      } catch { /* Degrade silently */ }
+    }
+
+    titleEl.addEventListener('blur', () => { void prewarm(); });
+    aimEl.addEventListener('blur', () => { void check(); });
+
+    // Clear the warning while the user edits; re-check on next blur.
+    titleEl.addEventListener('input', () => { warningEl.hidden = true; });
+    aimEl.addEventListener('input', () => { warningEl.hidden = true; });
+  }
+</script>
+
+<style>
+  .duplicate-warning {
+    border-color: var(--accent);
+  }
+
+  .duplicate-warning__link {
+    font-weight: var(--weight-semibold);
+  }
+</style>

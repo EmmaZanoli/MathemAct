@@ -50,7 +50,9 @@ const [thread, incoming, outgoing] = await Promise.all([
     <p class="breadcrumb"><a href={path('/propositions/')}>← All propositions</a></p>
 
     {/* The statement and the rationale are quotable; the rating control is not. */}
-    <header data-quotable>
+    <header data-quotable data-pagefind-body>
+      {/* Pagefind filter metadata. */}
+      <span data-pagefind-filter="type:proposition" hidden></span>
       <p class="proposition__label">
         <span class="meta">
           {proposition.status === 'active' ? 'Active proposition' : 'Proposed'}
@@ -64,7 +66,7 @@ const [thread, incoming, outgoing] = await Promise.all([
       </blockquote>
 
       <ul class="card__facts" role="list">
-        <li>{areaLabel(proposition.area)}</li>
+        <li data-pagefind-filter="area">{areaLabel(proposition.area)}</li>
         <li>
           {
             proposition.author ? (
@@ -89,14 +91,14 @@ const [thread, incoming, outgoing] = await Promise.all([
 
     {
       proposition.rationale && (
-        <section class="field-block" data-quotable>
+        <section class="field-block" data-quotable data-pagefind-body>
           <span class="field-block__label">Why this was proposed</span>
           <p class="field-block__body">{proposition.rationale}</p>
         </section>
       )
     }
 
-    <section class="rate" data-rate data-proposition-id={proposition.id}>
+    <section class="rate" data-rate data-proposition-id={proposition.id} data-pagefind-ignore>
       <h2>Where do you stand?</h2>
 
       {/* Signed out. An anonymous reader cannot rate, so they cannot see the distribution
@@ -143,13 +145,15 @@ const [thread, incoming, outgoing] = await Promise.all([
 
     <References incoming={incoming} outgoing={outgoing} />
 
-    <CommentThread
-      parentType="proposition"
-      parentId={proposition.id}
-      nodes={thread}
-      title={proposition.statement}
-      href={path(`/propositions/${proposition.id}/`)}
-    />
+    <div data-pagefind-ignore>
+      <CommentThread
+        parentType="proposition"
+        parentId={proposition.id}
+        nodes={thread}
+        title={proposition.statement}
+        href={path(`/propositions/${proposition.id}/`)}
+      />
+    </div>
   </div>
 </Base>
 

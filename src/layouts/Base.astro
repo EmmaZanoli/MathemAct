@@ -86,6 +86,7 @@ const year = new Date().getFullYear();
       <div class="shell site-header__inner">
         <a class="wordmark" href={path('/')}>MathemAct</a>
 
+        <div class="header-end">
         <nav aria-label="Main">
           <ul class="nav" role="list">
             {
@@ -120,6 +121,17 @@ const year = new Date().getFullYear();
             </li>
           </ul>
         </nav>
+
+        <form class="header-search" role="search" method="get" action={path('/search/')}>
+          <input
+            class="header-search__input"
+            type="search"
+            name="q"
+            placeholder="Search"
+            aria-label="Search practices and propositions"
+          />
+        </form>
+        </div>
       </div>
     </header>
 
@@ -205,6 +217,46 @@ const year = new Date().getFullYear();
     justify-content: space-between;
     gap: var(--space-2xs) var(--space-md);
     padding-block: var(--space-md);
+  }
+
+  .header-end {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--space-2xs) var(--space-md);
+  }
+
+  .header-search__input {
+    width: 14ch;
+    padding: var(--space-3xs) var(--space-2xs);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background-color: transparent;
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--size-2);
+    line-height: inherit;
+    transition: width 0.15s ease, border-color 0.1s;
+  }
+
+  .header-search__input::placeholder {
+    color: var(--ink-muted);
+  }
+
+  .header-search__input:focus {
+    width: 22ch;
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+  }
+
+  @media (max-width: 26rem) {
+    .header-search__input {
+      width: 100%;
+    }
+    .header-search__input:focus {
+      width: 100%;
+    }
   }
 
   .wordmark {
