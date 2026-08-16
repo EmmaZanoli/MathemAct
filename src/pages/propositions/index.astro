@@ -15,6 +15,7 @@ import Base from '../../layouts/Base.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { longDate } from '../../lib/format';
+import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { areaLabel } from '../../lib/practice-schema';
 import { listPropositions } from '../../lib/propositions';
@@ -28,7 +29,7 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
   title="Propositions"
   description="Claims about how AI tools should be used in mathematics, and where the community stands on each."
 >
-  <div class="shell corpus">
+  <div class="shell corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
     <header class="corpus__header">
       <h1>Propositions</h1>
       <p class="corpus__lead">
@@ -47,18 +48,25 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
 
     {
       propositions.length === 0 ? (
-        <div class="empty">
-          <p class="empty__heading">No propositions yet.</p>
-          <p>
-            The first ones will come from members who noticed an argument worth settling —
-            or worth showing is not settled.
-          </p>
-          <p class="actions">
-            <a class="button button--primary" href={path('/propositions/new/')}>
-              Suggest a proposition
-            </a>
-          </p>
-        </div>
+        <>
+          {/* Where the overlay puts anything suggested since the export. The first
+              proposition ever written arrives here, on a page that would otherwise say
+              there are none until the next nightly build. */}
+          <ul class="proposition-list" role="list" data-fresh-list hidden />
+
+          <div class="empty" data-empty-state>
+            <p class="empty__heading">No propositions yet.</p>
+            <p>
+              The first ones will come from members who noticed an argument worth settling —
+              or worth showing is not settled.
+            </p>
+            <p class="actions">
+              <a class="button button--primary" href={path('/propositions/new/')}>
+                Suggest a proposition
+              </a>
+            </p>
+          </div>
+        </>
       ) : (
         <>
           <section class="section">
@@ -94,23 +102,31 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
               Suggested by a member and open for answers. Answering one is what promotes it.
             </p>
 
-            {proposed.length === 0 ? (
-              <p class="field__hint">Nothing waiting.</p>
-            ) : (
-              <ul class="proposition-list" role="list">
-                {proposed.map((proposition) => (
-                  <li class="proposition-item">
-                    <a class="proposition-item__link" href={path(`/propositions/${proposition.id}/`)}>
-                      {proposition.statement}
-                    </a>
-                    <p class="card__facts proposition-item__facts">
-                      <span>{areaLabel(proposition.area)}</span>
-                      <span class="meta">Proposed {longDate(proposition.createdAt)}</span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
+            {/* The list is always here, even when it is empty, because it is where the
+                freshness overlay puts anything suggested since the export — and a hidden
+                empty list is a smaller thing to carry than a second insertion point. */}
+            {proposed.length === 0 && (
+              <p class="field__hint" data-none>Nothing waiting.</p>
             )}
+
+            <ul
+              class="proposition-list"
+              role="list"
+              data-fresh-list
+              hidden={proposed.length === 0}
+            >
+              {proposed.map((proposition) => (
+                <li class="proposition-item">
+                  <a class="proposition-item__link" href={path(`/propositions/${proposition.id}/`)}>
+                    {proposition.statement}
+                  </a>
+                  <p class="card__facts proposition-item__facts">
+                    <span>{areaLabel(proposition.area)}</span>
+                    <span class="meta">Proposed {longDate(proposition.createdAt)}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
           </section>
 
           <p class="actions">
@@ -121,5 +137,65 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
         </>
       )
     }
+
+    {/* One suggested since the export. Its statement is not a link for the same reason a
+        fresh practice's title is not: /propositions/<id>/ is generated at build time from
+        the export, so the page does not exist yet. */}
+    <template data-fresh-proposition>
+      <li class="proposition-item" data-fresh>
+        <p class="proposition-item__link" data-statement></p>
+        <p class="card__facts proposition-item__facts">
+          <span data-area></span>
+          <span class="meta" data-fresh-mark>New since the last build</span>
+        </p>
+      </li>
+    </template>
   </div>
 </Base>
+
+<script>
+  /**
+   * The freshness overlay.
+   *
+   * The lists on this page are as they stood at the last nightly export. One query asks for
+   * anything proposed since; whatever comes back is prepended to the proposed list and
+   * marked. Nothing here can fail visibly — see src/lib/fresh.ts.
+   *
+   * Nothing about ratings is touched. The aggregate is never built into a page, so there is
+   * no stale copy of one to refresh: a proposition page fetches its distribution live, after
+   * the reader has answered, and this listing shows no aggregate at all by design.
+   */
+  import { propositionsSince } from '../../lib/fresh';
+  import { areaLabel } from '../../lib/practice-schema';
+
+  const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
+  const list = document.querySelector<HTMLElement>('[data-fresh-list]');
+  const template = document.querySelector<HTMLTemplateElement>('[data-fresh-proposition]');
+
+  if (since && list && template) {
+    void (async () => {
+      const fresh = await propositionsSince(since);
+      if (fresh.length === 0) return;
+
+      for (const proposition of fresh.reverse()) {
+        const node = (template.content.cloneNode(true) as DocumentFragment)
+          .firstElementChild as HTMLElement;
+
+        const statement = node.querySelector<HTMLElement>('[data-statement]');
+        const area = node.querySelector<HTMLElement>('[data-area]');
+        if (statement) statement.textContent = proposition.statement;
+        if (area) area.textContent = areaLabel(proposition.area);
+
+        list.prepend(node);
+      }
+
+      list.hidden = false;
+      // Whichever of these the page happens to be showing: "nothing waiting" under a
+      // populated Proposed section, or the whole empty state.
+      for (const selector of ['[data-none]', '[data-empty-state]']) {
+        const element = document.querySelector<HTMLElement>(selector);
+        if (element) element.hidden = true;
+      }
+    })();
+  }
+</script>

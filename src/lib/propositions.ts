@@ -102,75 +102,31 @@ const EXPORTED = import.meta.glob<{ default: Proposition[] }>('/data/proposition
 
 let cached: Proposition[] | null = null;
 
+/**
+ * The committed export, and nothing else. The PostgREST fallback that stood here until the
+ * nightly job existed has gone; see the same note in src/lib/practices.ts for why its
+ * absence is the feature rather than a regression.
+ *
+ * Both statuses are in the file. A proposed claim is public, rateable, and being rated is
+ * how it gets promoted — it is neither pending nor hidden, and the page that lists them
+ * splits the two itself.
+ */
 async function readPropositions(): Promise<Proposition[]> {
   if (cached) return cached;
 
   const exported = Object.values(EXPORTED)[0]?.default;
-  if (exported) {
-    cached = exported;
+
+  if (!exported) {
+    console.warn(
+      '[propositions] data/propositions.json is missing, so there are none. ' +
+        'Run scripts/export.mjs, or let .github/workflows/export.yml commit one.',
+    );
+    cached = [];
     return cached;
   }
 
-  cached = await queryPropositions();
+  cached = exported;
   return cached;
-}
-
-async function queryPropositions(): Promise<Proposition[]> {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL;
-  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return [];
-
-  const select = [
-    'id,statement,rationale,status,area,created_at,activated_at',
-    'author:profiles!propositions_author_id_fkey(id,display_name,is_pseudonym)',
-  ].join(',');
-
-  try {
-    // Hidden propositions are excluded by row level security for the anonymous key, and the
-    // filter is written out anyway so the intent survives a policy being loosened.
-    const response = await fetch(
-      `${url}/rest/v1/propositions?select=${encodeURIComponent(select)}` +
-        '&status=in.(proposed,active)&order=created_at.desc',
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
-    );
-
-    if (!response.ok) return [];
-
-    return (await response.json()).map(toProposition);
-  } catch {
-    // A paused project produces a site with no propositions, not a failed build.
-    return [];
-  }
-}
-
-interface RawProposition {
-  id: string;
-  statement: string;
-  rationale: string | null;
-  status: 'proposed' | 'active';
-  area: Area;
-  created_at: string;
-  activated_at: string | null;
-  author: { id: string; display_name: string; is_pseudonym: boolean } | null;
-}
-
-function toProposition(row: RawProposition): Proposition {
-  return {
-    id: row.id,
-    statement: row.statement,
-    rationale: row.rationale,
-    status: row.status,
-    area: row.area,
-    createdAt: row.created_at,
-    activatedAt: row.activated_at,
-    author: row.author
-      ? {
-          id: row.author.id,
-          displayName: row.author.display_name,
-          isPseudonym: row.author.is_pseudonym,
-        }
-      : null,
-  };
 }
 
 export async function listPropositions(): Promise<Proposition[]> {

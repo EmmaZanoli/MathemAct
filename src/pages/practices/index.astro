@@ -14,8 +14,10 @@
  */
 import Base from '../../layouts/Base.astro';
 import PracticeCard from '../../components/PracticeCard.astro';
+import Tombstone from '../../components/Tombstone.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
+import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { AREAS, OUTCOME_CHOICES, TASK_TYPES } from '../../lib/practice-schema';
 import { listPractices, listToolNames, listUsedTags } from '../../lib/practices';
@@ -72,7 +74,10 @@ const groups = [
   title="Practices"
   description="First-hand accounts of how mathematicians have used AI tools, filterable by area, task, outcome, subject and tool."
 >
-  <div class="shell corpus">
+  {/* The export timestamp travels to the browser on the element rather than through a
+      `define:vars` script, which would have to be inline and could not import anything. The
+      overlay asks the database for rows newer than this and prepends what it finds. */}
+  <div class="shell corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
     <header class="corpus__header">
       <h1>Practices</h1>
       <p class="corpus__lead">
@@ -84,20 +89,32 @@ const groups = [
 
     {
       practices.length === 0 ? (
-        <div class="empty">
-          <p class="empty__heading">Nothing has been published yet.</p>
-          <p>
-            The corpus is empty because it has not started. Every account in it will have
-            been written by somebody who did the work and then took ten minutes to say what
-            happened — including, and especially, when it did not go well.
-          </p>
-          <p class="actions">
-            <a class="button button--primary" href={path('/practices/new/')}>
-              Post the first practice
-            </a>
-            <a class="button" href={path('/about/')}>What this is for</a>
-          </p>
-        </div>
+        <>
+          {/* The overlay's landing place when the export is empty. This is not a corner
+              case: it is the state the site is in on the day the first practice is posted,
+              and without it that practice would sit under "nothing has been published yet"
+              until the next nightly build. */}
+          <div class="listing listing--fresh" data-fresh-only hidden>
+            <div class="results">
+              <div data-results />
+            </div>
+          </div>
+
+          <div class="empty" data-empty-state>
+            <p class="empty__heading">Nothing has been published yet.</p>
+            <p>
+              The corpus is empty because it has not started. Every account in it will have
+              been written by somebody who did the work and then took ten minutes to say
+              what happened — including, and especially, when it did not go well.
+            </p>
+            <p class="actions">
+              <a class="button button--primary" href={path('/practices/new/')}>
+                Post the first practice
+              </a>
+              <a class="button" href={path('/about/')}>What this is for</a>
+            </p>
+          </div>
+        </>
       ) : (
         <div class="listing">
           <form class="filters" data-filters>
@@ -156,17 +173,57 @@ const groups = [
         </div>
       )
     }
+
+    {/* A card for something posted since the export.
+
+        Deliberately not PracticeCard: this one carries the marker, and its title is not a
+        link. The page at /practices/<id>/ is generated at build time from the export, so a
+        row newer than the export has no page yet — linking to one would be a 404 dressed up
+        as a result. The marker says so rather than leaving a reader to find out by clicking.
+
+        Written as markup rather than built in script so that the scoped styles below reach
+        it, and so the Tombstone comes from the component that owns the glyph rather than
+        from a second copy of its markup. Everything else here is a class from corpus.css,
+        which is global, so a cloned node is styled like any other card. */}
+    <template data-fresh-card>
+      <article class="card" data-practice data-fresh>
+        <div>
+          <Tombstone status="unverified" />
+        </div>
+
+        <p class="card__fresh">
+          <span class="mono">new since the last build</span>
+          <span>— its own page follows at the next one</span>
+        </p>
+
+        <h3 class="card__title" data-title></h3>
+        <p class="card__aim" data-aim></p>
+
+        <ul class="card__facts" role="list">
+          <li data-area></li>
+          <li data-task></li>
+          <li data-author></li>
+        </ul>
+
+        <ul class="card__tools" role="list" data-tools></ul>
+      </article>
+    </template>
   </div>
 </Base>
 
 <script>
   /**
-   * Filtering, sorting, and the URL.
+   * Filtering, sorting, and the URL — and, at the bottom, the freshness overlay.
    *
    * The address bar is the state. Every change writes to it with replaceState, and the page
    * reads it on load and on back-navigation, so a filtered view survives being copied,
    * bookmarked, or arrived at from a tag link on a practice page.
    */
+  import { practicesSince } from '../../lib/fresh';
+  import type { FreshPractice } from '../../lib/fresh';
+  import { areaLabel, taskTypeLabel } from '../../lib/practice-schema';
+  import { OUTCOME, tombstoneName } from '../../lib/status';
+
   const filters = document.querySelector<HTMLFormElement>('[data-filters]');
 
   if (filters) {
@@ -420,5 +477,147 @@ const groups = [
 
     readUrl();
     apply(false);
+
+    // Anything posted since the export joins the cards the filters already know about, so
+    // it is filtered, counted and sorted like everything else rather than pinned above the
+    // listing as a separate thing.
+    void overlay((added) => {
+      cards.push(...added);
+      apply(false);
+    });
+  }
+
+  // ── The freshness overlay ───────────────────────────────────────────────────────────
+  //
+  // The corpus on this page is as it stood at the last nightly export. One query asks for
+  // anything newer; whatever comes back is prepended and marked. Everything about it fails
+  // quietly — see src/lib/fresh.ts — because the page is already correct without it and an
+  // error message about a database, on a page that is showing its content, would teach
+  // readers this site depends on something it does not.
+
+  if (!filters) {
+    // The empty corpus. Nothing to filter, so the fresh cards go into their own container
+    // and the "nothing has been published yet" message steps aside.
+    void overlay(() => {
+      const only = document.querySelector<HTMLElement>('[data-fresh-only]');
+      const empty = document.querySelector<HTMLElement>('[data-empty-state]');
+      if (only) only.hidden = false;
+      if (empty) empty.hidden = true;
+    });
+  }
+
+  async function overlay(absorb: (added: HTMLElement[]) => void): Promise<void> {
+    const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
+    const results = document.querySelector<HTMLElement>('[data-results]');
+    const template = document.querySelector<HTMLTemplateElement>('[data-fresh-card]');
+
+    // No manifest means no export, so there is no "since" to ask about and nothing on the
+    // page for an answer to be newer than.
+    if (!since || !results || !template) return;
+
+    const fresh = await practicesSince(since);
+    if (fresh.length === 0) return;
+
+    const added = fresh.map((practice) => card(template, practice));
+    results.prepend(...added);
+    absorb(added);
+  }
+
+  function card(template: HTMLTemplateElement, practice: FreshPractice): HTMLElement {
+    const node = (template.content.cloneNode(true) as DocumentFragment)
+      .firstElementChild as HTMLElement;
+
+    // The same attributes PracticeCard writes, because the filter and sort code reads the
+    // element rather than any data behind it. A card missing one of these would quietly
+    // fail to match a filter it should have matched.
+    node.dataset.area = practice.area;
+    node.dataset.taskType = practice.taskType;
+    node.dataset.outcome = practice.outcome;
+    node.dataset.tools = practice.tools
+      .map((tool) => tool.name.trim().toLowerCase())
+      .join('|');
+    node.dataset.tags = practice.tags.join('|');
+    node.dataset.created = practice.createdAt;
+    node.dataset.confirmed = '';
+    node.dataset.confirmations = '0';
+
+    // Nothing this new has been confirmed by anyone, so the square is open and the status is
+    // `unverified` — which is what the template already renders. Only the outcome colour and
+    // the two labels are per-card.
+    const tombstone = node.querySelector<HTMLElement>('.tombstone');
+    if (tombstone) {
+      tombstone.dataset.outcome = practice.outcome;
+      tombstone.setAttribute('aria-label', tombstoneName('unverified', practice.outcome));
+      const label = tombstone.querySelector<HTMLElement>('.tombstone__label');
+      if (label) label.textContent = OUTCOME[practice.outcome].label;
+    }
+
+    put(node, '[data-title]', practice.title);
+    put(node, '[data-aim]', practice.aim);
+    put(node, '[data-area]', areaLabel(practice.area));
+    put(node, '[data-task]', taskTypeLabel(practice.taskType));
+    put(node, '[data-author]', practice.authorName ?? 'Author since erased');
+
+    const tools = node.querySelector<HTMLElement>('[data-tools]');
+    if (tools) {
+      for (const tool of practice.tools) tools.append(chip(tool.name, tool.version));
+      for (const tag of practice.tags) tools.append(chip(tag, null, true));
+    }
+
+    return node;
+  }
+
+  function put(root: HTMLElement, selector: string, text: string): void {
+    const element = root.querySelector<HTMLElement>(selector);
+    if (element) element.textContent = text;
+  }
+
+  /** A tool or tag chip. Built rather than cloned, because `.tool-chip` is a global class in
+   *  corpus.css — the practice page uses it too — so a created element is styled correctly. */
+  function chip(name: string, version: string | null, isTag = false): HTMLElement {
+    const item = document.createElement('li');
+    item.className = isTag ? 'tool-chip tool-chip--tag' : 'tool-chip';
+
+    const label = document.createElement('span');
+    label.className = 'tool-chip__name';
+    label.textContent = name;
+    item.append(label);
+
+    if (version) {
+      const number = document.createElement('span');
+      number.className = 'tool-chip__version';
+      number.textContent = version;
+      item.append(number);
+    }
+
+    return item;
   }
 </script>
+
+<style>
+  /* The overlay's marker. Mono for the fact, muted prose for the consequence — small
+     enough to read as a footnote on the card rather than as an announcement, which is what
+     "subtle" has to mean here: a reader skimming the corpus should not be pulled to the
+     newest thing by its formatting.
+
+     Scoped, and it reaches the cloned template because the template is authored in this
+     file. `.card__fresh` deliberately does not live in corpus.css: nothing else has one. */
+  .card__fresh {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3xs) var(--space-2xs);
+    font-size: var(--size-1);
+    color: var(--ink-muted);
+  }
+
+  .card__fresh .mono {
+    font-family: var(--font-mono);
+    letter-spacing: var(--tracking-wide);
+  }
+
+  /* The container the overlay uses when the corpus is empty. It has no filters and no
+     results head, so it needs the top rule that .listing would otherwise provide. */
+  .listing--fresh {
+    margin-block-end: var(--space-xl);
+  }
+</style>

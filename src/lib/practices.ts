@@ -4,11 +4,12 @@
  *
  * The swap point
  * --------------
- * `readCorpus()` below is the only function that knows where the corpus comes from, and it
- * is the only one a later change touches. Today it prefers a committed JSON export and
- * falls back to querying Supabase over PostgREST; when the nightly export job exists, the
- * fallback goes and the JSON is the whole story. No page imports anything but the named
- * functions under it, so that change is one file.
+ * `readCorpus()` below is the only function that knows where the corpus comes from. **It is
+ * now the committed export in data/ and nothing else** — the PostgREST fallback that stood
+ * here until the nightly job existed has gone, and its absence is the feature. While it was
+ * there, a build with credentials silently produced a different site from a build without
+ * them, and a paused database would have gone unnoticed until somebody wondered why the
+ * corpus had stopped growing. Now a build reads files or reads nothing.
  *
  * Reads happen at build time, not in the browser. That is the read/write split in CLAUDE.md
  * doing its job: a traffic spike never touches the egress quota, and the site keeps serving
@@ -17,7 +18,9 @@
  * corpus meant to be cited.
  *
  * Writes stay in the browser, because they are the only thing that genuinely cannot be
- * static: submitting a practice, and reporting whether one still works.
+ * static: submitting a practice, and reporting whether one still works. The one read a
+ * browser makes is the freshness overlay in src/lib/fresh.ts, which never renders a page,
+ * only adds to one.
  */
 import { getSupabase } from './supabase';
 import type { Area, TaskType } from './practice-schema';
@@ -103,167 +106,21 @@ async function readCorpus(): Promise<Practice[]> {
   if (cached) return cached;
 
   const exported = Object.values(EXPORTED)[0]?.default;
-  if (exported) {
-    cached = exported;
+
+  if (!exported) {
+    // A checkout that has never run scripts/export.mjs. The site builds, every page renders
+    // its empty state, and nothing pretends otherwise. Said out loud because the symptom —
+    // a complete site with no corpus in it — otherwise reads as a bug in the listing.
+    console.warn(
+      '[practices] data/practices.json is missing, so the corpus is empty. ' +
+        'Run scripts/export.mjs, or let .github/workflows/export.yml commit one.',
+    );
+    cached = [];
     return cached;
   }
 
-  cached = await queryCorpus();
+  cached = exported;
   return cached;
-}
-
-/**
- * The fallback: PostgREST, with the publishable key, at build time.
- *
- * Plain fetch rather than supabase-js, because this runs in Node during the build and the
- * client library brings a session, a storage adapter and a realtime socket that a build has
- * no use for.
- *
- * A failure returns an empty corpus rather than throwing. A paused project must produce a
- * site with no practices on it, not a red build — the free tier pauses after about a week
- * of inactivity, and the whole point of building the corpus into static files is that the
- * database being down is not a reader's problem.
- */
-async function queryCorpus(): Promise<Practice[]> {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL;
-  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return [];
-
-  // `author:profiles!practices_author_id_fkey` names the constraint explicitly. There are
-  // two foreign keys from practices to profiles — author_id and deleted_by — and without
-  // the constraint name PostgREST cannot tell which embed is meant and refuses the request.
-  const select = [
-    'id,title,area,task_type,aim,method,outcome,outcome_notes,verification',
-    'transcript_excerpt,transcript_url,caveats,time_spent_minutes,was_published',
-    'was_disclosed,author_confidence,created_at',
-    'author:profiles!practices_author_id_fkey(id,display_name,is_pseudonym,institution_name,institution_country,institution_verified_at)',
-    'practice_tools(tool_name,tool_version,used_on)',
-    'practice_tags(tags(code,label))',
-  ].join(',');
-
-  const headers = { apikey: key, Authorization: `Bearer ${key}` };
-
-  try {
-    const [rows, staleness] = await Promise.all([
-      fetch(
-        `${url}/rest/v1/practices?select=${encodeURIComponent(select)}` +
-          '&status=eq.published&deleted_at=is.null&order=created_at.desc',
-        { headers },
-      ).then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status))))),
-      fetch(`${url}/rest/v1/practice_staleness?select=*`, { headers }).then((r) =>
-        r.ok ? r.json() : Promise.reject(new Error(String(r.status))),
-      ),
-    ]);
-
-    // Joined here rather than embedded. PostgREST can only embed a view when it can infer
-    // the relationship, which for a view over several tables it frequently cannot, and a
-    // build that fails on a schema-cache detail is worse than one extra request.
-    const byId = new Map<string, RawStaleness>(
-      (staleness as RawStaleness[]).map((row) => [row.practice_id, row]),
-    );
-
-    return (rows as RawPractice[]).map((row) => toPractice(row, byId.get(row.id)));
-  } catch {
-    return [];
-  }
-}
-
-// ── Shapes as PostgREST returns them ──────────────────────────────────────────────────
-
-interface RawStaleness {
-  practice_id: string;
-  latest_tool_use: string | null;
-  latest_verdict: 'still_works' | 'no_longer_works' | null;
-  latest_confirmation_at: string | null;
-  confirmation_count: number;
-  tombstone_status: TombstoneStatus;
-  is_verified: boolean;
-}
-
-interface RawPractice {
-  id: string;
-  title: string;
-  area: Area;
-  task_type: TaskType;
-  aim: string;
-  method: string;
-  outcome: Outcome;
-  outcome_notes: string;
-  verification: string;
-  transcript_excerpt: string | null;
-  transcript_url: string | null;
-  caveats: string | null;
-  time_spent_minutes: number | null;
-  was_published: boolean | null;
-  was_disclosed: boolean | null;
-  author_confidence: number | null;
-  created_at: string;
-  author: {
-    id: string;
-    display_name: string;
-    is_pseudonym: boolean;
-    institution_name: string | null;
-    institution_country: string | null;
-    institution_verified_at: string | null;
-  } | null;
-  practice_tools: { tool_name: string; tool_version: string; used_on: string }[];
-  practice_tags: { tags: { code: string; label: string } | null }[];
-}
-
-function toPractice(row: RawPractice, staleness: RawStaleness | undefined): Practice {
-  return {
-    id: row.id,
-    title: row.title,
-    area: row.area,
-    taskType: row.task_type,
-    aim: row.aim,
-    method: row.method,
-    outcome: row.outcome,
-    outcomeNotes: row.outcome_notes,
-    verification: row.verification,
-    transcriptExcerpt: row.transcript_excerpt,
-    transcriptUrl: row.transcript_url,
-    caveats: row.caveats,
-    timeSpentMinutes: row.time_spent_minutes,
-    wasPublished: row.was_published,
-    wasDisclosed: row.was_disclosed,
-    authorConfidence: row.author_confidence,
-    createdAt: row.created_at,
-    author: row.author
-      ? {
-          id: row.author.id,
-          displayName: row.author.display_name,
-          isPseudonym: row.author.is_pseudonym,
-          institution:
-            row.author.institution_name &&
-            row.author.institution_country &&
-            row.author.institution_verified_at
-              ? {
-                  name: row.author.institution_name,
-                  country: row.author.institution_country,
-                  verifiedAt: row.author.institution_verified_at,
-                }
-              : null,
-        }
-      : null,
-    tools: row.practice_tools.map((tool) => ({
-      name: tool.tool_name,
-      version: tool.tool_version,
-      usedOn: tool.used_on,
-    })),
-    tags: row.practice_tags.flatMap((link) => (link.tags ? [link.tags] : [])),
-    // A practice with no staleness row cannot happen — the view produces one per practice —
-    // but a corpus read from a hand-edited export could be missing one, and an unverified
-    // open square is the honest default for "we do not know".
-    staleness: {
-      latestToolUse: staleness?.latest_tool_use ?? null,
-      latestVerdict: staleness?.latest_verdict ?? null,
-      latestConfirmationAt: staleness?.latest_confirmation_at ?? null,
-      confirmationCount: staleness?.confirmation_count ?? 0,
-      tombstoneStatus: staleness?.tombstone_status ?? 'unverified',
-      isVerified: staleness?.is_verified ?? false,
-    },
-  };
 }
 
 // ── What pages call ───────────────────────────────────────────────────────────────────
