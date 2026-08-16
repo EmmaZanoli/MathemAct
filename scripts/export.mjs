@@ -290,6 +290,9 @@ const PROFILES = `
      or exists (
           select 1 from public.comments c
            where c.author_id = f.id and c.status = 'published' and c.deleted_at is null)
+     or exists (
+          select 1 from public.resources r
+           where r.submitter_id = f.id and r.status = 'published' and r.deleted_at is null)
   order by f.created_at
 `;
 
@@ -334,6 +337,36 @@ const COMMENTS = `
           where q.id = c.parent_id and q.status <> 'hidden'))
     )
   order by c.created_at
+`;
+
+/**
+ * Published resources, newest first, with their submitter.
+ *
+ * link_status is in the export so the listing can show broken-link badges without a live
+ * query. link_checked_at tells researchers how fresh that status is.
+ */
+const RESOURCES = `
+  select
+    r.id,
+    r.title,
+    r.url,
+    r.url_normalised,
+    r.category::text,
+    r.description,
+    r.relevance,
+    r.created_at,
+    r.link_status::text,
+    r.link_checked_at,
+    a.id                      as submitter_id,
+    a.display_name            as submitter_display_name,
+    a.is_pseudonym            as submitter_is_pseudonym,
+    a.institution_name        as submitter_institution_name,
+    a.institution_country     as submitter_institution_country,
+    a.institution_verified_at as submitter_institution_verified_at
+  from public.resources r
+  left join public.profiles a on a.id = r.submitter_id
+  where r.status = 'published' and r.deleted_at is null
+  order by r.created_at desc
 `;
 
 /**
@@ -524,6 +557,38 @@ function toComment(row) {
   };
 }
 
+function toResource(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    urlNormalised: row.url_normalised,
+    category: row.category,
+    description: row.description,
+    relevance: row.relevance,
+    createdAt: iso(row.created_at),
+    linkStatus: row.link_status ?? null,
+    linkCheckedAt: iso(row.link_checked_at),
+    submitter: row.submitter_id
+      ? {
+          id: row.submitter_id,
+          displayName: row.submitter_display_name,
+          isPseudonym: row.submitter_is_pseudonym,
+          institution:
+            row.submitter_institution_name &&
+            row.submitter_institution_country &&
+            row.submitter_institution_verified_at
+              ? {
+                  name: row.submitter_institution_name,
+                  country: row.submitter_institution_country,
+                  verifiedAt: iso(row.submitter_institution_verified_at),
+                }
+              : null,
+        }
+      : null,
+  };
+}
+
 function toCitation(row) {
   return {
     id: row.id,
@@ -634,7 +699,7 @@ async function main() {
     // practices.json, and the site would build a reference to a page it never generated.
     await client.query('begin isolation level repeatable read, read only');
 
-    const [practices, propositions, aggregates, tags, profiles, comments, citations] =
+    const [practices, propositions, aggregates, tags, profiles, comments, citations, resources] =
       await Promise.all([
         client.query(PRACTICES),
         client.query(PROPOSITIONS),
@@ -643,11 +708,12 @@ async function main() {
         client.query(PROFILES),
         client.query(COMMENTS),
         client.query(CITATIONS),
+        client.query(RESOURCES),
       ]);
 
     await client.query('commit');
 
-    datasets = { practices, propositions, aggregates, tags, profiles, comments, citations };
+    datasets = { practices, propositions, aggregates, tags, profiles, comments, citations, resources };
   } catch (error) {
     await client.query('rollback').catch(() => {});
     await client.end().catch(() => {});
@@ -667,6 +733,7 @@ async function main() {
   files.set('profiles.json', datasets.profiles.rows.map(toProfile));
   files.set('comments.json', datasets.comments.rows.map(toComment));
   files.set('citations.json', datasets.citations.rows.map(toCitation));
+  files.set('resources.json', datasets.resources.rows.map(toResource));
 
   assertNoAddressFields(files);
 
@@ -686,6 +753,24 @@ async function main() {
     }
   }
 
+  const RESOURCE_CSV_COLUMNS = [
+    'id',
+    'title',
+    'url',
+    'url_normalised',
+    'category',
+    'description',
+    'relevance',
+    'created_at',
+    'link_status',
+    'link_checked_at',
+    'submitter_id',
+    'submitter_display_name',
+    'submitter_is_pseudonym',
+    'submitter_institution_name',
+    'submitter_institution_country',
+  ];
+
   const csvFiles = new Map([
     ['csv/practices.csv', csv(PRACTICE_CSV_COLUMNS, datasets.practices.rows)],
     [
@@ -693,6 +778,7 @@ async function main() {
       csv(['practice_id', 'tool_name', 'tool_version', 'used_on'], toolRows),
     ],
     ['csv/practice-tags.csv', csv(['practice_id', 'tag_code', 'tag_label'], tagRows)],
+    ['csv/resources.csv', csv(RESOURCE_CSV_COLUMNS, datasets.resources.rows)],
   ]);
 
   // ── The shrink guard ────────────────────────────────────────────────────────────────

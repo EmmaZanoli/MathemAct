@@ -99,6 +99,16 @@ import { path } from '../../lib/paths';
       <p class="queue__empty" data-empty hidden>Nothing waiting.</p>
     </section>
 
+    <section class="queue__section" data-section="resources">
+      <h2>Resources waiting <span class="mono" data-count></span></h2>
+      <p class="queue__note">
+        Oldest first. Check that the link is real, the category is right, and the relevance
+        section is specific rather than marketing copy.
+      </p>
+      <ol class="queue__list" data-list role="list"></ol>
+      <p class="queue__empty" data-empty hidden>Nothing waiting.</p>
+    </section>
+
     <section class="queue__section" data-section="reports">
       <h2>Open reports <span class="mono" data-count></span></h2>
       <p class="queue__note">
@@ -113,7 +123,7 @@ import { path } from '../../lib/paths';
       <h2>Hidden <span class="mono" data-count></span></h2>
       <p class="queue__note">
         Hidden content is still there and still readable by its author, who can see that it
-        was hidden. Unhiding a practice publishes it.
+        was hidden. Unhiding a practice or resource publishes it.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
       <p class="queue__empty" data-empty hidden>Nothing is hidden.</p>
@@ -281,6 +291,52 @@ import { path } from '../../lib/paths';
     </li>
   </template>
 
+  <template data-template="resource">
+    <li class="item">
+      <div class="item__head">
+        <h3 class="item__title" data-title></h3>
+        <p class="mono item__meta" data-meta></p>
+      </div>
+
+      <div class="item__note" data-optional hidden>
+        <p class="item__note-head">Already sent back <span class="mono" data-note-at></span></p>
+        <p data-note></p>
+      </div>
+
+      <dl class="fields">
+        <dt>URL</dt>
+        <dd class="mono" data-url></dd>
+
+        <dt>Category</dt>
+        <dd class="mono" data-category></dd>
+
+        <dt>Description</dt>
+        <dd data-description></dd>
+
+        <dt>Why mathematicians should care</dt>
+        <dd data-relevance></dd>
+      </dl>
+
+      <div class="reason">
+        <label class="reason__label" data-reason-label
+          >Note to the author, or reason for hiding</label
+        >
+        <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
+        <p class="reason__hint">
+          Required to send back or to hide. A note goes to the author on their account page;
+          a hide reason is kept in the log for other moderators.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button class="button button--primary" data-act="publish">Publish</button>
+        <button class="button" data-act="request_changes">Send back</button>
+        <button class="button" data-act="hide">Hide</button>
+        <button class="button button--quiet" data-act="ban">Ban this account</button>
+      </div>
+    </li>
+  </template>
+
   <template data-template="hidden">
     <li class="item item--compact">
       <div class="item__head">
@@ -343,6 +399,7 @@ import { path } from '../../lib/paths';
     QueuePractice,
     QueueProposition,
     QueueReport,
+    QueueResource,
     Role,
     Target,
   } from '../../lib/moderation';
@@ -400,6 +457,7 @@ import { path } from '../../lib/paths';
 
     section('practices', queues.practices, practiceItem);
     section('propositions', queues.propositions, propositionItem);
+    section('resources', queues.resources, resourceItem);
     section('reports', queues.reports, reportItem);
     section(
       'hidden',
@@ -407,6 +465,7 @@ import { path } from '../../lib/paths';
         ...queues.hiddenPractices.map((row) => ({ kind: 'practice' as const, row })),
         ...queues.hiddenPropositions.map((row) => ({ kind: 'proposition' as const, row })),
         ...queues.hiddenComments.map((row) => ({ kind: 'comment' as const, row })),
+        ...queues.hiddenResources.map((row) => ({ kind: 'resource' as const, row })),
       ],
       hiddenItem,
     );
@@ -416,13 +475,17 @@ import { path } from '../../lib/paths';
     if (role === 'admin') section('erasures', queues.erasures, erasureItem);
 
     const waiting =
-      queues.practices.length + queues.propositions.length + queues.reports.length;
+      queues.practices.length +
+      queues.propositions.length +
+      queues.resources.length +
+      queues.reports.length;
 
     tally.textContent =
       waiting === 0
         ? 'Nothing waiting'
         : `${waiting} waiting · ${queues.practices.length} practices · ` +
-          `${queues.propositions.length} propositions · ${queues.reports.length} reports`;
+          `${queues.propositions.length} propositions · ${queues.resources.length} resources · ` +
+          `${queues.reports.length} reports`;
   }
 
   function section<T>(
@@ -648,10 +711,42 @@ import { path } from '../../lib/paths';
     return item;
   }
 
+  function resourceItem(resource: QueueResource): HTMLElement {
+    const item = clone('resource');
+
+    put(item, '[data-title]', resource.title);
+    put(
+      item,
+      '[data-meta]',
+      [name(resource.author), `submitted ${longDate(resource.createdAt)}`, resource.category].join(
+        ' · ',
+      ),
+    );
+
+    put(item, '[data-note]', resource.note);
+    put(item, '[data-note-at]', resource.noteAt ? longDate(resource.noteAt) : '');
+    put(item, '[data-url]', resource.url);
+    put(item, '[data-category]', resource.category);
+    put(item, '[data-description]', resource.description);
+    put(item, '[data-relevance]', resource.relevance);
+
+    wire(item, (action) => {
+      if (action === 'ban') {
+        return resource.author
+          ? { target: 'account' as Target, id: resource.author.id, action: 'ban' as Action }
+          : null;
+      }
+      return { target: 'resource' as Target, id: resource.id, action };
+    }, resource.author !== null);
+
+    return item;
+  }
+
   type Hidden =
     | { kind: 'practice'; row: QueuePractice }
     | { kind: 'proposition'; row: QueueProposition }
-    | { kind: 'comment'; row: QueueComment };
+    | { kind: 'comment'; row: QueueComment }
+    | { kind: 'resource'; row: QueueResource };
 
   function hiddenItem(entry: Hidden): HTMLElement {
     const item = clone('hidden');
@@ -664,7 +759,9 @@ import { path } from '../../lib/paths';
         ? entry.row.title
         : entry.kind === 'proposition'
           ? entry.row.statement
-          : 'Comment',
+          : entry.kind === 'resource'
+            ? entry.row.title
+            : 'Comment',
     );
 
     put(
@@ -680,7 +777,9 @@ import { path } from '../../lib/paths';
         ? entry.row.aim
         : entry.kind === 'proposition'
           ? (entry.row.rationale ?? '')
-          : entry.row.body,
+          : entry.kind === 'resource'
+            ? entry.row.description
+            : entry.row.body,
     );
 
     wire(item, (action) => ({ target: entry.kind as Target, id: entry.row.id, action }));

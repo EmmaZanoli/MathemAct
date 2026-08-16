@@ -136,6 +136,20 @@ export interface QueueComment {
   readonly parentId: string;
 }
 
+export interface QueueResource {
+  readonly id: string;
+  readonly status: 'pending' | 'published' | 'hidden';
+  readonly title: string;
+  readonly url: string;
+  readonly category: string;
+  readonly description: string;
+  readonly relevance: string;
+  readonly createdAt: string;
+  readonly author: QueueAuthor | null;
+  readonly note: string | null;
+  readonly noteAt: string | null;
+}
+
 export interface QueueReport {
   readonly id: string;
   readonly subjectType: ReportSubject;
@@ -169,10 +183,12 @@ export interface QueueErasure {
 export interface Queues {
   readonly practices: readonly QueuePractice[];
   readonly propositions: readonly QueueProposition[];
+  readonly resources: readonly QueueResource[];
   readonly reports: readonly QueueReport[];
   readonly hiddenPractices: readonly QueuePractice[];
   readonly hiddenPropositions: readonly QueueProposition[];
   readonly hiddenComments: readonly QueueComment[];
+  readonly hiddenResources: readonly QueueResource[];
   /** Empty for a moderator: erasure is an account action and only admins see it. */
   readonly erasures: readonly QueueErasure[];
 }
@@ -200,6 +216,12 @@ const PROPOSITION_COLUMNS = [
 const COMMENT_COLUMNS = [
   'id,body,created_at,status,parent_type,parent_id',
   `author:profiles!comments_author_id_fkey(${AUTHOR_COLUMNS})`,
+].join(',');
+
+const RESOURCE_COLUMNS = [
+  'id,status,title,url,category,description,relevance,created_at',
+  'moderation_note,moderation_note_at',
+  `author:profiles!resources_submitter_id_fkey(${AUTHOR_COLUMNS})`,
 ].join(',');
 
 interface RawAuthor {
@@ -290,6 +312,22 @@ function toComment(row: any): QueueComment {
     parentId: row.parent_id,
   };
 }
+
+function toResource(row: any): QueueResource {
+  return {
+    id: row.id,
+    status: row.status,
+    title: row.title,
+    url: row.url,
+    category: row.category,
+    description: row.description,
+    relevance: row.relevance,
+    createdAt: row.created_at,
+    author: toAuthor(row.author),
+    note: row.moderation_note ?? null,
+    noteAt: row.moderation_note_at ?? null,
+  };
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
@@ -308,51 +346,73 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const [practices, propositions, reports, hiddenPractices, hiddenPropositions, hiddenComments] =
-      await Promise.all([
-        supabase
-          .from('practices')
-          .select(PRACTICE_COLUMNS)
-          .eq('status', 'pending')
-          .is('deleted_at', null)
-          // Oldest first: the submission that has waited longest is the one to look at next.
-          .order('created_at', { ascending: true }),
-        supabase
-          .from('propositions')
-          .select(PROPOSITION_COLUMNS)
-          .eq('status', 'proposed')
-          .order('created_at', { ascending: true }),
-        supabase
-          .from('reports')
-          .select(
-            `id,subject_type,subject_id,reason,detail,created_at,reporter:profiles!reports_reporter_id_fkey(${AUTHOR_COLUMNS})`,
-          )
-          .eq('status', 'open')
-          .order('created_at', { ascending: true }),
-        supabase
-          .from('practices')
-          .select(PRACTICE_COLUMNS)
-          .eq('status', 'hidden')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('propositions')
-          .select(PROPOSITION_COLUMNS)
-          .eq('status', 'hidden')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('comments')
-          .select(COMMENT_COLUMNS)
-          .eq('status', 'hidden')
-          .order('created_at', { ascending: false }),
-      ]);
-
-    const failed = [
+    const [
       practices,
       propositions,
+      resources,
       reports,
       hiddenPractices,
       hiddenPropositions,
       hiddenComments,
+      hiddenResources,
+    ] = await Promise.all([
+      supabase
+        .from('practices')
+        .select(PRACTICE_COLUMNS)
+        .eq('status', 'pending')
+        .is('deleted_at', null)
+        // Oldest first: the submission that has waited longest is the one to look at next.
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('propositions')
+        .select(PROPOSITION_COLUMNS)
+        .eq('status', 'proposed')
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('resources')
+        .select(RESOURCE_COLUMNS)
+        .eq('status', 'pending')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('reports')
+        .select(
+          `id,subject_type,subject_id,reason,detail,created_at,reporter:profiles!reports_reporter_id_fkey(${AUTHOR_COLUMNS})`,
+        )
+        .eq('status', 'open')
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('practices')
+        .select(PRACTICE_COLUMNS)
+        .eq('status', 'hidden')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('propositions')
+        .select(PROPOSITION_COLUMNS)
+        .eq('status', 'hidden')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('comments')
+        .select(COMMENT_COLUMNS)
+        .eq('status', 'hidden')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('resources')
+        .select(RESOURCE_COLUMNS)
+        .eq('status', 'hidden')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false }),
+    ]);
+
+    const failed = [
+      practices,
+      propositions,
+      resources,
+      reports,
+      hiddenPractices,
+      hiddenPropositions,
+      hiddenComments,
+      hiddenResources,
     ].find((response) => response.error);
 
     if (failed?.error) return { ok: false, message: describe(failed.error) };
@@ -365,12 +425,14 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
     const value: Queues = {
       practices: (practices.data ?? []).map(toPractice),
       propositions: (propositions.data ?? []).map((row) => toProposition(row, raters)),
+      resources: (resources.data ?? []).map(toResource),
       reports: await withSubjects(reports.data ?? []),
       hiddenPractices: (hiddenPractices.data ?? []).map(toPractice),
       hiddenPropositions: (hiddenPropositions.data ?? []).map((row) =>
         toProposition(row, raters),
       ),
       hiddenComments: (hiddenComments.data ?? []).map(toComment),
+      hiddenResources: (hiddenResources.data ?? []).map(toResource),
       erasures: role === 'admin' ? await loadErasures() : [],
     };
 
@@ -540,7 +602,7 @@ async function loadErasures(): Promise<QueueErasure[]> {
 
 // ── Acting ────────────────────────────────────────────────────────────────────────────
 
-export type Target = 'practice' | 'proposition' | 'comment' | 'report' | 'account';
+export type Target = 'practice' | 'proposition' | 'comment' | 'report' | 'resource' | 'account';
 
 export type Action =
   | 'publish'
@@ -857,6 +919,23 @@ const FIXTURES: Queues = {
     },
   ],
 
+  resources: [
+    {
+      id: '00000000-0000-4000-e000-000000000001',
+      status: 'pending' as const,
+      title: 'Lean4 by Example',
+      url: 'https://leanprover-community.github.io/lean4-samples/',
+      category: 'formalisation',
+      description: 'A community-maintained collection of annotated Lean 4 examples.',
+      relevance:
+        'Fills a practical gap: the reference manual explains what Lean 4 can do; this shows how to do it step by step, in mathematics.',
+      createdAt: '2026-08-15T14:32:00Z',
+      author: HANNA,
+      note: null,
+      noteAt: null,
+    },
+  ],
+
   hiddenPractices: [],
 
   hiddenPropositions: [],
@@ -880,6 +959,8 @@ const FIXTURES: Queues = {
       parentId: '00000000-0000-4000-9000-000000000001',
     },
   ],
+
+  hiddenResources: [],
 
   erasures: [
     {

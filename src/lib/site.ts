@@ -66,6 +66,7 @@ export interface NavLink {
 export const NAV: readonly NavLink[] = [
   { label: 'Practices', href: '/practices/' },
   { label: 'Propositions', href: '/propositions/' },
+  { label: 'Resources', href: '/resources/' },
   { label: 'About', href: '/about/' },
 ];
 
@@ -74,7 +75,11 @@ export const NAV: readonly NavLink[] = [
 export const FOOTER_NAV: readonly NavLink[] = [
   { label: 'Practices', href: '/practices/' },
   { label: 'Propositions', href: '/propositions/' },
+  { label: 'Resources', href: '/resources/' },
   { label: 'About', href: '/about/' },
   { label: 'Code of conduct', href: '/code-of-conduct/' },
   { label: 'Privacy', href: '/privacy/' },
+  { label: 'Terms', href: '/terms/' },
+  { label: 'Licence', href: '/licence/' },
+  { label: 'Accessibility', href: '/accessibility/' },
 ];

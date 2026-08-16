@@ -1,0 +1,317 @@
+---
+/**
+ * Resource listing, filterable by category.
+ *
+ * Unreachable resources (link_status = 'unreachable') are always shown — never silently
+ * hidden — but sorted last and visibly marked. A broken link is a fact in the corpus.
+ *
+ * Static build from data/resources.json (written nightly by scripts/export.mjs).
+ */
+import Base from '../../layouts/Base.astro';
+import Badges from '../../components/Badges.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { path } from '../../lib/paths';
+import { CATEGORIES, categoryLabel, listResources } from '../../lib/resources';
+import type { ResourceCategory } from '../../lib/resources';
+
+const all = listResources();
+
+const usedCategories = new Set(all.map((r) => r.category));
+const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
+---
+
+<Base
+  title="Resources"
+  description="Community-curated links to AI tools, educational materials, and guidelines for mathematicians."
+>
+  <div class="shell corpus resource-corpus" data-corpus>
+    <header class="corpus__header">
+      <h1>Resources</h1>
+      <p class="corpus__lead">
+        Community-curated links to tools, courses, libraries, and guidelines. Moderated
+        before publication and checked monthly.
+      </p>
+    </header>
+
+    {all.length === 0 ? (
+      <p class="corpus__empty">
+        No resources have been published yet.{' '}
+        <a href={path('/resources/new/')}>Be the first to submit one.</a>
+      </p>
+    ) : (
+      <div class="listing">
+        <aside class="listing__filters" aria-label="Filter resources">
+          <form method="get" action={path('/resources/')}>
+            <fieldset class="filter-set">
+              <legend class="filter-set__legend">Category</legend>
+              <label class="filter-chip">
+                <input type="radio" name="cat" value="" />
+                <span>All</span>
+              </label>
+              {categories.map((c) => (
+                <label class="filter-chip">
+                  <input type="radio" name="cat" value={c.value} />
+                  <span>{c.label}</span>
+                </label>
+              ))}
+            </fieldset>
+            <button class="button button--secondary filter-apply" type="submit">Apply</button>
+          </form>
+        </aside>
+
+        <section class="listing__results" aria-label="Resources" aria-live="polite">
+          <p class="listing__count" data-count aria-live="polite">
+            {all.length} resource{all.length === 1 ? '' : 's'}
+          </p>
+
+          <ul class="resource-list" data-resource-list role="list">
+            {/* Reachable resources first, then unreachable — sorted by created_at desc within each group. */}
+            {[
+              ...all.filter((r) => r.linkStatus !== 'unreachable').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+              ...all.filter((r) => r.linkStatus === 'unreachable').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+            ].map((resource) => (
+              <li
+                class="resource-card"
+                data-category={resource.category}
+                data-unreachable={resource.linkStatus === 'unreachable' ? 'true' : undefined}
+              >
+                <div class="resource-card__head">
+                  <a
+                    class="resource-card__title"
+                    href={resource.url}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {resource.title}
+                  </a>
+                  {resource.linkStatus === 'unreachable' && (
+                    <span class="resource-card__unreachable" title="This link was unreachable at the last monthly check">
+                      Link may be broken
+                    </span>
+                  )}
+                  {resource.linkStatus === 'redirected' && (
+                    <span class="resource-card__redirected">Redirects</span>
+                  )}
+                </div>
+
+                <p class="resource-card__url mono">{resource.urlNormalised}</p>
+
+                <p class="resource-card__description">{resource.description}</p>
+
+                <p class="resource-card__relevance">{resource.relevance}</p>
+
+                <div class="resource-card__meta">
+                  <span class="resource-card__category mono">
+                    {categoryLabel(resource.category as ResourceCategory)}
+                  </span>
+                  {resource.submitter && (
+                    <span class="resource-card__submitter">
+                      Submitted by{' '}
+                      <a href={path(`/authors/${resource.submitter.id}/`)}>
+                        {resource.submitter.displayName}
+                        {resource.submitter.isPseudonym && ' (a pseudonym)'}
+                      </a>
+                      <Badges profile={resource.submitter} />
+                    </span>
+                  )}
+                  {!resource.submitter && (
+                    <span class="resource-card__submitter resource-card__erased">
+                      Submitter since erased
+                    </span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+    )}
+
+    <p class="corpus__submit">
+      <a class="button button--primary" href={path('/resources/new/')}>Submit a resource</a>
+    </p>
+  </div>
+</Base>
+
+<script>
+  /**
+   * Client-side category filtering. The URL is the state: selecting a category
+   * updates ?cat= and the page reloads, making filtered views linkable.
+   * JS also hides non-matching cards without a round trip for fast switching.
+   */
+  const params = new URLSearchParams(window.location.search);
+  const activeCat = params.get('cat') ?? '';
+
+  // Reflect the current filter in the radio inputs.
+  for (const input of document.querySelectorAll<HTMLInputElement>(
+    '.filter-set input[type="radio"]',
+  )) {
+    if (input.value === activeCat) {
+      input.checked = true;
+    }
+  }
+
+  // Filter cards in place and update the count.
+  const list = document.querySelector<HTMLElement>('[data-resource-list]');
+  const countEl = document.querySelector<HTMLElement>('[data-count]');
+  const cards = document.querySelectorAll<HTMLElement>('.resource-card');
+
+  function applyFilter(cat: string) {
+    let visible = 0;
+    for (const card of cards) {
+      const match = cat === '' || card.dataset.category === cat;
+      card.hidden = !match;
+      if (match) visible++;
+    }
+    if (countEl) {
+      countEl.textContent = `${visible} resource${visible === 1 ? '' : 's'}`;
+    }
+    // Sort: reachable first, then unreachable.
+    if (list) {
+      const items = [...list.querySelectorAll<HTMLElement>('.resource-card')];
+      const reachable = items.filter((c) => !c.hidden && c.dataset.unreachable !== 'true');
+      const unreachable = items.filter((c) => !c.hidden && c.dataset.unreachable === 'true');
+      for (const item of [...reachable, ...unreachable]) list.appendChild(item);
+    }
+  }
+
+  applyFilter(activeCat);
+
+  for (const input of document.querySelectorAll<HTMLInputElement>(
+    '.filter-set input[type="radio"]',
+  )) {
+    input.addEventListener('change', () => {
+      const url = new URL(window.location.href);
+      if (input.value) {
+        url.searchParams.set('cat', input.value);
+      } else {
+        url.searchParams.delete('cat');
+      }
+      window.history.pushState({}, '', url);
+      applyFilter(input.value);
+    });
+  }
+</script>
+
+<style>
+  .resource-corpus {
+    padding-block: var(--space-2xl);
+  }
+
+  .corpus__empty {
+    color: var(--ink-muted);
+    font-size: var(--size-3);
+  }
+
+  .corpus__submit {
+    margin-block-start: var(--space-2xl);
+  }
+
+  .resource-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .resource-card {
+    padding: var(--space-md);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface);
+  }
+
+  .resource-card[data-unreachable='true'] {
+    border-color: var(--outcome-failed);
+    opacity: 0.8;
+  }
+
+  .resource-card__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2xs) var(--space-sm);
+    margin-block-end: var(--space-3xs);
+  }
+
+  .resource-card__title {
+    font-family: var(--font-serif);
+    font-size: var(--size-4);
+    font-weight: var(--weight-semibold);
+    color: var(--accent-strong);
+  }
+
+  .resource-card__unreachable {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--outcome-failed);
+    padding: var(--space-3xs) var(--space-2xs);
+    border: 1px solid var(--outcome-failed);
+    border-radius: var(--radius-sm);
+  }
+
+  .resource-card__redirected {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+    padding: var(--space-3xs) var(--space-2xs);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+  }
+
+  .resource-card__url {
+    font-size: var(--size-1);
+    color: var(--ink-muted);
+    margin-block-end: var(--space-xs);
+    word-break: break-all;
+  }
+
+  .resource-card__description {
+    font-size: var(--size-2);
+    line-height: var(--leading-relaxed);
+    margin-block-end: var(--space-xs);
+  }
+
+  .resource-card__relevance {
+    font-size: var(--size-2);
+    line-height: var(--leading-relaxed);
+    color: var(--ink-muted);
+    margin-block-end: var(--space-sm);
+  }
+
+  .resource-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2xs) var(--space-sm);
+    font-size: var(--size-1);
+    color: var(--ink-muted);
+  }
+
+  .resource-card__category {
+    padding: var(--space-3xs) var(--space-2xs);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background-color: var(--ground);
+  }
+
+  .resource-card__erased {
+    font-style: italic;
+  }
+
+  .filter-apply {
+    margin-block-start: var(--space-sm);
+    font-size: var(--size-2);
+  }
+
+  @media (max-width: 48rem) {
+    .listing {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

@@ -10,10 +10,13 @@ import { SITE } from '../lib/site';
   lead="What is stored, who else sees it, and how to get rid of it. In plain terms, because a privacy notice nobody reads protects nobody."
   updated="August 2026"
 >
-  <p class="status">
-    Accounts are built but not yet open, so nothing described here is being collected
-    today. This notice is published in advance so that it can be read before anyone signs
-    up rather than after.
+  <h2>Who is responsible</h2>
+
+  <p>
+    MathemAct is a personal project. The data controller is Emma Zanoli, an individual
+    based in Italy, not an institution. Requests about personal data, rights under the GDPR,
+    and anything else covered here go to{' '}
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
   </p>
 
   <h2>What is stored</h2>
@@ -24,33 +27,38 @@ import { SITE } from '../lib/site';
       Needed to confirm the account, to sign you in, and to reset a password. It is also
       what your institutional badge is derived from. It is <strong>never displayed</strong>
       on the site, never returned by the API, never included in the public export, and
-      never shown to moderators.
+      never shown to moderators. Legal basis: performance of the account contract (GDPR
+      Article 6(1)(b)).
     </dd>
 
     <dt>Your display name</dt>
     <dd>
       Shown on everything you post. It may be a pseudonym, at every verification tier.
+      Legal basis: performance of the account contract (Article 6(1)(b)).
     </dd>
 
     <dt>Your institution, if the domain matched</dt>
     <dd>
       Derived automatically from your confirmed email domain against the Research
       Organization Registry, along with the date of that check. Stored as the institution
-      name and country. You cannot set or edit this yourself.
+      name and country. You cannot set or edit this yourself. Legal basis: performance of
+      the account contract (Article 6(1)(b)).
     </dd>
 
     <dt>What you post</dt>
     <dd>
-      Practices, comments, ratings, and still-works confirmations, with the date each was
-      made. Ratings are stored per person so that you can change yours; individual ratings
-      are never shown attributed to a name.
+      Practices, resources, comments, ratings, and still-works confirmations, with the date
+      each was made. Ratings are stored per person so that you can change yours; individual
+      ratings are never shown attributed to a name. Legal basis: performance of the account
+      contract (Article 6(1)(b)).
     </dd>
 
     <dt>An erasure request, if you make one</dt>
     <dd>
       The fact that your account has asked to be erased, when it was asked, and anything
       you chose to add. Only you and an administrator can see it, and withdrawing the
-      request deletes the record of it outright.
+      request deletes the record of it outright. Legal basis: compliance with the right to
+      erasure under GDPR Article 17.
     </dd>
   </dl>
 
@@ -67,12 +75,30 @@ import { SITE } from '../lib/site';
     Exactly one script is loaded from another company, on exactly four pages: Cloudflare's
     Turnstile check, where you sign up, sign in, reset a password, or ask for another
     confirmation link. It is not on any page you only read, and you can confirm that by
-    viewing source.
+    viewing source. This processing is necessary to prevent automated abuse (GDPR Article
+    6(1)(f) — legitimate interests).
   </p>
 
   <p>
-    There is no cookie banner because there are no cookies. Being signed in is kept in this
-    browser's own local storage, written when you sign in and removed when you sign out.
+    There is no cookie banner because there are no persistent cookies. Being signed in is
+    kept in this browser's own local storage, written when you sign in and removed when you
+    sign out.
+  </p>
+
+  <h2>Retention</h2>
+
+  <p>
+    Account data — your email address, display name, and institutional record — is held for
+    as long as your account exists. On erasure it is deleted within a reasonable time,
+    typically the same day. Content you posted is detached from your account on erasure (see
+    below) and is retained as part of the corpus, which is its purpose.
+  </p>
+
+  <p>
+    Brevo retains logs of the emails it sent on your behalf for as long as the account is
+    active. Cloudflare's Turnstile privacy addendum does not state a specific retention
+    period for the signals it processes during bot checks. GitHub retains server logs
+    according to its own privacy statement.
   </p>
 
   <h2>Who processes it</h2>
@@ -82,40 +108,44 @@ import { SITE } from '../lib/site';
   <dl class="items">
     <dt>Supabase</dt>
     <dd>
-      Database and authentication, hosted in the European Union. Holds everything listed
-      above. This is the only processor that sees the whole picture.
+      Database and authentication, hosted in the European Union on AWS infrastructure.
+      Holds everything listed above. This is the only processor that sees the whole picture.
+      Supabase operates under a DPA incorporating Standard Contractual Clauses for any
+      transfers outside the EU. Supabase's sub-processor list is published at{' '}
+      <a href="https://supabase.com/legal/customer-resources/subprocessor-list">supabase.com/legal</a>.
     </dd>
 
     <dt>Brevo</dt>
     <dd>
       Sends the confirmation and password-reset emails, and therefore receives your email
       address and the contents of those messages. Nothing else. It is never used to send
-      announcements.
+      announcements. Brevo is a French company and stores data within the EU.
     </dd>
 
     <dt>Cloudflare</dt>
     <dd>
       Provides the Turnstile check that keeps automated signups out. It receives your IP
-      address and a token when you sign up, sign in, ask for a password reset, or ask for
-      another confirmation link. Its script is loaded on those four pages and nowhere else,
-      so it is never involved in a page you only read.
+      address, TLS fingerprint, and browser user agent when you sign up, sign in, ask for
+      a password reset, or ask for another confirmation link. Its script is loaded on those
+      four pages and nowhere else, so it is never involved in a page you only read. The
+      Turnstile privacy addendum requires that it be referenced here:{' '}
+      <a href="https://www.cloudflare.com/turnstile-privacy-policy/">cloudflare.com/turnstile-privacy-policy</a>.
     </dd>
 
     <dt>GitHub</dt>
     <dd>
-      Serves the site's files, and therefore receives your IP address and browser user
-      agent as part of any ordinary web request. This is unavoidable for any website; no
-      account is needed to read this one.
+      Serves the site's static files. GitHub records your IP address as part of any
+      ordinary web request. No account is required to read this site. See GitHub's{' '}
+      <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">privacy statement</a>.
     </dd>
-
   </dl>
 
   <h2>What is public</h2>
 
   <p>
-    Everything you post is public, and is published under a
-    <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a>
-    licence. It is also included in a
+    Everything you post is public, and is published under a{' '}
+    <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a>{' '}
+    licence. It is also included in a{' '}
     <a href={`${SITE.repository}/tree/main/data`}>nightly export</a> that anyone can download
     in full, as JSON and as CSV. Assume that anything you post can be copied, archived,
     quoted, and analysed by people you did not anticipate, because it can. Your email address
@@ -152,12 +182,19 @@ import { SITE } from '../lib/site';
   <h2>Your rights</h2>
 
   <p>
-    If you are in the European Union or the United Kingdom you have the right to see what
-    is held about you, to have it corrected, to have it erased, to get a copy in a portable
-    form, and to object to how it is used. Write to
-    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> and it will be dealt
-    with. If a request is refused you will be told why, and you can complain to your
-    national data protection authority.
+    Under the GDPR you have the right to: access your personal data; have it corrected; have
+    it erased; restrict how it is processed; receive a portable copy; and object to
+    processing based on legitimate interests. Write to{' '}
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a> and a response will follow
+    within one month. If a request is refused you will be told why.
+  </p>
+
+  <p>
+    If you believe your data has been handled unlawfully, you have the right to complain to
+    the supervisory authority for Italy:{' '}
+    <strong>Garante per la protezione dei dati personali</strong>,{' '}
+    Piazza Venezia 11, 00187 Roma, Italy.{' '}
+    <a href="https://www.garanteprivacy.it">garanteprivacy.it</a>
   </p>
 
   <h2>Changes</h2>
@@ -165,25 +202,18 @@ import { SITE } from '../lib/site';
   <p>
     If this notice changes in a way that affects what is collected or who sees it,
     registered users will be told before it takes effect, not after. The date at the top
-    is the date of the last change, and the full history is in the
+    is the date of the last change, and the full history is in the{' '}
     <a href={SITE.repository}>public repository</a>.
   </p>
 
   <p>
-    Questions about any of this, including the awkward ones, go to
-    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>. The
+    Questions about any of this, including the awkward ones, go to{' '}
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>. The{' '}
     <a href={path('/about/')}>about page</a> explains how verification works in more detail.
   </p>
 </Page>
 
 <style>
-  .status {
-    padding: var(--space-sm);
-    border: var(--border);
-    background-color: var(--surface);
-    font-size: var(--size-2);
-  }
-
   .items {
     margin: 0;
   }

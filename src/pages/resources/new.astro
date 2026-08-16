@@ -1,0 +1,361 @@
+---
+/**
+ * Resource submission form.
+ *
+ * Short by design — title, URL, category, description, relevance — so that submitting a
+ * link takes under a minute once the link is in front of the submitter. The relevance
+ * field is what makes the corpus worth having: scraped page titles are free and worthless.
+ *
+ * URL duplicate check: on blur of the URL field, the client normalises the URL and queries
+ * Supabase for any existing resource with the same normalised form. If found, a non-blocking
+ * warning links to the existing entry.
+ */
+import Account from '../../layouts/Account.astro';
+import Field from '../../components/Field.astro';
+import FormStatus from '../../components/FormStatus.astro';
+import { path } from '../../lib/paths';
+import { CATEGORIES, type ResourceCategory } from '../../lib/resources';
+import { SITE } from '../../lib/site';
+
+export const RESOURCE_LIMITS = {
+  title: 120,
+  description: 200,
+  relevance: 600,
+} as const;
+---
+
+<Account
+  title="Submit a resource"
+  description="Add a link to a tool, course, library, or guideline that is genuinely useful for mathematicians working with AI."
+  lead="Five fields. Takes under a minute if the link is in front of you."
+  gate="required"
+>
+  <div class="panel" data-gate-unconfirmed hidden>
+    <p class="panel__heading">Confirm your email address first</p>
+    <p>
+      Submitting a resource needs a confirmed address.
+    </p>
+    <p class="actions">
+      <a class="button button--primary" href={path('/account/confirm/')}>
+        Get another confirmation link
+      </a>
+    </p>
+  </div>
+
+  <div class="panel" data-gate-banned hidden>
+    <p class="panel__heading">This account cannot post</p>
+    <p>
+      If you think that is a mistake, write to{' '}
+      <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+    </p>
+  </div>
+
+  <div data-form-wrapper hidden>
+    {/* Non-blocking warning shown when the URL matches an existing resource. */}
+    <div class="panel duplicate-warning" data-duplicate-warning hidden role="alert" aria-live="polite">
+      <p>
+        <strong>A resource with this URL already exists.</strong> Check whether it has already
+        been submitted before adding a duplicate:
+      </p>
+      <p>
+        <span class="duplicate-warning__title" data-duplicate-title></span>
+        {' — '}
+        <a class="duplicate-warning__link" data-duplicate-link href="" target="_blank" rel="noopener noreferrer"></a>
+      </p>
+      <p class="field__hint">You can still submit if the existing entry is substantially different from what you have in mind.</p>
+    </div>
+
+    <form class="resource-form" id="resource" novalidate>
+      <FormStatus id="resource-status" />
+
+      <Field
+        id="title"
+        label="Title"
+        hint="A plain name for the resource. 120 characters."
+        required
+        maxlength={RESOURCE_LIMITS.title}
+        counter
+      >
+        <input
+          slot="input"
+          type="text"
+          id="title"
+          name="title"
+          required
+          maxlength={RESOURCE_LIMITS.title}
+          autocomplete="off"
+        />
+      </Field>
+
+      <Field
+        id="url"
+        label="URL"
+        hint="The link itself. Must start with https:// or http://."
+        required
+      >
+        <input
+          slot="input"
+          type="url"
+          id="url"
+          name="url"
+          required
+          autocomplete="off"
+          inputmode="url"
+        />
+      </Field>
+
+      <Field
+        id="category"
+        label="Category"
+        hint="Choose the one that fits best."
+        required
+      >
+        <select slot="input" id="category" name="category" required>
+          <option value="" disabled selected>Select a category</option>
+          {CATEGORIES.map((c) => (
+            <option value={c.value}>{c.label}</option>
+          ))}
+        </select>
+      </Field>
+
+      <Field
+        id="description"
+        label="Description"
+        hint={`One sentence saying what this is. ${RESOURCE_LIMITS.description} characters.`}
+        required
+        maxlength={RESOURCE_LIMITS.description}
+        counter
+      >
+        <textarea
+          slot="input"
+          id="description"
+          name="description"
+          required
+          maxlength={RESOURCE_LIMITS.description}
+          rows={2}
+        ></textarea>
+      </Field>
+
+      <Field
+        id="relevance"
+        label="Why mathematicians should care"
+        hint={`In your own words. Do not paste marketing copy. ${RESOURCE_LIMITS.relevance} characters.`}
+        required
+        maxlength={RESOURCE_LIMITS.relevance}
+        counter
+      >
+        <textarea
+          slot="input"
+          id="relevance"
+          name="relevance"
+          required
+          maxlength={RESOURCE_LIMITS.relevance}
+          rows={4}
+        ></textarea>
+      </Field>
+
+      <div class="form-section">
+        <label class="checkbox-label" for="cc-confirm">
+          <input type="checkbox" id="cc-confirm" name="cc-confirm" required />
+          I agree that this submission is published under CC BY 4.0.
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="button button--primary" type="submit" data-submit>Submit resource</button>
+        <a class="button" href={path('/resources/')}>Cancel</a>
+      </div>
+    </form>
+  </div>
+</Account>
+
+<script>
+  import { getSupabase } from '../../lib/supabase';
+  import { loadProfile, mayPost } from '../../lib/profile';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
+  import { normaliseUrl } from '../../lib/resources';
+  import { path } from '../../lib/paths';
+
+  const account  = query<HTMLElement>('[data-account]');
+  const wrapper  = query<HTMLElement>('[data-form-wrapper]');
+  const gateUnconfirmed = query<HTMLElement>('[data-gate-unconfirmed]');
+  const gateBanned      = query<HTMLElement>('[data-gate-banned]');
+  const form     = query<HTMLFormElement>('#resource');
+  const status   = query<HTMLElement>('#resource-status');
+  const submit   = query<HTMLButtonElement>('[data-submit]');
+
+  const urlInput        = document.querySelector<HTMLInputElement>('#url');
+  const duplicateWarning = document.querySelector<HTMLElement>('[data-duplicate-warning]');
+  const duplicateTitle  = document.querySelector<HTMLElement>('[data-duplicate-title]');
+  const duplicateLink   = document.querySelector<HTMLAnchorElement>('[data-duplicate-link]');
+
+  let userId: string | null = null;
+
+  subscribeToSession((state) => {
+    if (state.status === 'loading') return;
+
+    if (state.status !== 'signed-in') {
+      account.dataset.gate = 'anonymous';
+      return;
+    }
+
+    userId = state.userId;
+    void open(state.userId);
+  });
+
+  void startSession();
+
+  async function open(id: string): Promise<void> {
+    const profile = await loadProfile(id);
+
+    if (profile.ok && !mayPost(profile.value)) {
+      if (!profile.value.confirmedAt) {
+        gateUnconfirmed.hidden = false;
+      } else {
+        gateBanned.hidden = false;
+      }
+      return;
+    }
+
+    wrapper.hidden = false;
+  }
+
+  // ── URL duplicate check ──────────────────────────────────────────────────────────────
+
+  if (urlInput && duplicateWarning && duplicateTitle && duplicateLink) {
+    const urlEl       = urlInput;
+    const warningEl   = duplicateWarning;
+    const titleEl     = duplicateTitle;
+    const linkEl      = duplicateLink;
+
+    urlEl.addEventListener('blur', async () => {
+      const raw = urlEl.value.trim();
+      if (!raw) return;
+
+      const normalised = normaliseUrl(raw);
+      const supabase = getSupabase();
+      if (!supabase) return;
+
+      try {
+        const { data } = await supabase
+          .from('resources')
+          .select('id,title,url')
+          .eq('url_normalised', normalised)
+          .eq('status', 'published')
+          .is('deleted_at', null)
+          .maybeSingle<{ id: string; title: string; url: string }>();
+
+        if (data) {
+          titleEl.textContent = data.title;
+          linkEl.textContent  = data.url;
+          linkEl.href         = data.url;
+          warningEl.hidden    = false;
+        } else {
+          warningEl.hidden = true;
+        }
+      } catch {
+        // Network failure: fail silently, do not block submission.
+      }
+    });
+
+    urlEl.addEventListener('input', () => {
+      warningEl.hidden = true;
+    });
+  }
+
+  // ── Submission ───────────────────────────────────────────────────────────────────────
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!userId) return;
+
+    hideStatus(status);
+
+    const data = new FormData(form);
+    const title       = (data.get('title')       as string).trim();
+    const url         = (data.get('url')          as string).trim();
+    const category    = data.get('category')      as string;
+    const description = (data.get('description') as string).trim();
+    const relevance   = (data.get('relevance')   as string).trim();
+    const ccConfirm   = data.get('cc-confirm') === 'on';
+
+    if (!title || !url || !category || !description || !relevance) {
+      showStatus(status, 'error', 'Please fill in all fields.');
+      return;
+    }
+
+    if (!ccConfirm) {
+      showStatus(status, 'error', 'Please confirm the CC BY 4.0 licence before submitting.');
+      return;
+    }
+
+    if (!/^https?:\/\/.+/.test(url)) {
+      showStatus(status, 'error', 'The URL must start with https:// or http://.');
+      return;
+    }
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      showStatus(status, 'error', 'The database is not reachable right now. Try again in a few minutes.');
+      return;
+    }
+
+    setBusy(submit, true, 'Submitting…');
+
+    const { error } = await supabase.from('resources').insert({
+      submitter_id: userId,
+      title,
+      url,
+      category,
+      description,
+      relevance,
+    });
+
+    setBusy(submit, false);
+
+    if (error) {
+      if (error.code === '23505') {
+        showStatus(
+          status,
+          'error',
+          'A resource with this URL has already been submitted. Check the resources listing.',
+        );
+      } else if (error.code === '53400') {
+        showStatus(status, 'error', error.message);
+      } else {
+        showStatus(status, 'error', 'That did not go through. Check the URL and try again.');
+      }
+      return;
+    }
+
+    // Redirect to the listing on success; the submitted resource will appear once moderated.
+    window.location.href = path('/resources/?submitted=1');
+  });
+</script>
+
+<style>
+  .resource-form {
+    max-width: var(--width-prose);
+  }
+
+  .form-section {
+    margin-block: var(--space-lg);
+  }
+
+  .checkbox-label {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-xs);
+    font-size: var(--size-3);
+    cursor: pointer;
+  }
+
+  .duplicate-warning {
+    margin-block-end: var(--space-lg);
+  }
+
+  .duplicate-warning__title {
+    font-weight: var(--weight-semibold);
+  }
+</style>

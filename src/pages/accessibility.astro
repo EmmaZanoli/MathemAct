@@ -1,0 +1,69 @@
+---
+import Page from '../layouts/Page.astro';
+import { SITE } from '../lib/site';
+---
+
+<Page
+  title="Accessibility"
+  description="MathemAct's accessibility statement: what we aim for, what is known not to work, and how to report a problem."
+  lead="This site aims to meet WCAG 2.1 Level AA. Where it falls short, say so."
+  updated="August 2026"
+>
+  <h2>What we aim for</h2>
+
+  <p>
+    MathemAct is built to the{' '}
+    <a href="https://www.w3.org/TR/WCAG21/">Web Content Accessibility Guidelines 2.1</a>{' '}
+    Level AA. The relevant targets:
+  </p>
+
+  <ul>
+    <li>All form controls have labels bound to their inputs.</li>
+    <li>Interactive elements have visible keyboard focus indicators.</li>
+    <li>
+      Colour is never the sole carrier of meaning — outcome states (worked, partially
+      worked, did not work) use both colour and a label.
+    </li>
+    <li>
+      The site respects <code>prefers-reduced-motion</code>. There are no animations
+      by default.
+    </li>
+    <li>Page structure uses semantic landmarks: <code>header</code>, <code>main</code>,
+      <code>footer</code>, and <code>nav</code>.</li>
+    <li>The reading order in the HTML matches the visual order.</li>
+    <li>Mathematical content is rendered with KaTeX, which produces accessible MathML.</li>
+  </ul>
+
+  <h2>Known limitations</h2>
+
+  <ul>
+    <li>
+      The moderation queue — only visible to logged-in moderators — has not been tested
+      with a screen reader.
+    </li>
+    <li>
+      Complex TeX expressions in practices may not be fully navigable with older screen
+      readers that do not support MathML.
+    </li>
+  </ul>
+
+  <h2>Reporting a problem</h2>
+
+  <p>
+    If you find something that stops you using this site, write to{' '}
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>. Describe what you were
+    trying to do, what happened, and what browser and assistive technology you were using.
+    This is a personal project with no dedicated accessibility resource, but reports are
+    taken seriously and fixes are prioritised over new features.
+  </p>
+
+  <h2>Enforcement</h2>
+
+  <p>
+    This statement covers the MathemAct website at{' '}
+    <a href="https://emmazanoli.github.io/MathemAct/">emmazanoli.github.io/MathemAct</a>.
+    MathemAct is an independent personal project and is not subject to the EU Web
+    Accessibility Directive, which applies to public sector bodies. This statement is
+    published voluntarily.
+  </p>
+</Page>

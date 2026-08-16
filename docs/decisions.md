@@ -1250,3 +1250,46 @@ of CPU to a job that already runs nightly. Weekly on Monday morning (after the n
 export has committed fresh practices.json) is a reasonable tradeoff: the related practices
 and near-duplicate suggestions are allowed to be a week stale. The moderation queue catches
 true duplicates before they are published anyway.
+
+## 2026-08-16 — Resources are a separate content type, not a tag on practices
+
+A resource is a pointer to something useful, not an account of using it. The two are
+complements, not duplicates: a practice says "I used Lean 4 like this and it worked like
+that"; a resource says "here is the Lean 4 documentation". Conflating them into one form
+with a type field would produce a form that asks for a verification section from people
+adding a link and a URL field from people describing a session, which is two bad experiences
+in exchange for one table fewer.
+
+Resources have a rate limit (5/day vs 10 for practices) because a link-sharing form is
+lower friction and therefore more likely to be abused. The moderation queue treats them
+the same way.
+
+## 2026-08-16 — The link-checker uses SUPABASE_DB_URL, not the service role key
+
+The link-check workflow checks URLs and updates `link_status` and `link_checked_at` on
+each published resource. It uses a direct Postgres connection (SUPABASE_DB_URL) rather
+than the service role key + PostgREST.
+
+The practical reason: both authorise the same thing, but the direct connection is already
+a secret in CI for the export, so no new credential is needed. Using PostgREST for UPDATEs
+with the service role key would have been a second credential added to CI for no gain.
+
+The security argument: the job is already trusted with the DB URL, which bypasses RLS. A
+service role key that can also bypass RLS adds nothing. The principle from the export entry
+applies here too: handing a job a credential it does not need is how credentials appear in
+logs.
+
+## 2026-08-16 — Bot-rejecting status codes are treated as reachable
+
+The link-checker classifies 403, 405, 406, and 429 as 'ok' (or 'redirected' if the URL
+changed). These responses prove the server is alive and actively handling the request, even
+if it is rejecting the checker specifically because it is a bot.
+
+404 and 410 are explicit "this is gone" signals and are classified as 'unreachable'.
+5xx and connection errors are 'unreachable' because they indicate the server cannot serve
+the resource.
+
+The alternative — treating 403 as unreachable — would mark large numbers of academic and
+commercial sites as broken because they use Cloudflare or similar services that block
+automated HEAD requests from cloud IPs. A false 'unreachable' label is worse than no check:
+it tells moderators and readers that working links are broken.
