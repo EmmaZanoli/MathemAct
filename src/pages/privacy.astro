@@ -13,7 +13,7 @@ import { SITE } from '../lib/site';
   <h2>Who is responsible</h2>
 
   <p>
-    MathemAct is a personal project. The data controller is Emma Zanoli, an individual
+    MathemAct is a personal project. The data controller is an individual
     based in Italy, not an institution. Requests about personal data, rights under the GDPR,
     and anything else covered here go to{' '}
     <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
@@ -27,38 +27,38 @@ import { SITE } from '../lib/site';
       Needed to confirm the account, to sign you in, and to reset a password. It is also
       what your institutional badge is derived from. It is <strong>never displayed</strong>
       on the site, never returned by the API, never included in the public export, and
-      never shown to moderators. Legal basis: performance of the account contract (GDPR
-      Article 6(1)(b)).
+      never shown to moderators.
+      <p class="legal-basis">Legal basis: performance of the account contract (GDPR Article 6(1)(b)).</p>
     </dd>
 
     <dt>Your display name</dt>
     <dd>
       Shown on everything you post. It may be a pseudonym, at every verification tier.
-      Legal basis: performance of the account contract (Article 6(1)(b)).
+      <p class="legal-basis">Legal basis: performance of the account contract (Article 6(1)(b)).</p>
     </dd>
 
     <dt>Your institution, if the domain matched</dt>
     <dd>
       Derived automatically from your confirmed email domain against the Research
       Organization Registry, along with the date of that check. Stored as the institution
-      name and country. You cannot set or edit this yourself. Legal basis: performance of
-      the account contract (Article 6(1)(b)).
+      name and country. You cannot set or edit this yourself.
+      <p class="legal-basis">Legal basis: performance of the account contract (Article 6(1)(b)).</p>
     </dd>
 
     <dt>What you post</dt>
     <dd>
       Practices, resources, comments, ratings, and still-works confirmations, with the date
       each was made. Ratings are stored per person so that you can change yours; individual
-      ratings are never shown attributed to a name. Legal basis: performance of the account
-      contract (Article 6(1)(b)).
+      ratings are never shown attributed to a name.
+      <p class="legal-basis">Legal basis: performance of the account contract (Article 6(1)(b)).</p>
     </dd>
 
     <dt>An erasure request, if you make one</dt>
     <dd>
       The fact that your account has asked to be erased, when it was asked, and anything
       you chose to add. Only you and an administrator can see it, and withdrawing the
-      request deletes the record of it outright. Legal basis: compliance with the right to
-      erasure under GDPR Article 17.
+      request deletes the record of it outright.
+      <p class="legal-basis">Legal basis: compliance with the right to erasure under GDPR Article 17.</p>
     </dd>
   </dl>
 
@@ -75,9 +75,9 @@ import { SITE } from '../lib/site';
     Exactly one script is loaded from another company, on exactly four pages: Cloudflare's
     Turnstile check, where you sign up, sign in, reset a password, or ask for another
     confirmation link. It is not on any page you only read, and you can confirm that by
-    viewing source. This processing is necessary to prevent automated abuse (GDPR Article
-    6(1)(f) — legitimate interests).
+    viewing source.
   </p>
+  <p class="legal-basis">Legal basis: prevention of automated abuse — legitimate interests (GDPR Article 6(1)(f)).</p>
 
   <p>
     There is no cookie banner because there are no persistent cookies. Being signed in is
@@ -226,5 +226,13 @@ import { SITE } from '../lib/site';
   .items dd {
     margin-block-start: var(--space-3xs);
     margin-inline-start: 0;
+  }
+
+  .legal-basis {
+    margin-block-start: var(--space-3xs);
+    margin-block-end: 0;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+    font-style: italic;
   }
 </style>

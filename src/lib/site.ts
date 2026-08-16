@@ -70,13 +70,10 @@ export const NAV: readonly NavLink[] = [
   { label: 'About', href: '/about/' },
 ];
 
-/** Footer navigation, internal pages only. The licence and contact are rendered
- *  separately because one is an external link and the other is a mailto. */
+/** Footer navigation, internal pages only. The four main sections live in the header nav
+ *  and are intentionally omitted here to avoid repetition. The licence and contact are
+ *  rendered separately because one is an external link and the other is a mailto. */
 export const FOOTER_NAV: readonly NavLink[] = [
-  { label: 'Practices', href: '/practices/' },
-  { label: 'Propositions', href: '/propositions/' },
-  { label: 'Resources', href: '/resources/' },
-  { label: 'About', href: '/about/' },
   { label: 'Code of conduct', href: '/code-of-conduct/' },
   { label: 'Privacy', href: '/privacy/' },
   { label: 'Terms', href: '/terms/' },

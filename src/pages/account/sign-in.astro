@@ -39,18 +39,19 @@ import { path } from '../../lib/paths';
       type="password"
       required
       autocomplete="current-password"
-    />
+    >
+      <a slot="hint" href={path('/account/reset/')}>Forgotten your password?</a>
+    </Field>
 
     <Turnstile id="sign-in-turnstile" />
 
     <div class="actions">
       <button class="button button--primary" type="submit">Sign in</button>
-      <a href={path('/account/reset/')}>I have forgotten my password</a>
+      <a class="button" href={path('/account/sign-up/')}>Create an account</a>
     </div>
 
     <p class="field__hint">
-      No account yet? <a href={path('/account/sign-up/')}>Create one</a>. Signed up but
-      never confirmed? <a href={path('/account/confirm/')}>Get another confirmation link</a>.
+      Signed up but never confirmed? <a href={path('/account/confirm/')}>Get another confirmation link</a>.
     </p>
   </form>
 </Account>
