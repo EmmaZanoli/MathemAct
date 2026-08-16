@@ -1,0 +1,48 @@
+{
+  "exportedAt": "2026-08-16T11:32:46.883Z",
+  "generator": "scripts/export.mjs",
+  "licence": "CC BY 4.0",
+  "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+  "files": {
+    "practices.json": {
+      "rows": 0,
+      "bytes": 3
+    },
+    "propositions.json": {
+      "rows": 0,
+      "bytes": 3
+    },
+    "proposition-ratings.json": {
+      "rows": 0,
+      "bytes": 3
+    },
+    "tags.json": {
+      "rows": 32,
+      "bytes": 5122
+    },
+    "profiles.json": {
+      "rows": 0,
+      "bytes": 3
+    },
+    "comments.json": {
+      "rows": 0,
+      "bytes": 3
+    },
+    "citations.json": {
+      "rows": 0,
+      "bytes": 3
+    },
+    "csv/practices.csv": {
+      "rows": 0,
+      "bytes": 369
+    },
+    "csv/practice-tools.csv": {
+      "rows": 0,
+      "bytes": 44
+    },
+    "csv/practice-tags.csv": {
+      "rows": 0,
+      "bytes": 32
+    }
+  }
+}
