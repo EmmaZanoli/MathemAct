@@ -61,53 +61,30 @@ const EXPORTED = import.meta.glob<{ default: Citation[] }>('/data/citations.json
 
 let cached: Citation[] | null = null;
 
+/**
+ * The committed export, and nothing else.
+ *
+ * Every arrow in the file has both endpoints public: the export filters on it, because a
+ * citation carries a verbatim excerpt of its target and one that outlived its target being
+ * hidden would republish, on a third page, exactly the passage a moderator removed. The
+ * resolution below drops anything that still fails to resolve, which is the second lock.
+ */
 async function readCitations(): Promise<Citation[]> {
   if (cached) return cached;
 
   const exported = Object.values(EXPORTED)[0]?.default;
-  if (exported) {
-    cached = exported;
+
+  if (!exported) {
+    console.warn(
+      '[citations] data/citations.json is missing, so no page shows what references it. ' +
+        'Run scripts/export.mjs, or let .github/workflows/export.yml commit one.',
+    );
+    cached = [];
     return cached;
   }
 
-  cached = await queryCitations();
+  cached = exported;
   return cached;
-}
-
-async function queryCitations(): Promise<Citation[]> {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL;
-  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return [];
-
-  const select =
-    'id,source_type,source_id,source_comment_id,target_type,target_id,' +
-    'target_comment_id,excerpt,context,created_at';
-
-  try {
-    const response = await fetch(
-      `${url}/rest/v1/citations?select=${select}&order=created_at.desc`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
-    );
-
-    if (!response.ok) return [];
-
-    return (await response.json()).map(
-      (row: Record<string, unknown>): Citation => ({
-        id: row.id as string,
-        sourceType: row.source_type as NodeType,
-        sourceId: row.source_id as string,
-        sourceCommentId: (row.source_comment_id as string | null) ?? null,
-        targetType: row.target_type as NodeType,
-        targetId: row.target_id as string,
-        targetCommentId: (row.target_comment_id as string | null) ?? null,
-        excerpt: (row.excerpt as string | null) ?? null,
-        context: (row.context as string | null) ?? null,
-        createdAt: row.created_at as string,
-      }),
-    );
-  } catch {
-    return [];
-  }
 }
 
 // ── Resolving a node ──────────────────────────────────────────────────────────────────

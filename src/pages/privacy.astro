@@ -115,9 +115,11 @@ import { SITE } from '../lib/site';
   <p>
     Everything you post is public, and is published under a
     <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a>
-    licence. It is also included in a nightly export that anyone can download in full. Assume
-    that anything you post can be copied, archived, quoted, and analysed by people you did not
-    anticipate, because it can. Your email address is not in the export.
+    licence. It is also included in a
+    <a href={`${SITE.repository}/tree/main/data`}>nightly export</a> that anyone can download
+    in full, as JSON and as CSV. Assume that anything you post can be copied, archived,
+    quoted, and analysed by people you did not anticipate, because it can. Your email address
+    is not in the export — there is no field in it that could hold one.
   </p>
 
   <p>
@@ -143,7 +145,8 @@ import { SITE } from '../lib/site';
     structure stays, so that the discussion around it does not collapse into
     incomprehensibility. If you want specific posts deleted as well, say so and they will
     be. Anything already downloaded by someone else from a previous export cannot be
-    recalled, which is true of anything published anywhere.
+    recalled, and neither can a copy of that export already in the site's public history,
+    which is true of anything published anywhere.
   </p>
 
   <h2>Your rights</h2>

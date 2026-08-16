@@ -1120,3 +1120,80 @@ It is DEFINER on purpose and for the reason the lint exists to question: it writ
 caller may not write — the audit row above all, which has no INSERT grant to anybody. The
 authorisation is `auth.uid()` and is not weakened by DEFINER. The baseline is now six, and a
 seventh warning means something new.
+
+## 2026-08-16 — The export reads over a direct connection, not with the service role key
+
+The prompt for the export names both `SUPABASE_DB_URL` and the service role key. Only the
+first is used, and the second is deliberately not passed to the job.
+
+They authorise the same thing — a read that bypasses row level security — through different
+doors. Over PostgREST the service role key would need paginating past a default 1000-row
+limit, cannot express the lateral aggregates the practices query uses, and would cost one
+request per dataset per page. A direct connection is one round trip per dataset, is the same
+path `supabase db push` already uses from CI, and is the `pg_dump`-shaped exit this project
+chose Supabase for in the first place. Handing a job a credential it does not need is how
+credentials end up in logs.
+
+The consequence is the line at the top of scripts/export.mjs, in bold: the connection sees
+everything, so the WHERE clauses in that file are the entire boundary between public and
+private. Everywhere else in this project the policies do that work and a mistake is caught by
+them. Not there.
+
+## 2026-08-16 — The build reads data/ or reads nothing
+
+The PostgREST fallback in practices.ts, propositions.ts, comments.ts and citations.ts is
+gone. It was correct while the export did not exist and wrong the moment it did: a build with
+credentials silently produced a different site from a build without them, and a paused
+database would have gone unnoticed until somebody wondered why the corpus had stopped
+growing. A missing export now warns on stderr and produces the empty state, which is a
+designed state rather than a failure.
+
+This is also what makes the check in prompt 12 meaningful. With every request to
+`*supabase.co*` blocked in devtools, all four reading pages render their main content: the
+listing, a practice with its comment thread, the propositions index, and a proposition with
+its references. The only requests any of them make are the overlay and, on pages that carry a
+comment form, the thread's own live top-up — all of which fail silently.
+
+## 2026-08-16 — A freshness card has no link, and that is the honest version
+
+`/practices/<id>/` is generated at build time from the export, so a practice newer than the
+export has no page. The overlay could link to one anyway and let GitHub Pages serve the 404;
+it does not. The card's title is plain text and the marker says "new since the last build —
+its own page follows at the next one".
+
+The alternative designs were worse. Linking is a 404 dressed as a result. Hiding fresh rows
+entirely means the first practice ever posted sits under "nothing has been published yet" for
+up to a day, which is exactly when a contributor is most likely to conclude the submission
+was lost — so both listings also carry a landing place for the overlay in their empty state.
+
+The overlay uses plain `fetch` rather than the Supabase client, deliberately: importing
+`supabase.ts` would pull the auth client and its storage adapter into a page whose job is to
+be read. Checked in the built output — `/practices/` and `/propositions/` load no supabase
+chunk, while the detail pages do, because they carry a comment form.
+
+## 2026-08-16 — The export commits only when content changed, and asks for the deploy by name
+
+`manifest.json` carries `exportedAt`, which changes on every run, so a commit-on-any-diff
+would put a commit and a full site rebuild into the log every night for ever — including the
+nights when nothing was posted, which early on is most of them. The workflow stages `data/`
+and compares against the index excluding the manifest. Staged first, because `git diff` alone
+reports only tracked files and would have dropped the entire first export on the floor.
+
+A push made with `GITHUB_TOKEN` does not start another workflow — GitHub's recursion guard —
+so `deploy.yml` would never see the export commit. The job calls `gh workflow run deploy.yml`
+instead, which is what `workflow_dispatch` on that workflow has been there for.
+
+The job runs nightly rather than on demand because its own connection is what stops a free
+Supabase project pausing after a week of quiet. A night when nothing was posted is exactly
+the night that matters.
+
+## 2026-08-16 — profiles.json holds only people with something public
+
+Not every profile. Somebody with an account and no contributions has published nothing, and
+copying their display name into a file committed to a public repository — and so into its
+history, permanently — would publish something on their behalf. The exported set is exactly
+the set already visible in the corpus.
+
+The limit worth stating rather than hiding: erasure removes an account from every future
+export and cannot remove it from a commit already in the history, or from a copy anybody has
+downloaded. data/README.md says so in as many words, and the privacy notice now says it too.

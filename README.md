@@ -35,7 +35,10 @@ publish it.
 | ✅ | The submission form: twelve sections, draft autosave, one-transaction submit |
 | ✅ | Reading: listing with linkable filters, practice pages, author pages |
 | ✅ | Propositions, the agreement scale, and the histogram — median, never a mean |
-| ⬜ | Moderation, nightly export, search |
+| ✅ | Discussion, the citation graph, and the report queue |
+| ✅ | Moderation: an audited queue, and erasure that erases |
+| ✅ | The nightly export, the CSV dataset, and the freshness overlay |
+| ⬜ | Search, and an edit screen for a submission sent back |
 
 The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
 the dashboard configuration in [docs/auth.md](docs/auth.md). Without them they render a
@@ -60,10 +63,18 @@ unaffected.
 
 **Reads are served statically. The database handles writes and auth only.**
 
-A nightly workflow exports published content to JSON committed to `data/`, and the site
-builds from those files. Browsers only talk to Supabase when someone logs in, submits,
-comments, votes, or confirms a practice. A traffic spike therefore never touches the
-egress quota, and reading still works if the database is paused or over quota.
+A nightly workflow exports published content to JSON committed to [`data/`](data/), and the
+site builds from those files — there is no fallback to a live query, so a build reads files
+or reads nothing. Browsers only talk to Supabase when someone logs in, submits, comments,
+votes, or confirms a practice. A traffic spike therefore never touches the egress quota, and
+reading still works if the database is paused or over quota.
+
+The one read a browser makes is the freshness overlay: a listing hydrates from the static
+page and then asks, once and with a cap, whether anything has been posted since the export.
+It fails silently, because the page is already correct without it.
+
+That same nightly job is the backup, the citable CC BY dataset, and — because a free Supabase
+project pauses after about a week without a connection — the keep-alive.
 
 ### Identity, in one paragraph
 
@@ -180,12 +191,15 @@ src/lib/                paths, site constants, status vocabulary, markdown, auth
                         profile queries, validation, formatting, form helpers
 src/styles/             tokens.css (single source of truth), base.css, forms.css
 public/fonts/           self-hosted IBM Plex woff2 + the @font-face that loads them
-data/                   committed JSON export the site builds from (not yet populated)
+data/                   the committed export the site builds from, plus the CSV dataset
+                        and a README describing both
 supabase/migrations/    numbered SQL, applied in order, append-only
 supabase/tests/         pgTAP: RLS, grants, triggers, matching
 scripts/load-ror.mjs    streams the ROR dump into the private schema
-.github/workflows/      deploy, migrate, test-db, ror-verify, auth-config
-docs/                   decisions log, ROR notes, auth runbook
+scripts/export.mjs      writes data/ from the database; the whole read path
+.github/workflows/      deploy, migrate, test-db, ror-verify, auth-config, export
+docs/                   decisions log, ROR notes, auth runbook, moderation runbook,
+                        code of conduct
 ```
 
 Non-obvious choices are recorded in [docs/decisions.md](docs/decisions.md), including the

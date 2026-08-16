@@ -60,16 +60,29 @@ const EXPORTED = import.meta.glob<{ default: Comment[] }>('/data/comments.json',
 
 let cached: Comment[] | null = null;
 
+/**
+ * The committed export, and nothing else. Threads are built from it; the live query below
+ * is the overlay that adds anything posted since, and it never renders the page.
+ *
+ * Deleted comments are in the file, already empty — the node has to survive or the replies
+ * under it stop making sense, and the marker a reader sees is rendered from `deletedAt`
+ * rather than stored, so it can never end up in the export as though somebody wrote it.
+ */
 async function readComments(): Promise<Comment[]> {
   if (cached) return cached;
 
   const exported = Object.values(EXPORTED)[0]?.default;
-  if (exported) {
-    cached = exported;
+
+  if (!exported) {
+    console.warn(
+      '[comments] data/comments.json is missing, so no discussion is built into any page. ' +
+        'Run scripts/export.mjs, or let .github/workflows/export.yml commit one.',
+    );
+    cached = [];
     return cached;
   }
 
-  cached = await queryComments();
+  cached = exported;
   return cached;
 }
 
@@ -77,32 +90,6 @@ const SELECT = [
   'id,parent_type,parent_id,in_reply_to,body,created_at,updated_at,deleted_at',
   'author:profiles!comments_author_id_fkey(id,display_name,is_pseudonym,institution_name,institution_country,institution_verified_at)',
 ].join(',');
-
-/**
- * Every readable comment, oldest first.
- *
- * Oldest first, unlike every listing on the site, because a discussion is read in the order
- * it happened. A failure returns nothing rather than throwing: a paused project produces
- * pages with no discussion on them, not a red build.
- */
-async function queryComments(): Promise<Comment[]> {
-  const url = import.meta.env.PUBLIC_SUPABASE_URL;
-  const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return [];
-
-  try {
-    const response = await fetch(
-      `${url}/rest/v1/comments?select=${encodeURIComponent(SELECT)}` +
-        '&status=eq.published&order=created_at.asc',
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } },
-    );
-
-    if (!response.ok) return [];
-    return (await response.json()).map(toComment);
-  } catch {
-    return [];
-  }
-}
 
 interface RawComment {
   id: string;
