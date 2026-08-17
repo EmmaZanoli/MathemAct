@@ -1670,3 +1670,36 @@ A rename that is 95% done is worse than one not started: the missing 5% is a fun
 that still says `public.practices` and fails months later on somebody's submission. So the
 last statement in the file is an assertion over the catalogues, the settings keys and every
 function body, and it raises rather than committing if any of the old vocabulary survived.
+
+## 2026-08-18 — Every listing carries its submit action, unconditionally, above the corpus
+
+The three corpus listings each had a way to contribute and each hid it at exactly the wrong
+moment.
+
+`/reports/` had the only one inside its empty state, so **the invitation to post disappeared
+the day the first report was published** — the corpus started working and the site got harder
+to contribute to in the same commit. `/debates/` and `/network/` had theirs at the foot of the
+page, below a list that grows without limit; a control nobody scrolls to is a control that is
+not there.
+
+There is now one rule for all three: a single `.corpus__action` holding one primary button, at
+the end of the introduction, immediately above the corpus. Same place on every listing, so
+somebody who has learnt where it is on one page knows where it is on the other two.
+
+**Unconditional, rather than rendered only when the corpus has content.** That was the first
+attempt and it was wrong for a reason worth writing down: an empty listing whose freshness
+overlay has just found a row hides its own empty state. So on the day the first report is
+posted — before the nightly export has run, which is precisely when this was reported — the
+page shows a report card and, under the conditional version, no way to write another. The
+static corpus being empty is not the same question as the page having nothing on it, and the
+button has to answer the second one.
+
+The consequence is that the empty states lost their own primary buttons: `/reports/` keeps
+"What this is for" as a secondary, `/debates/` keeps its prose, and `/network/`'s message is
+now just the sentence. Two filled reds on one screen makes neither of them the thing to do,
+and the surviving button is a few lines above the box in both cases.
+
+One thing this moved that had nothing to do with buttons: the network overlay's insertion
+point was `.corpus__submit` — the button now at the top of the page. It anchors on the empty
+message instead, which is where the list actually belongs. Appending to `[data-corpus]` would
+have worked by accident and put the listing after the `<template>` the cards are cloned from.

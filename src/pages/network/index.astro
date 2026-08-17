@@ -35,11 +35,15 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
       </p>
     </header>
 
+    {/* Above the listing and outside the branch, so it is in the same place whether
+        anything has been published or not. It used to be at the foot of the page, below a
+        list that grows without limit. */}
+    <p class="corpus__action">
+      <a class="button button--primary" href={path('/network/new/')}>Submit an entry</a>
+    </p>
+
     {all.length === 0 ? (
-      <p class="corpus__empty">
-        No entries have been published yet.{' '}
-        <a href={path('/network/new/')}>Be the first to submit one.</a>
-      </p>
+      <p class="corpus__empty">No entries have been published yet.</p>
     ) : (
       <div class="listing">
         <aside class="listing__filters" aria-label="Filter entries">
@@ -136,10 +140,6 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
         </section>
       </div>
     )}
-
-    <p class="corpus__submit">
-      <a class="button button--primary" href={path('/network/new/')}>Submit an entry</a>
-    </p>
 
     {/* Fresh entries link directly to the external URL — no view page needed, because
         an entry is a pointer to an external thing, not a page on this site. */}
@@ -244,15 +244,21 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     // create a list to receive the fresh cards.
     let targetList = entryList;
     if (!targetList) {
-      if (emptyEl) emptyEl.hidden = true;
+      // Where the empty message is, which is where the list would have been. Anchored on
+      // that element rather than on the submit button it used to sit above: the button has
+      // moved to the top of the page, and the last child of [data-corpus] is now the
+      // <template> these cards are cloned from — appending past it would put the listing
+      // below the fold of the page for no reason. No message means no insertion point, and
+      // nothing to do.
+      if (!emptyEl) return;
+
       targetList = document.createElement('ul');
       targetList.className = 'entry-list';
       targetList.setAttribute('role', 'list');
       targetList.dataset.entryList = '';
-      document.querySelector('[data-corpus]')?.insertBefore(
-        targetList,
-        document.querySelector('.corpus__submit'),
-      );
+
+      emptyEl.insertAdjacentElement('afterend', targetList);
+      emptyEl.hidden = true;
     }
 
     for (const entry of fresh) {
@@ -299,10 +305,6 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
   .corpus__empty {
     color: var(--ink-muted);
     font-size: var(--size-3);
-  }
-
-  .corpus__submit {
-    margin-block-start: var(--space-2xl);
   }
 
   .entry-list {

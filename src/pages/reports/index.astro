@@ -87,6 +87,15 @@ const groups = [
       </p>
     </header>
 
+    {/* Outside the branch below, so it is here whatever state the corpus is in. It used to
+        exist only inside the empty state, which meant the invitation to post vanished on
+        the day the first report was published — and the empty state is itself hidden by
+        the overlay as soon as one arrives, so there was a window where the page showed a
+        report and no way to write another. */}
+    <p class="corpus__action">
+      <a class="button button--primary" href={path('/reports/new/')}>Post a report</a>
+    </p>
+
     {
       reports.length === 0 ? (
         <>
@@ -107,10 +116,9 @@ const groups = [
               been written by somebody who did the work and then took ten minutes to say
               what happened — including, and especially, when it did not go well.
             </p>
+            {/* No second "post" button here. The one above this box does the same thing,
+                and two filled reds on one screen makes neither of them the thing to do. */}
             <p class="actions">
-              <a class="button button--primary" href={path('/reports/new/')}>
-                Post the first report
-              </a>
               <a class="button" href={path('/about/')}>What this is for</a>
             </p>
           </div>

@@ -31,6 +31,29 @@
     text-wrap: pretty;
   }
 
+  /* The way to add to whichever corpus the page is showing: reports, debates, network.
+     One rule for all three — at the end of the introduction, immediately above the corpus,
+     unconditionally.
+
+     Unconditionally because both of the ways this was done before failed on the same day.
+     The reports listing had it only inside the empty state, so the invitation to post
+     disappeared the moment the first report was published; the other two had it at the
+     foot of the page, below a list that grows without limit. And an empty listing whose
+     freshness overlay has just found a row hides its own empty state, so the version
+     living in there was gone before the first nightly build even ran.
+
+     Consequence to hold on to: an empty state on one of these pages must not carry a
+     second filled button, because this one is already a few lines above it.
+
+     Symmetric margins rather than just the one below, because what sits above differs by
+     page: the header on two of them, which carries its own matching bottom margin, and on
+     debates a .prose note that carries none. Both are blocks in normal flow, so the two
+     lg margins collapse to one and the button is the same distance from whatever precedes
+     it either way. */
+  .corpus__action {
+    margin-block: var(--space-lg);
+  }
+
   /* ── Listing ────────────────────────────────────────────────────────────────────── */
 
   .listing {

@@ -46,6 +46,14 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
       </p>
     </div>
 
+    {/* Above the lists rather than below them, and outside the branch so it is here whether
+        anything has been suggested or not. It was previously at the foot of the page, past
+        two sections that will grow without limit — a control nobody scrolls to is a control
+        that is not there. */}
+    <p class="corpus__action">
+      <a class="button button--primary" href={path('/debates/new/')}>Suggest a debate</a>
+    </p>
+
     {
       debates.length === 0 ? (
         <>
@@ -60,11 +68,8 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
               The first ones will come from members who noticed an argument worth settling —
               or worth showing is not settled.
             </p>
-            <p class="actions">
-              <a class="button button--primary" href={path('/debates/new/')}>
-                Suggest a debate
-              </a>
-            </p>
+            {/* The button that used to be here is now above this box, where it also stands
+                for the populated page. */}
           </div>
         </>
       ) : (
@@ -128,12 +133,6 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
               ))}
             </ul>
           </section>
-
-          <p class="actions">
-            <a class="button button--primary" href={path('/debates/new/')}>
-              Suggest a debate
-            </a>
-          </p>
         </>
       )
     }
