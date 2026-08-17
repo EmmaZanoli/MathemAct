@@ -201,35 +201,45 @@
     gap: var(--space-sm);
   }
 
+  /* The pair from the home page: a filled accent primary and an outlined secondary in the
+     same accent, so a call to action looks the same on a form as it does on the poster
+     that sent someone to it.
+
+     This used to be ink, on the reasoning that a filled accent button would put the same
+     colour on a control and on a link in one sentence and make neither mean anything.
+     That reasoning was written when the accent was chalk blue and the primary button was
+     the only filled thing on the page. It is weaker now and still worth remembering: keep
+     the number of buttons per screen small, and keep --button--quiet for anything that is
+     an escape hatch rather than an action. Two red buttons in a row is a design smell. */
   .button {
     display: inline-block;
     padding: var(--space-2xs) var(--space-md);
-    border: var(--border-width) solid var(--ink);
+    border: var(--border-width) solid var(--accent);
     border-radius: var(--radius-sm);
     background-color: transparent;
-    color: var(--ink);
+    color: var(--accent);
     font-size: var(--size-3);
+    font-weight: var(--weight-semibold);
     text-align: center;
     text-decoration: none;
     cursor: pointer;
-    transition: background-color var(--motion-fast) var(--motion-ease);
+    transition: background-color var(--motion-fast) var(--motion-ease),
+      border-color var(--motion-fast) var(--motion-ease),
+      color var(--motion-fast) var(--motion-ease);
   }
 
   .button:hover {
-    background-color: var(--accent-wash);
-    color: var(--ink);
+    background-color: var(--accent);
+    color: var(--ground);
   }
 
-  /* Ink rather than accent. The accent is for links, focus rings, and the histogram; a
-     filled accent button would put the same blue on a control and on a link in the same
-     sentence and make neither mean anything. */
   .button--primary {
-    background-color: var(--ink);
+    background-color: var(--accent);
     color: var(--ground);
-    font-weight: var(--weight-semibold);
   }
 
   .button--primary:hover {
+    border-color: var(--accent-strong);
     background-color: var(--accent-strong);
     color: var(--ground);
   }

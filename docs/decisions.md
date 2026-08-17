@@ -1561,3 +1561,64 @@ grid column, not a `max-width` in `ch` that has to be re-guessed whenever the gr
 span of its own, setting "Act" in 12px muted grey in the footer — the same shape as the
 `.card__facts > li + li` entry above, and just as quiet, because it reads as a deliberate
 lockup rather than as a bug. Now `> span`.
+
+## 2026-08-17 — The reading pages adopt the landing palette. One palette again
+
+Same day, one commit later. The landing page's warm paper, near-black ink and single brick
+red now carry the whole site; the chalk-blue accent is gone from `tokens.css`. This is
+almost entirely a token edit, which is the payoff for the rule that a raw hex anywhere else
+is a bug — four values in one file changed the colour of 29 pages.
+
+The `--home-*` names survive as **aliases** of the real tokens rather than being deleted.
+Two reasons: the home page and the footer genuinely read better with role names of their
+own ("paper" and "ink", not "ground" and "ink"), and a rename touching every landing rule
+would have buried the actual change in noise. They are one line each and cannot drift.
+
+**`--surface` moved from `#ffffff` to `#fffdf7`.** Pure white against warm paper does not
+read as raised, it reads as a hole. It needs to be warmer than the ground and lighter than
+it, which white is only half of.
+
+**Buttons are the accent pair from the home page now**: filled red primary, red outline
+secondary. The old comment on `.button--primary` argued for ink on the grounds that a
+filled accent button and a link in the same sentence would be the same colour and neither
+would mean anything. That was written when the accent was blue and the primary button was
+the only filled thing on the page, and it is now overruled — but the caution is kept in the
+file, because it is still true that two red buttons in a row is a design smell.
+
+**Focus rings moved from the accent to ink.** A red ring around a red button is not a focus
+indicator, it is a slightly thicker button. Ink is 16:1 on the ground and reads against
+every surface including the inside of the primary button. This also deletes the
+`--focus-ring` override that the landing page needed a commit earlier.
+
+**The nav is small tracked capitals on every page, with a dot on the current section.** The
+underline it used to carry does not survive 0.14em tracking: it runs a full space past the
+last letter and reads as a text decoration, which is the one thing a current-page marker
+must not look like. The dot is still a second cue alongside the colour, so the rule that
+colour never carries meaning alone is intact.
+
+**The accent is red and so is `--outcome-failed`, and that is a real cost.** `#b1231a`
+against `#8a3a34`: same family, distinguishable side by side, but no longer orthogonal the
+way blue and brick were. It is written up at length in `tokens.css` rather than papered
+over. The mitigation is the one already in the design — an outcome is a glyph plus the
+words, a link is underlined text — and the fix, if it turns out to mislead once there are
+practices to look at, is to move the outcome colour rather than the accent.
+
+**Not changed:** the reading shell stays 72rem while the landing page is 80rem, so the
+masthead shifts about 128px between them on a wide screen. Each page is internally aligned,
+which matters more than continuity across a navigation; widening every listing to 80rem is
+a density change to judge against a corpus that does not exist yet.
+
+## 2026-08-17 — The home page asks for a submission instead of an email address
+
+Posting is open, so the closing section is no longer a holding message. "Posting is not open
+yet … Stay updated", with a `mailto:`, becomes "Create an account" and "Post a practice",
+pointing at `/account/sign-up/` and `/practices/new/`.
+
+The copy names the three fields the form will ask for and the ten minutes it takes, because
+the single most important flow on this site is a researcher submitting a well-structured
+account in under ten minutes and the honest way to open it is to say what it costs. It also
+says an account of something that did not work is worth as much as one that did — that
+belongs in the invitation itself, not only in the form, since the decision about whether a
+failure is worth writing up is made before anybody opens it.
+
+That sentence was the only place in the repo claiming posting was closed.

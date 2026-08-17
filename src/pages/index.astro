@@ -266,20 +266,26 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
     <section class="join" aria-labelledby="join-heading">
       <div class="shell join__inner">
         <div class="join__copy">
-          <h2 id="join-heading">Join as a reader, contributor, or collaborator</h2>
+          <h2 id="join-heading">Write up one thing you have actually done</h2>
           <p>
-            Posting is not open yet. You can explore, follow updates, and get
-            involved as the project grows.
+            Posting is open. Create an account, then say what you were trying to do, what
+            the tool did, and how you checked the result — about ten minutes. An account of
+            something that did not work is worth as much as one that did, and the corpus is
+            only useful if both are in it.
           </p>
         </div>
 
-        <a
-          class="button button--primary join__button"
-          href={`mailto:${SITE.contactEmail}?subject=MathemAct%20updates`}
-        >
-          Stay updated
-          <span class="button__arrow" aria-hidden="true">→</span>
-        </a>
+        <div class="join__actions">
+          <a class="button button--primary" href={path('/account/sign-up/')}>
+            Create an account
+            <span class="button__arrow" aria-hidden="true">→</span>
+          </a>
+
+          <a class="button button--secondary" href={path('/practices/new/')}>
+            Post a practice
+            <span class="button__arrow" aria-hidden="true">→</span>
+          </a>
+        </div>
       </div>
     </section>
   </div>
@@ -676,7 +682,7 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--space-lg);
+    gap: var(--space-lg) var(--space-2xl);
     padding-block: var(--space-xl);
   }
 
@@ -685,13 +691,17 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
   }
 
   .join p {
-    margin-block-start: var(--space-3xs);
+    max-width: 64ch;
+    margin-block-start: var(--space-2xs);
     color: var(--home-ink-soft);
     font-size: var(--size-2);
+    line-height: 1.55;
   }
 
-  .join__button {
-    min-width: 12rem;
+  .join__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
   }
 
   /* ── Responsive ───────────────────────────────────────────────────────────────── */
@@ -760,10 +770,6 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
     .join__inner {
       grid-template-columns: 1fr;
     }
-
-    .join__button {
-      width: fit-content;
-    }
   }
 
   @media (max-width: 34rem) {
@@ -771,7 +777,8 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
       font-size: clamp(2.4rem, 11vw, 3rem);
     }
 
-    .hero__actions {
+    .hero__actions,
+    .join__actions {
       flex-direction: column;
       align-items: stretch;
     }

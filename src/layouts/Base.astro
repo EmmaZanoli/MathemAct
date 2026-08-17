@@ -56,7 +56,9 @@ const year = new Date().getFullYear();
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{documentTitle}</title>
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#fbfaf6" />
+    {/* Must be a literal — a browser reads this before any stylesheet, so it cannot be
+        var(--ground). Keep it in step with that token by hand; nothing checks it. */}
+    <meta name="theme-color" content="#f8f5ee" />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical.href} />
 
@@ -315,22 +317,36 @@ const year = new Date().getFullYear();
     text-decoration: none;
   }
 
-  .wordmark:hover {
+  /* The verb is the point of the name, so it carries the accent — on every page, not
+     just the home page. Only that half responds to hover: the whole mark changing colour
+     at 24px reads as a link doing something, and this one only ever goes home. */
+  .wordmark__act {
+    color: var(--accent);
+  }
+
+  .wordmark:hover .wordmark__act {
     color: var(--accent-strong);
   }
 
+  /* Small tracked capitals, on every page. This started as the landing masthead and is
+     now the site's navigation: at this size the sections read as a contents list rather
+     than as a row of links, which is what stops them competing with the page title
+     directly underneath. */
   .nav {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-md);
+    align-items: center;
+    gap: clamp(var(--space-sm), 2.4vw, var(--space-xl));
     margin: 0;
     padding: 0;
-    font-size: var(--size-2);
+    font-size: var(--size-1);
   }
 
   .nav a {
     color: var(--ink);
     font-weight: var(--weight-semibold);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
     text-decoration: none;
   }
 
@@ -354,12 +370,25 @@ const year = new Date().getFullYear();
     }
   }
 
-  /* The current page is marked with a rule under it as well as the attribute, so the
-     cue is not carried by colour alone. */
+  /* The current page is marked with a dot under it as well as the attribute, so the cue
+     is not carried by colour alone. A dot rather than the underline this used to be:
+     at 0.14em tracking an underline runs past the last letter by a whole space and reads
+     as a text decoration on a link, which is the one thing it must not look like. */
   .nav a[aria-current='page'] {
+    position: relative;
     color: var(--accent);
-    border-block-end: var(--border-width-thick) solid var(--accent);
-    padding-block-end: 2px;
+  }
+
+  .nav a[aria-current='page']::after {
+    content: '';
+    position: absolute;
+    inset-block-start: calc(100% + 0.45em);
+    inset-inline-start: 50%;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    transform: translateX(-50%);
   }
 
   /* ── Footer ─────────────────────────────────────────────────────────────────────── */
@@ -482,92 +511,28 @@ const year = new Date().getFullYear();
   }
 
   /* ── Landing variant ───────────────────────────────────────────────────────────────
-     A masthead rather than a utility bar: a large serif wordmark on the left, and the
-     sections set as small letterspaced capitals on the right so they read as a contents
-     list and never compete with the headline underneath. */
+     Almost nothing is left here. The masthead — the accented wordmark, the tracked
+     capitals, the dot on the current section — used to live in this block and is now the
+     header on every page, which is the point of the redesign. What remains is the two
+     things a poster does that a reading page should not. */
 
-  /* Wider than the 72rem reading shell, and set on the body so the header, the hero, and
-     the footer all measure from the same edge — the wordmark sitting directly above the
-     first letter of the headline is most of what makes the masthead read as one. A
-     reading page keeps the narrower default; this is a poster, not a column of prose. */
+  /* Wider than the 72rem reading shell, and set on the body so the header, the hero and
+     the footer all measure from the same edge: the wordmark sitting directly above the
+     first letter of the headline is most of what makes the masthead read as one object.
+     A reading page keeps the narrower default, because 80rem of listing is too wide to
+     scan and the corpus is what people came for. */
   .landing-body {
     --shell-width: 80rem;
-
-    /* The focus ring is chalk blue everywhere else, which is a colour that does not
-       appear on this page at all — a ring in it reads as a rendering fault rather than
-       as focus. Ink is 16:1 here, well past the 3:1 an indicator needs, and it is
-       legible against both the paper and the red button it has to outline. */
-    --focus-ring: var(--focus-width) solid var(--home-ink);
   }
 
-  .site-header--landing {
-    border-block-end: 1px solid var(--home-rule);
-    background: var(--home-paper);
-  }
-
+  /* Bigger, and with more air around it. Everywhere else the wordmark is a way back;
+     here it is the top of a poster. */
   .site-header--landing .site-header__inner {
-    align-items: center;
     padding-block: var(--space-md);
   }
 
   .site-header--landing .wordmark {
-    color: var(--home-ink);
     font-size: clamp(1.75rem, 2.6vw, 2.25rem);
-  }
-
-  .site-header--landing .wordmark:hover {
-    color: var(--home-ink);
-  }
-
-  .site-header--landing .wordmark__act {
-    color: var(--home-red);
-  }
-
-  .site-header--landing .header-end {
-    margin-inline-start: auto;
-  }
-
-  .site-header--landing .nav {
-    align-items: center;
-    gap: clamp(var(--space-sm), 3vw, var(--space-2xl));
-    font-size: var(--size-1);
-  }
-
-  .site-header--landing .nav a {
-    color: var(--home-ink);
-    font-weight: var(--weight-semibold);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-  }
-
-  .site-header--landing .nav a:hover {
-    color: var(--home-red);
-  }
-
-  .site-header--landing .nav__account {
-    border-inline-start-color: var(--home-rule);
-  }
-
-  /* The current section is marked by a dot below it rather than the reading pages' rule:
-     at this tracking an underline collides with the letter spacing and reads as a text
-     decoration. Still not colour alone — the dot is the second cue. */
-  .site-header--landing .nav a[aria-current='page'] {
-    position: relative;
-    padding-block-end: 0;
-    border-block-end: 0;
-    color: var(--home-red);
-  }
-
-  .site-header--landing .nav a[aria-current='page']::after {
-    content: '';
-    position: absolute;
-    inset-block-start: calc(100% + 0.45em);
-    inset-inline-start: 50%;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--home-red);
-    transform: translateX(-50%);
   }
 
   @media (max-width: 48rem) {

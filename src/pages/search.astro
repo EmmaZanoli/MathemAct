@@ -357,7 +357,7 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
   .filter-chip:has(input:checked) {
     background-color: var(--accent);
     border-color: var(--accent);
-    color: #fff;
+    color: var(--ground);
   }
 
   .filter-chip input[type='radio'] {
@@ -368,7 +368,7 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
   }
 
   .filter-chip:focus-within {
-    outline: 2px solid var(--accent);
+    outline: var(--focus-ring);
     outline-offset: 1px;
   }
 

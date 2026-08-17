@@ -55,7 +55,10 @@
     </marker>
   </defs>
 
-  <rect class="diagram__ground" x="0" y="0" width="680" height="405" rx="6" />
+  {/* No ground rect. The drawing arrived with a tinted rounded panel behind it, which put
+      a box on the page that the layout does not otherwise have — the hero has no cards,
+      and a panel here reads as a slot something was dropped into rather than as part of
+      the page. It sits on the paper instead. */}
 
   {/* The three orbits of the rotation, drawn outside the triangle. */}
   <g class="diagram__orbits">
@@ -126,10 +129,6 @@
   .diagram {
     width: 100%;
     height: auto;
-  }
-
-  .diagram__ground {
-    fill: var(--home-panel);
   }
 
   /* ── The triangle and its group ─────────────────────────────────────────────────── */
