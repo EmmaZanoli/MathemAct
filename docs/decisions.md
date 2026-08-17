@@ -1467,3 +1467,46 @@ branch keeps the same italic "Author since erased" the static card shows.
 
 Verified against a local PostgREST stub — the resources branch of `/authors/view/` cannot be
 exercised against production, because no resource is published yet.
+
+## 2026-08-17 — Proposition authors are contributors too, and their names link
+
+Completing the rule from the entry above: a page exists exactly where a link to it exists.
+Proposition authors were the remaining case where the *name* was shown and not linked — so
+there was no 404, just an inconsistency a reader cannot explain, since a practice author's
+name is a link and a proposer's was not. Both proposition templates now link it, and
+`listContributors()` includes proposition authors, and author pages list propositions between
+the practices and the resources: authored accounts, then claims put to the community, then
+things pointed at.
+
+**Identity moved to data/profiles.json.** This is the substantive change. The three corpora
+disagree about how much they carry: a practice and a resource each embed the institution
+triple a badge is built from, and a proposition embeds only a name and the pseudonym flag.
+Taking identity from whichever corpus mentioned somebody first would therefore have dropped
+the institutional badge from the page of anyone who has only ever posted a proposition —
+silently, and in the direction that matters, because a badge that fails to appear looks like
+an account nobody verified. `profiles.json` has the institution for every contributor, so it
+is now the identity source and the corpora only decide membership. Checked with a fixture
+whose proposition-only author has a badge: it renders.
+
+**Comment-only contributors still have no page**, because nothing links a name from a comment.
+That is the same rule, not an exception to it.
+
+## 2026-08-17 — `.card__facts > li + li` skipped the variant that is not a list
+
+Two of the places using `.card__facts` are a `<p>` of `<span>`s rather than a list: the
+proposition items on `/propositions/` and now on author pages. The separator rule named `li`,
+so it did not apply to them — and since a flex container ignores the whitespace between its
+items and the column gap on that class is zero, the two facts were rendered flush against
+each other: `WritingActive since 20 July 2026`. It had been live on `/propositions/` and was
+faithfully reproduced on the author page by reusing the class, which is how it was noticed.
+
+Now `> * + *`, which is identical for every list case and fixes both span cases. The general
+lesson is the one worth keeping: **an element name inside a shared-class selector is a silent
+opt-out.** Nothing warns you that a variant does not match, and the failure looks like missing
+copy rather than missing CSS.
+
+**The author summary does not use that class at all**, for a related reason. Three counts and
+the outcome breakdown do not fit on one line, and a wrapped flex item keeps the border that
+was standing in for a separator — so the second line opened with a rule attached to nothing.
+The counts are stacked, one per kind of contribution. Anybody with only practices, which is
+nearly everybody, still sees exactly one line.

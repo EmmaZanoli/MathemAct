@@ -1,5 +1,5 @@
 /**
- * Who gets an author page.
+ * Who gets an author page, and where their name and badge come from.
  *
  * This is its own file rather than another function in practices.ts for a bundling reason.
  * `resources.ts` does a static `import` of data/resources.json, so anything that imports it
@@ -7,33 +7,69 @@
  * submission form among them. Tree-shaking would probably drop it; probably is not a good
  * enough reason to put a build-time-only join into a module the browser loads.
  *
- * **Practice authors and resource submitters, unioned.** Not everyone in data/profiles.json:
- * that file also holds people whose only contribution is a comment or a proposition, and
- * nothing links a name from either of those, so a page for them would be one no reader can
- * reach and Pagefind would index it as an almost-empty result. The rule is that a page exists
- * exactly where a link to it exists.
+ * **Membership: anyone whose name is linked from something.** That is practice authors,
+ * proposition authors, and resource submitters. Deliberately not everyone in
+ * data/profiles.json, which also holds people whose only contribution is a comment — nothing
+ * links a name from a comment, so a page for them would be one no reader can reach and
+ * Pagefind would index it as an almost-empty result. The rule is that a page exists exactly
+ * where a link to it exists. If comment authors ever become links, this function is the one
+ * thing to change.
  *
- * Identity comes from whichever corpus mentioned the person, because both carry the same
- * fields — display name, pseudonym flag, and the institution triple the badge is built from.
- * A practice wins a tie only in the sense that it is read first; the rows agree, both having
- * been written by the same export from the same profile.
+ * **Identity: data/profiles.json, with the corpus as a fallback.** The three corpora do not
+ * agree on how much they carry about a person. A practice and a resource each embed the
+ * institution triple a badge is built from; a proposition embeds only the name and the
+ * pseudonym flag. Taking identity from the corpus that happened to mention someone first
+ * would therefore drop the institutional badge from the page of anyone who has only ever
+ * posted a proposition — silently, and in the one direction that matters, since a badge that
+ * fails to appear looks like an account that was never verified.
  */
-import { listPractices } from './practices';
 import type { CorpusAuthor } from './practices';
+import { listPractices } from './practices';
+import { listPropositions } from './propositions';
 import { listResources } from './resources';
 
+/** A row of data/profiles.json. A superset of CorpusAuthor, and the same shape for the
+ *  fields they share, because scripts/export.mjs writes both from public.profiles. */
+interface ExportedProfile extends CorpusAuthor {
+  readonly bio: string | null;
+  readonly createdAt: string;
+}
+
+const EXPORTED = import.meta.glob<{ default: ExportedProfile[] }>('/data/profiles.json', {
+  eager: true,
+});
+
 export async function listContributors(): Promise<CorpusAuthor[]> {
+  const profiles = new Map<string, CorpusAuthor>(
+    (Object.values(EXPORTED)[0]?.default ?? []).map((profile) => [
+      profile.id,
+      {
+        id: profile.id,
+        displayName: profile.displayName,
+        isPseudonym: profile.isPseudonym,
+        institution: profile.institution,
+      },
+    ]),
+  );
+
   const contributors = new Map<string, CorpusAuthor>();
 
-  for (const practice of await listPractices()) {
-    if (practice.author) contributors.set(practice.author.id, practice.author);
+  /** The profile if the export has one, otherwise whatever the corpus knew. */
+  const add = (author: CorpusAuthor | null): void => {
+    if (!author || contributors.has(author.id)) return;
+    contributors.set(author.id, profiles.get(author.id) ?? author);
+  };
+
+  for (const practice of await listPractices()) add(practice.author);
+
+  for (const proposition of await listPropositions()) {
+    // Propositions carry no institution. Passing null here is safe rather than lossy: `add`
+    // prefers the profile, and this value is used only if the export has no profile row for
+    // somebody it also lists as an author, which the export's own query rules out.
+    if (proposition.author) add({ ...proposition.author, institution: null });
   }
 
-  for (const resource of listResources()) {
-    if (resource.submitter && !contributors.has(resource.submitter.id)) {
-      contributors.set(resource.submitter.id, resource.submitter);
-    }
-  }
+  for (const resource of listResources()) add(resource.submitter);
 
   return [...contributors.values()];
 }

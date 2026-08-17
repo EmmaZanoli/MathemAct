@@ -11,9 +11,9 @@
  *
  * Pattern and rationale: same as /practices/view/, /propositions/view/ and /moderate/. Anon
  * fetches against PostgREST get what the static page bakes in — the profile, the published
- * practices, the staleness aggregate that decides each tombstone, and the resources this
- * person has submitted. `/authors/<id>/` stays the canonical URL once a build has run;
- * nothing links here except pages that are themselves runtime-rendered.
+ * practices, the staleness aggregate that decides each tombstone, their propositions, and the
+ * resources they have submitted. `/authors/<id>/` stays the canonical URL once a build has
+ * run; nothing links here except pages that are themselves runtime-rendered.
  *
  * **Everything this page links to is a runtime-rendered view page**, because this page
  * exists precisely when the export cannot be trusted to contain the rows. A card title
@@ -59,10 +59,13 @@ import { path } from '../../lib/paths';
           <Badges pending />
         </div>
 
-        <ul class="card__facts author__summary" role="list">
+        <ul class="author__summary" role="list">
           <li>
             <span class="meta" data-count></span>
             <span class="author__breakdown" data-breakdown hidden></span>
+          </li>
+          <li data-proposition-count-item hidden>
+            <span class="meta" data-proposition-count></span>
           </li>
           <li data-resource-count-item hidden>
             <span class="meta" data-resource-count></span>
@@ -81,6 +84,12 @@ import { path } from '../../lib/paths';
       <section data-practices hidden>
         <h2 class="author__section">Practices</h2>
         <div data-listing></div>
+      </section>
+
+      <section data-propositions hidden>
+        <h2 class="author__section">Propositions</h2>
+        <ul class="proposition-list" role="list" data-proposition-list></ul>
+        <p class="author__more"><a href={path('/propositions/')}>All propositions</a></p>
       </section>
 
       <section data-resources hidden>
@@ -110,6 +119,17 @@ import { path } from '../../lib/paths';
 
         <ul class="card__tools" role="list" data-tools></ul>
       </article>
+    </template>
+
+    {/* One proposition. Same classes as the propositions index, which are global. */}
+    <template data-proposition-card>
+      <li class="proposition-item">
+        <a class="proposition-item__link" data-statement></a>
+        <p class="card__facts proposition-item__facts">
+          <span data-area></span>
+          <span class="meta" data-when></span>
+        </p>
+      </li>
     </template>
 
     {/* One submitted resource. Same two lines as the static page: what it is, then where it
@@ -145,10 +165,17 @@ import { path } from '../../lib/paths';
     margin-block-start: var(--space-md);
   }
 
-  /* Layout comes from .card__facts in corpus.css. Kept identical to /authors/<id>/, which
-     this page stands in for — see the note at the top of the file. */
+  /* Kept identical to /authors/<id>/, which this page stands in for. One line per kind of
+     contribution; see the note there for why they are not one line with rules between. */
   .author__summary {
-    margin-block-start: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    margin-block: var(--space-md) 0;
+    padding: 0;
+    list-style: none;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
   }
 
   .meta {
@@ -202,7 +229,7 @@ import { path } from '../../lib/paths';
 </style>
 
 <script>
-  import { verificationMonth } from '../../lib/format';
+  import { longDate, verificationMonth } from '../../lib/format';
   import { areaLabel, taskTypeLabel } from '../../lib/practice-schema';
   import { path } from '../../lib/paths';
   // categoryLabel only. Importing listResources here would pull data/resources.json into
@@ -255,10 +282,12 @@ import { path } from '../../lib/paths';
     }
     badges.hidden = false;
 
-    // Both corpora at once. A resource submitter is a contributor whether or not they have
-    // ever posted a practice, which is why /authors/<id>/ exists for them too.
-    const [practices, resources] = await Promise.all([
+    // All three at once. A proposition author and a resource submitter are contributors
+    // whether or not they have ever posted a practice, which is why /authors/<id>/ exists
+    // for them too.
+    const [practices, propositions, resources] = await Promise.all([
       fetchPractices(authorId),
+      fetchPropositions(authorId),
       fetchResources(authorId),
     ]);
 
@@ -266,6 +295,15 @@ import { path } from '../../lib/paths';
       '[data-count]',
       `${practices.length} published ${practices.length === 1 ? 'practice' : 'practices'}`,
     );
+
+    if (propositions.length > 0) {
+      setText(
+        '[data-proposition-count]',
+        `${propositions.length} ${propositions.length === 1 ? 'proposition' : 'propositions'}`,
+      );
+      document.querySelector<HTMLElement>('[data-proposition-count-item]')!.hidden = false;
+      renderPropositions(propositions);
+    }
 
     if (resources.length > 0) {
       setText(
@@ -277,7 +315,7 @@ import { path } from '../../lib/paths';
     }
 
     if (practices.length === 0) {
-      if (resources.length === 0) {
+      if (propositions.length === 0 && resources.length === 0) {
         document.querySelector<HTMLElement>('[data-none]')!.hidden = false;
       }
       loadingEl.hidden = true;
@@ -307,6 +345,35 @@ import { path } from '../../lib/paths';
 
     loadingEl.hidden = true;
     contentEl.hidden = false;
+  }
+
+  function renderPropositions(propositions: FetchedProposition[]): void {
+    const template = document.querySelector<HTMLTemplateElement>('[data-proposition-card]')!;
+    const list = document.querySelector<HTMLElement>('[data-proposition-list]')!;
+
+    for (const proposition of propositions) {
+      const node = (template.content.cloneNode(true) as DocumentFragment)
+        .firstElementChild as HTMLElement;
+
+      const statement = node.querySelector<HTMLAnchorElement>('[data-statement]')!;
+      statement.textContent = proposition.statement;
+      // The view page again, for the reason the practice links use it: a contributor reached
+      // through this page may have posted the proposition after the last build too.
+      statement.href = path(`/propositions/view/?id=${proposition.id}`);
+
+      put(node, '[data-area]', areaLabel(proposition.area));
+      put(
+        node,
+        '[data-when]',
+        proposition.status === 'active'
+          ? `Active since ${longDate(proposition.activatedAt)}`
+          : `Proposed ${longDate(proposition.createdAt)}`,
+      );
+
+      list.append(node);
+    }
+
+    document.querySelector<HTMLElement>('[data-propositions]')!.hidden = false;
   }
 
   function renderResources(resources: FetchedResource[]): void {
@@ -407,6 +474,15 @@ import { path } from '../../lib/paths';
       readonly country: string;
       readonly verifiedAt: string;
     } | null;
+  }
+
+  interface FetchedProposition {
+    readonly id: string;
+    readonly statement: string;
+    readonly area: string;
+    readonly status: 'proposed' | 'active';
+    readonly createdAt: string;
+    readonly activatedAt: string | null;
   }
 
   interface FetchedResource {
@@ -514,6 +590,30 @@ import { path } from '../../lib/paths';
     }));
   }
 
+  /**
+   * This author's propositions, newest first.
+   *
+   * `status=neq.hidden` rather than a positive filter, because both remaining values belong
+   * here: a proposed claim is public and rateable, and being rated is how it is promoted. It
+   * is the same clause the export uses.
+   */
+  async function fetchPropositions(id: string): Promise<FetchedProposition[]> {
+    const rows = await ask<RawProposition>(
+      'propositions?select=id,statement,area,status,created_at,activated_at' +
+        `&author_id=eq.${encodeURIComponent(id)}` +
+        '&status=neq.hidden&order=created_at.desc',
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      statement: row.statement,
+      area: row.area,
+      status: row.status,
+      createdAt: row.created_at,
+      activatedAt: row.activated_at,
+    }));
+  }
+
   /** This author's published resources, newest first. Same restated filters, same reason. */
   async function fetchResources(id: string): Promise<FetchedResource[]> {
     const rows = await ask<RawResource>(
@@ -568,6 +668,15 @@ import { path } from '../../lib/paths';
   interface RawStaleness {
     practice_id: string;
     tombstone_status: TombstoneStatus;
+  }
+
+  interface RawProposition {
+    id: string;
+    statement: string;
+    area: string;
+    status: 'proposed' | 'active';
+    created_at: string;
+    activated_at: string | null;
   }
 
   interface RawResource {

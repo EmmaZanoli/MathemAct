@@ -71,7 +71,10 @@ const [thread, incoming, outgoing] = await Promise.all([
           {
             proposition.author ? (
               <>
-                Proposed by {proposition.author.displayName}
+                Proposed by{' '}
+                <a href={path(`/authors/${proposition.author.id}/`)}>
+                  {proposition.author.displayName}
+                </a>
                 {proposition.author.isPseudonym && ' (a pseudonym)'}
               </>
             ) : (

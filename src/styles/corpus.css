@@ -259,7 +259,12 @@
     color: var(--ink-muted);
   }
 
-  .card__facts > li + li {
+  /* `> * + *`, not `> li + li`. Two of the places using this class are a <p> of <span>s
+     rather than a list — the proposition items on /propositions/ and on an author page — and
+     the element selector silently skipped them. A flex container ignores the whitespace
+     between its items and the column gap here is zero, so the result was `WritingActive
+     since 20 July 2026`: no rule, and no space either. Identical for the list cases. */
+  .card__facts > * + * {
     margin-inline-start: var(--space-2xs);
     padding-inline-start: var(--space-2xs);
     border-inline-start: var(--border);

@@ -7,13 +7,15 @@
  * reader asks after an account they found useful. Anything more would turn a corpus into a
  * network, and the corpus is the point.
  *
- * Practices first, then resources they have pointed at, because those are the two kinds of
- * contribution anything links a name from. Resources are listed rather than carded: on this
- * page the question is what someone found worth passing on, not the full case for each one,
- * which is what /resources/ is for. The list is thin for the same reason the page is.
+ * Practices, then propositions, then resources: authored accounts, then claims they have put
+ * to the community, then things they have pointed at. Only practices get cards. A proposition
+ * is one sentence and a resource is a link, so both are listed — on this page the question is
+ * what someone has contributed, not the full case for each item, which is what
+ * /propositions/ and /resources/ are for. The lists are thin for the same reason the page is.
  *
- * A person can appear here with no practices at all — a resource submitter is a contributor.
- * `listContributors()` is the union, and it is the definition of which pages exist.
+ * A person can appear here with no practices at all: a proposition author and a resource
+ * submitter are both contributors. `listContributors()` is the union, and it is the
+ * definition of which pages exist.
  *
  * The badge block says exactly what was verified and no more: an address at an
  * institution's domain was confirmed to work, on a date. Not employment, not position, not
@@ -26,8 +28,11 @@ import PracticeCard from '../../components/PracticeCard.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { listContributors } from '../../lib/authors';
+import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
 import { practicesByAuthor } from '../../lib/practices';
+import { areaLabel } from '../../lib/practice-schema';
+import { propositionsByAuthor } from '../../lib/propositions';
 import { categoryLabel, resourcesBySubmitter } from '../../lib/resources';
 
 export async function getStaticPaths() {
@@ -39,13 +44,14 @@ export async function getStaticPaths() {
       props: {
         author,
         practices: await practicesByAuthor(author.id),
+        propositions: await propositionsByAuthor(author.id),
         resources: resourcesBySubmitter(author.id),
       },
     })),
   );
 }
 
-const { author, practices, resources } = Astro.props;
+const { author, practices, propositions, resources } = Astro.props;
 
 const outcomes = {
   worked: practices.filter((practice) => practice.outcome === 'worked').length,
@@ -79,9 +85,12 @@ const outcomes = {
         <Badges institution={author.institution} />
       </div>
 
-      {/* Two counts, one line, separated by the rule this site uses between facts rather
-          than a middot — which at this size reads as part of the word after it. */}
-      <ul class="card__facts author__summary" role="list">
+      {/* One line per kind of contribution, stacked, rather than one line with rules between
+          them. Three counts and the outcome breakdown do not fit on a line at this size, and
+          a wrapped flex item keeps the border that was standing in for a separator — so the
+          second line began with a rule attached to nothing. Somebody with only practices,
+          which is nearly everybody, sees exactly one line either way. */}
+      <ul class="author__summary" role="list">
         <li>
           <span class="meta">
             {practices.length} published {practices.length === 1 ? 'practice' : 'practices'}
@@ -96,6 +105,16 @@ const outcomes = {
           }
         </li>
         {
+          propositions.length > 0 && (
+            <li>
+              <span class="meta">
+                {propositions.length}{' '}
+                {propositions.length === 1 ? 'proposition' : 'propositions'}
+              </span>
+            </li>
+          )
+        }
+        {
           resources.length > 0 && (
             <li>
               <span class="meta">
@@ -109,7 +128,7 @@ const outcomes = {
     </header>
 
     {
-      practices.length === 0 && resources.length === 0 && (
+      practices.length === 0 && propositions.length === 0 && resources.length === 0 && (
         <div class="empty">
           <p class="empty__heading">Nothing published yet.</p>
           <p>
@@ -127,6 +146,42 @@ const outcomes = {
           {practices.map((practice) => (
             <PracticeCard practice={practice} showAuthor={false} />
           ))}
+        </section>
+      )
+    }
+
+    {
+      propositions.length > 0 && (
+        <section>
+          <h2 class="author__section">Propositions</h2>
+
+          {/* The same list the propositions index uses, classes and all — those live in
+              corpus.css rather than in that page's scoped block, which is what makes one
+              claim look the same wherever it is read. */}
+          <ul class="proposition-list" role="list">
+            {propositions.map((proposition) => (
+              <li class="proposition-item">
+                <a
+                  class="proposition-item__link"
+                  href={path(`/propositions/${proposition.id}/`)}
+                >
+                  {proposition.statement}
+                </a>
+                <p class="card__facts proposition-item__facts">
+                  <span>{areaLabel(proposition.area)}</span>
+                  <span class="meta">
+                    {proposition.status === 'active'
+                      ? `Active since ${longDate(proposition.activatedAt)}`
+                      : `Proposed ${longDate(proposition.createdAt)}`}
+                  </span>
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          <p class="author__more">
+            <a href={path('/propositions/')}>All propositions</a>
+          </p>
         </section>
       )
     }
@@ -182,10 +237,15 @@ const outcomes = {
     margin-block-start: var(--space-md);
   }
 
-  /* Layout comes from .card__facts in corpus.css, which brings the rule between the two
-     counts with it. Only the spacing above is this page's business. */
   .author__summary {
-    margin-block-start: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    margin-block: var(--space-md) 0;
+    padding: 0;
+    list-style: none;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
   }
 
   .meta {

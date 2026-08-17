@@ -137,6 +137,14 @@ export async function getProposition(id: string): Promise<Proposition | undefine
   return (await readPropositions()).find((proposition) => proposition.id === id);
 }
 
+/** One person's propositions, for their author page. Both statuses, for the reason above: a
+ *  proposed claim is public and being rated is how it gets promoted. */
+export async function propositionsByAuthor(authorId: string): Promise<Proposition[]> {
+  return (await readPropositions()).filter(
+    (proposition) => proposition.author?.id === authorId,
+  );
+}
+
 // ══ Writes and the aggregate ══════════════════════════════════════════════════════════
 
 /**

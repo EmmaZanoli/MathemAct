@@ -165,9 +165,14 @@ import { path } from '../../lib/paths';
 
     const authorEl = document.querySelector<HTMLElement>('[data-author]')!;
     if (proposition.author) {
-      authorEl.textContent =
-        `Proposed by ${proposition.author.displayName}` +
-        (proposition.author.isPseudonym ? ' (a pseudonym)' : '');
+      authorEl.append('Proposed by ');
+      // /authors/view/, not /authors/<id>/, for the same reason this page exists: a
+      // proposition reached here is newer than the last build, and its author may be too.
+      const link = document.createElement('a');
+      link.href = path(`/authors/view/?id=${proposition.author.id}`);
+      link.textContent = proposition.author.displayName;
+      authorEl.append(link);
+      if (proposition.author.isPseudonym) authorEl.append(' (a pseudonym)');
     } else {
       const erased = document.createElement('span');
       erased.className = 'card__erased';
