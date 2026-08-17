@@ -87,18 +87,9 @@ const year = new Date().getFullYear();
 
     <header class:list={['site-header', { 'site-header--landing': landing }]}>
       <div class="shell site-header__inner">
-        <div class="brand-lockup">
-          <a class="wordmark" href={path('/')}>MathemAct</a>
-
-          {
-            landing && (
-              <span class="brand-kicker">
-                Documenting AI in<br />
-                Mathematical Practice
-              </span>
-            )
-          }
-        </div>
+        {/* Split so the landing header can set "Act" in the accent — the verb is the
+            point of the name, and the rest of the site leaves the span alone. */}
+        <a class="wordmark" href={path('/')}>Mathem<span class="wordmark__act">Act</span></a>
 
         <div class="header-end">
           <nav aria-label="Main">
@@ -188,7 +179,7 @@ const year = new Date().getFullYear();
     <footer class="site-footer">
       <div class="shell site-footer__inner">
         <div class="site-footer__brand">
-          <a class="wordmark" href={path('/')}>MathemAct</a>
+          <a class="wordmark" href={path('/')}>Mathem<span class="wordmark__act">Act</span></a>
           <span>Documenting AI in Mathematical Practice</span>
         </div>
 
@@ -375,7 +366,7 @@ const year = new Date().getFullYear();
   .site-footer {
     padding-block: var(--space-md);
     border: 0;
-    background: var(--home-navy);
+    background: var(--home-ink);
     color: var(--home-paper);
     font-size: var(--size-2);
   }
@@ -402,7 +393,17 @@ const year = new Date().getFullYear();
     color: white;
   }
 
-  .site-footer__brand span {
+  /* Paper, not the accent: --home-red on --home-ink is 2.6:1 and the wordmark is text.
+     The split still reads, because the footer mark is small and the header carries it. */
+  .site-footer__brand .wordmark__act {
+    color: inherit;
+  }
+
+  /* Direct child only. The wordmark now contains a span of its own, and a descendant
+     selector here set "Act" in 12px muted grey — the same shape of trap as the
+     `.card__facts > li + li` one in CLAUDE.md, and just as quiet: it reads as a
+     deliberate lockup rather than as a rule matching one element too many. */
+  .site-footer__brand > span {
     font-size: var(--size-0);
     color: color-mix(in srgb, var(--home-paper) 72%, transparent);
   }
@@ -480,41 +481,46 @@ const year = new Date().getFullYear();
     }
   }
 
-  /* ── Landing variant ───────────────────────────────────────────────────────── */
+  /* ── Landing variant ───────────────────────────────────────────────────────────────
+     A masthead rather than a utility bar: a large serif wordmark on the left, and the
+     sections set as small letterspaced capitals on the right so they read as a contents
+     list and never compete with the headline underneath. */
 
-  .brand-lockup {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-sm);
-  }
+  /* Wider than the 72rem reading shell, and set on the body so the header, the hero, and
+     the footer all measure from the same edge — the wordmark sitting directly above the
+     first letter of the headline is most of what makes the masthead read as one. A
+     reading page keeps the narrower default; this is a poster, not a column of prose. */
+  .landing-body {
+    --shell-width: 80rem;
 
-  .brand-kicker {
-    display: none;
+    /* The focus ring is chalk blue everywhere else, which is a colour that does not
+       appear on this page at all — a ring in it reads as a rendering fault rather than
+       as focus. Ink is 16:1 here, well past the 3:1 an indicator needs, and it is
+       legible against both the paper and the red button it has to outline. */
+    --focus-ring: var(--focus-width) solid var(--home-ink);
   }
 
   .site-header--landing {
-    border-block-end: 0;
+    border-block-end: 1px solid var(--home-rule);
     background: var(--home-paper);
   }
 
   .site-header--landing .site-header__inner {
     align-items: center;
-    padding-block: var(--space-lg);
+    padding-block: var(--space-md);
   }
 
   .site-header--landing .wordmark {
     color: var(--home-ink);
-    font-size: 2rem;
+    font-size: clamp(1.75rem, 2.6vw, 2.25rem);
   }
 
-  .site-header--landing .brand-kicker {
-    display: block;
-    max-width: 12rem;
-    padding-block-start: 0.1rem;
-    color: var(--ink-muted);
-    font-size: var(--size-0);
-    font-weight: var(--weight-semibold);
-    line-height: 1.25;
+  .site-header--landing .wordmark:hover {
+    color: var(--home-ink);
+  }
+
+  .site-header--landing .wordmark__act {
+    color: var(--home-red);
   }
 
   .site-header--landing .header-end {
@@ -522,16 +528,46 @@ const year = new Date().getFullYear();
   }
 
   .site-header--landing .nav {
-    gap: clamp(var(--space-sm), 3vw, var(--space-xl));
+    align-items: center;
+    gap: clamp(var(--space-sm), 3vw, var(--space-2xl));
+    font-size: var(--size-1);
   }
 
   .site-header--landing .nav a {
     color: var(--home-ink);
     font-weight: var(--weight-semibold);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
   }
 
   .site-header--landing .nav a:hover {
-    color: var(--home-teal);
+    color: var(--home-red);
+  }
+
+  .site-header--landing .nav__account {
+    border-inline-start-color: var(--home-rule);
+  }
+
+  /* The current section is marked by a dot below it rather than the reading pages' rule:
+     at this tracking an underline collides with the letter spacing and reads as a text
+     decoration. Still not colour alone — the dot is the second cue. */
+  .site-header--landing .nav a[aria-current='page'] {
+    position: relative;
+    padding-block-end: 0;
+    border-block-end: 0;
+    color: var(--home-red);
+  }
+
+  .site-header--landing .nav a[aria-current='page']::after {
+    content: '';
+    position: absolute;
+    inset-block-start: calc(100% + 0.45em);
+    inset-inline-start: 50%;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--home-red);
+    transform: translateX(-50%);
   }
 
   @media (max-width: 48rem) {
@@ -560,25 +596,9 @@ const year = new Date().getFullYear();
     }
   }
 
-  @media (max-width: 32rem) {
-    .brand-kicker {
-      display: none !important;
-    }
-  }
-
-  @media (max-height: 860px) {
+  @media (max-height: 720px) {
     .site-header--landing .site-header__inner {
-      padding-block: var(--space-md);
-    }
-
-    .site-header--landing .brand-kicker {
-      display: none !important;
-    }
-  }
-
-  @media (max-height: 500px) {
-    .site-header--landing .site-header__inner {
-      padding-block: var(--space-xs);
+      padding-block: var(--space-sm);
     }
   }
 </style>

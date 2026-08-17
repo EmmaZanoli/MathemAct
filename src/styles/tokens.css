@@ -30,23 +30,26 @@
   --accent-strong: #16405c; /* link hover and active         9.8:1 */
   --accent-wash: color-mix(in srgb, var(--accent) 8%, var(--ground));
 
-  /* ── Landing page ────────────────────────────────────────────────────────────── */
-  --home-paper: #fbfaf6;
-  --home-ink: #0b3142;
-  --home-navy: #0a3344;
-  --home-rule: #d6dfdc;
-  --home-mist: #eef7f5;
+  /* ── Landing page ──────────────────────────────────────────────────────────────────
+   * The home page and the shared footer run a second palette: warm paper, near-black
+   * ink, and exactly one accent. It is deliberately not the chalk-blue reading palette
+   * above — the landing page is a poster, the rest of the site is a corpus — but it is
+   * held to the same discipline. One red. Nothing borrows the outcome colours.
+   *
+   * Contrast is measured against --home-paper.
+   */
+  --home-paper: #f8f5ee; /* warm paper — the landing ground */
+  --home-panel: #fbf4e5; /* the tinted band, and the diagram's own ground */
+  --home-ink: #1a1a1a; /* headings and body                  16.0:1 */
+  --home-ink-soft: #4a4844; /* secondary prose and the diagram's rules  8.4:1 */
+  --home-rule: #ddd6c7; /* hairlines                           1.4:1, graphics only */
 
-  --home-teal: #21776f;
-  --home-teal-wash: #e2f2ee;
+  /* The one accent. Carries the wordmark, every link, both buttons, the section
+   * numbers, and the diagram. 6.2:1 as text on paper; white on it is 6.7:1. */
+  --home-red: #b1231a;
+  --home-red-strong: #8c1a12;
 
-  --home-violet: #7459a6;
-  --home-violet-wash: #eee9f7;
-
-  --home-gold: #a67721;
-  --home-gold-wash: #f7eedc;
-
-  --home-radius: 0.55rem;
+  --home-radius: 3px;
 
   /* ── Outcome semantics ────────────────────────────────────────────────────────────
    * worked / partially worked / did not work. These three appear NOWHERE else — the
@@ -74,6 +77,10 @@
   --font-serif: 'IBM Plex Serif', Cambria, Georgia, 'Times New Roman', serif;
   --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Helvetica, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, monospace;
+
+  /* Not part of the split above and not for prose. Kalam sets the annotations on the
+   * home page diagram only; see the note in public/fonts/fonts.css. */
+  --font-hand: 'Kalam', 'Segoe Script', 'Bradley Hand', cursive;
 
   /* Numeric scale, roughly 1.2–1.25 between steps. Body sits at 17px: this is long-form
    * reading, and 16px is a browser default rather than a decision. */

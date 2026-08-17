@@ -1510,3 +1510,54 @@ the outcome breakdown do not fit on one line, and a wrapped flex item keeps the 
 was standing in for a separator — so the second line opened with a rule attached to nothing.
 The counts are stacked, one per kind of contribution. Anybody with only practices, which is
 nearly everybody, still sees exactly one line.
+
+## 2026-08-17 — The landing page becomes a poster: one red, one diagram
+
+Designed to a supplied reference. The home page now runs a second palette — warm paper
+`#f8f5ee`, near-black ink `#1a1a1a`, and exactly one accent, a brick red `#b1231a` — in
+place of the teal / violet / gold trio it carried before. Those three colours are gone from
+`tokens.css`; nothing else referenced them.
+
+**Why a second palette is allowed here and nowhere else.** The reading pages are a corpus
+and the landing page is an argument for reading it. Chalk blue and the three outcome
+colours are load-bearing on a practice page — a colour there is a claim about a submission
+— and none of that machinery exists on the home page, so borrowing it would be decoration.
+What does carry across is the discipline: one accent, hairlines, near-zero radii, and the
+Serif / Sans / Mono split. The outcome colours are not touched.
+
+**This contradicts two lines of the "Design direction" section of CLAUDE.md**, which
+forbids cream grounds with warm accents and `01 / 02 / 03` markers where the content is not
+a sequence. The palette is a deliberate, instructed override; the numbers are arguably not
+one, since Educate → Agitate → Organize is a progression and the copy already called it
+"three connected parts". Both prohibitions have been rescoped in CLAUDE.md to the reading
+pages rather than deleted, so a future session does not "fix" this back out.
+
+**Kalam is a fourth font family, fenced to the diagram.** The reference drawing is
+handwritten annotation, which is the whole point of it — mathematics as it is done on a
+board, rather than a decorative pseudo-formula this audience would read as an insult. It is
+self-hosted like Plex (constraint 6: no Google Fonts CDN, and the supplied HTML linked
+three faces from it), latin subset only, one weight, ~22 KB, and it is not available to
+prose. The Greek α falls through to the serif stack, which is what the drawing did anyway.
+
+**The diagram's colours were rerouted through the tokens** rather than kept as supplied. It
+arrived with its own red (`#D42B2B`) and its own greys; shipping those would have put two
+nearly-identical reds on one screen, which is exactly the drift `tokens.css` exists to
+prevent. Every fill and stroke is now a class.
+
+**The landing shell is 80rem, not the 72rem reading width**, set on `.landing-body` so the
+header, the hero and the footer all measure from one edge — the wordmark sitting directly
+above the first letter of the headline is most of what makes the masthead read as one
+object. The focus ring is overridden to ink on the same selector, because chalk blue does
+not appear on this page and a ring in it reads as a rendering fault.
+
+**Two traps, both already in CLAUDE.md, hit again while building this.**
+
+`text-wrap: balance` from `base.css` applies to the hero `h1` through `:where()`, and
+balancing a display headline is wrong: it evened the rag by pulling "is" down and split one
+sentence into three short lines. Set `text-wrap: wrap` to opt out. The measure is now the
+grid column, not a `max-width` in `ch` that has to be re-guessed whenever the grid changes.
+
+`.site-footer__brand span` matched one element too many the moment the wordmark gained a
+span of its own, setting "Act" in 12px muted grey in the footer — the same shape as the
+`.card__facts > li + li` entry above, and just as quiet, because it reads as a deliberate
+lockup rather than as a bug. Now `> span`.
