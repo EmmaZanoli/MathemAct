@@ -1373,3 +1373,37 @@ incorrect. Editing and resubmitting is one deliberate action.
 so 'send back' reaches the author but they cannot yet act on it" in the "What exists"
 section can now be removed. `docs/moderation.md` carries the authoritative list.
 
+
+## 2026-08-17 — /authors/view/, because an author's first practice has no author page
+
+Author pages come from `getStaticPaths` over `listAuthors()`, which reads the committed
+corpus. So `/authors/<id>/` exists only for somebody who already had a published practice
+at the last export — and a person's *first* practice therefore goes live with their name on
+it and a 404 under it, until the nightly build catches up. That window is the worst possible
+one: a new contributor has just posted and is showing the link to a colleague. With the
+corpus still empty, it was every author.
+
+`/authors/view/?id=<uuid>` is the same answer `/practices/view/` and `/propositions/view/`
+already give: a client-rendered shell that fetches what the static page bakes in — the
+profile, the author's published practices, and `practice_staleness` for the tombstones.
+`/authors/<id>/` stays the canonical URL, and nothing links to the view page except pages
+that are themselves runtime-rendered.
+
+**The tombstone is fetched rather than assumed.** The practice view page omits the staleness
+block because a fresh practice has no confirmations, so it would be empty either way. An
+author page is different: it is where a reader judges a body of work, and rendering every
+square as `unverified` would misreport the ones that are confirmed. One extra request against
+`public.practice_staleness`, keyed by practice id, and a missing key means `unverified` — a
+practice nobody has confirmed has no row there for the same reason it has an open square.
+
+**Everything this page links to is a view page too.** A card title pointing at
+`/practices/<id>/` would reintroduce the same 404 one level down, and for the same reason:
+this page exists precisely when the export cannot be trusted to contain the rows.
+
+**What still points at the static page.** `PracticeCard` and `/practices/<id>/` are built
+from the corpus, so their author links are always to a page the same build generated. The
+one link that was broken was in `/practices/view/`, and it is the one that changed.
+
+**CLAUDE.md note** — the "Fresh cards link to /practices/view/?id=<id>" trap bullet now has
+a third view page to name, and the repo layout entry for `src/pages/authors/` covers two
+files rather than one.

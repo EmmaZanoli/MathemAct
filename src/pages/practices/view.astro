@@ -232,7 +232,10 @@ import { path } from '../../lib/paths';
     const authorBlock = document.querySelector<HTMLElement>('[data-author-block]')!;
     if (practice.author) {
       const link = document.createElement('a');
-      link.href = path(`/authors/${practice.author.id}/`);
+      // /authors/view/, not /authors/<id>/. Author pages are generated from the corpus, so
+      // the author of a practice this new may have no static page yet — this is somebody's
+      // first submission more often than not. The view page reads live and always resolves.
+      link.href = path(`/authors/view/?id=${practice.author.id}`);
       link.textContent = practice.author.displayName;
       authorBlock.appendChild(link);
       if (practice.author.isPseudonym) {
