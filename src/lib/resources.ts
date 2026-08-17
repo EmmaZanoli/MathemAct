@@ -67,6 +67,12 @@ export function getResource(id: string): Resource | undefined {
   return listResources().find((r) => r.id === id);
 }
 
+/** One person's published resources, for their author page. Erased submitters are absent by
+ *  construction: their rows keep the resource and lose the name. */
+export function resourcesBySubmitter(submitterId: string): Resource[] {
+  return listResources().filter((r) => r.submitter?.id === submitterId);
+}
+
 /**
  * Client-side URL normalisation, kept in sync with private.normalise_url() in
  * supabase/migrations/20260816100000_resources.sql.

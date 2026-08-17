@@ -48,6 +48,8 @@ export interface FreshPractice {
   readonly outcome: 'worked' | 'partial' | 'failed';
   readonly createdAt: string;
   readonly authorName: string | null;
+  /** Null for an erased account, and always null when `authorName` is. */
+  readonly authorId: string | null;
   readonly tools: readonly { name: string; version: string }[];
   readonly tags: readonly string[];
 }
@@ -110,7 +112,7 @@ async function ask<T>(query: string): Promise<T[]> {
 export async function practicesSince(since: string): Promise<FreshPractice[]> {
   const select = [
     'id,title,aim,area,task_type,outcome,created_at',
-    'author:profiles!practices_author_id_fkey(display_name,is_pseudonym)',
+    'author:profiles!practices_author_id_fkey(id,display_name,is_pseudonym)',
     'practice_tools(tool_name,tool_version)',
     'practice_tags(tags(code))',
   ].join(',');
@@ -129,9 +131,10 @@ export async function practicesSince(since: string): Promise<FreshPractice[]> {
     taskType: row.task_type,
     outcome: row.outcome,
     createdAt: row.created_at,
-    // The name only. A fresh card carries no institutional badge, because a badge is an
+    // The name and the id it links to. No institutional badge, because a badge is an
     // attestation with a date on it and the date is not in this query.
     authorName: row.author?.display_name ?? null,
+    authorId: row.author?.id ?? null,
     tools: (row.practice_tools ?? []).map((tool) => ({
       name: tool.tool_name,
       version: tool.tool_version,
@@ -165,7 +168,7 @@ interface RawFreshPractice {
   task_type: string;
   outcome: 'worked' | 'partial' | 'failed';
   created_at: string;
-  author: { display_name: string; is_pseudonym: boolean } | null;
+  author: { id: string; display_name: string; is_pseudonym: boolean } | null;
   practice_tools: { tool_name: string; tool_version: string }[];
   practice_tags: { tags: { code: string } | null }[];
 }

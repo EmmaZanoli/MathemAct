@@ -221,6 +221,7 @@ const groups = [
    */
   import { practicesSince } from '../../lib/fresh';
   import type { FreshPractice } from '../../lib/fresh';
+  import { path } from '../../lib/paths';
   import { areaLabel, taskTypeLabel } from '../../lib/practice-schema';
   import { OUTCOME, tombstoneName } from '../../lib/status';
 
@@ -560,7 +561,24 @@ const groups = [
     put(node, '[data-aim]', practice.aim);
     put(node, '[data-area]', areaLabel(practice.area));
     put(node, '[data-task]', taskTypeLabel(practice.taskType));
-    put(node, '[data-author]', practice.authorName ?? 'Author since erased');
+
+    // Linked, and to /authors/view/ rather than /authors/<id>/. Author pages are generated
+    // from the corpus, so the author of a practice this new frequently has no static page —
+    // it is often their first submission. Same reasoning as the title link above.
+    const author = node.querySelector<HTMLElement>('[data-author]');
+    if (author) {
+      if (practice.authorName && practice.authorId) {
+        const link = document.createElement('a');
+        link.href = path(`/authors/view/?id=${practice.authorId}`);
+        link.textContent = practice.authorName;
+        author.append(link);
+      } else {
+        const erased = document.createElement('span');
+        erased.className = 'card__erased';
+        erased.textContent = 'Author since erased';
+        author.append(erased);
+      }
+    }
 
     const tools = node.querySelector<HTMLElement>('[data-tools]');
     if (tools) {

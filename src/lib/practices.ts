@@ -138,17 +138,12 @@ export async function practicesByAuthor(authorId: string): Promise<Practice[]> {
   return (await readCorpus()).filter((practice) => practice.author?.id === authorId);
 }
 
-/** Everyone with at least one published practice. Erased accounts are absent by
- *  construction: their contributions have no author to page. */
-export async function listAuthors(): Promise<CorpusAuthor[]> {
-  const authors = new Map<string, CorpusAuthor>();
-
-  for (const practice of await readCorpus()) {
-    if (practice.author) authors.set(practice.author.id, practice.author);
-  }
-
-  return [...authors.values()];
-}
+/* `listAuthors()` used to live here and returned everyone with a published practice. It was
+ * what getStaticPaths built author pages from, which meant a person whose only contribution
+ * was a resource had no page and every link to them was a permanent 404. `listContributors()`
+ * in src/lib/authors.ts is the union that replaced it. Deliberately not left behind as an
+ * unused export: the next person to need "the list of author pages" would find this one
+ * first, and it is the wrong answer to that question. */
 
 /** The distinct tool names in the corpus, for the listing filter. Case-folded so that
  *  "Lean" and "lean" are one filter rather than two. */

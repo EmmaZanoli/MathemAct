@@ -11,9 +11,9 @@
  *
  * Pattern and rationale: same as /practices/view/, /propositions/view/ and /moderate/. Anon
  * fetches against PostgREST get what the static page bakes in — the profile, the published
- * practices, and the staleness aggregate that decides each tombstone. `/authors/<id>/` stays
- * the canonical URL once a build has run; nothing links here except pages that are
- * themselves runtime-rendered.
+ * practices, the staleness aggregate that decides each tombstone, and the resources this
+ * person has submitted. `/authors/<id>/` stays the canonical URL once a build has run;
+ * nothing links here except pages that are themselves runtime-rendered.
  *
  * **Everything this page links to is a runtime-rendered view page**, because this page
  * exists precisely when the export cannot be trusted to contain the rows. A card title
@@ -59,10 +59,15 @@ import { path } from '../../lib/paths';
           <Badges pending />
         </div>
 
-        <p class="author__summary">
-          <span class="meta" data-count></span>
-          <span class="author__breakdown" data-breakdown hidden></span>
-        </p>
+        <ul class="card__facts author__summary" role="list">
+          <li>
+            <span class="meta" data-count></span>
+            <span class="author__breakdown" data-breakdown hidden></span>
+          </li>
+          <li data-resource-count-item hidden>
+            <span class="meta" data-resource-count></span>
+          </li>
+        </ul>
       </header>
 
       <div class="empty" data-none hidden>
@@ -73,7 +78,16 @@ import { path } from '../../lib/paths';
         </p>
       </div>
 
-      <div data-listing></div>
+      <section data-practices hidden>
+        <h2 class="author__section">Practices</h2>
+        <div data-listing></div>
+      </section>
+
+      <section data-resources hidden>
+        <h2 class="author__section">Resources submitted</h2>
+        <ul class="author__resources" role="list" data-resource-list></ul>
+        <p class="author__more"><a href={path('/resources/')}>All resources</a></p>
+      </section>
     </div>
 
     {/* Cloned per practice. The Tombstone is rendered here rather than assembled in script
@@ -97,6 +111,27 @@ import { path } from '../../lib/paths';
         <ul class="card__tools" role="list" data-tools></ul>
       </article>
     </template>
+
+    {/* One submitted resource. Same two lines as the static page: what it is, then where it
+        goes and what kind of thing it is. */}
+    <template data-resource-card>
+      <li class="author__resource">
+        <p class="author__resource-title">
+          <a data-title rel="noopener noreferrer" target="_blank"></a>
+          <span
+            class="author__broken"
+            title="This link was unreachable at the last monthly check"
+            data-broken
+            hidden>Link may be broken</span
+          >
+        </p>
+
+        <ul class="card__facts" role="list">
+          <li><span class="meta" data-url></span></li>
+          <li data-category></li>
+        </ul>
+      </li>
+    </template>
   </div>
 </Base>
 
@@ -110,14 +145,10 @@ import { path } from '../../lib/paths';
     margin-block-start: var(--space-md);
   }
 
+  /* Layout comes from .card__facts in corpus.css. Kept identical to /authors/<id>/, which
+     this page stands in for — see the note at the top of the file. */
   .author__summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3xs);
-    align-items: baseline;
     margin-block-start: var(--space-md);
-    color: var(--ink-muted);
-    font-size: var(--size-2);
   }
 
   .meta {
@@ -125,12 +156,59 @@ import { path } from '../../lib/paths';
     font-size: var(--size-1);
     letter-spacing: var(--tracking-wide);
   }
+
+  .author__section {
+    margin-block: var(--space-xl) 0;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    font-weight: var(--weight-normal);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+
+  .author__resources {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .author__resource {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    padding-block: var(--space-sm);
+    border-block-start: var(--border);
+  }
+
+  .author__resource-title {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    align-items: baseline;
+    margin: 0;
+  }
+
+  .author__broken {
+    font-size: var(--size-1);
+    font-style: italic;
+    color: var(--ink-muted);
+  }
+
+  .author__more {
+    margin-block-start: var(--space-md);
+    font-size: var(--size-2);
+  }
 </style>
 
 <script>
   import { verificationMonth } from '../../lib/format';
   import { areaLabel, taskTypeLabel } from '../../lib/practice-schema';
   import { path } from '../../lib/paths';
+  // categoryLabel only. Importing listResources here would pull data/resources.json into
+  // this page's bundle, and the whole point of this page is that it reads live.
+  import { categoryLabel } from '../../lib/resources';
+  import type { ResourceCategory, ResourceLinkStatus } from '../../lib/resources';
   import { OUTCOME, TOMBSTONE_STATUS, tombstoneName } from '../../lib/status';
   import type { Outcome, TombstoneStatus } from '../../lib/status';
 
@@ -177,15 +255,31 @@ import { path } from '../../lib/paths';
     }
     badges.hidden = false;
 
-    const practices = await fetchPractices(authorId);
+    // Both corpora at once. A resource submitter is a contributor whether or not they have
+    // ever posted a practice, which is why /authors/<id>/ exists for them too.
+    const [practices, resources] = await Promise.all([
+      fetchPractices(authorId),
+      fetchResources(authorId),
+    ]);
 
     setText(
       '[data-count]',
       `${practices.length} published ${practices.length === 1 ? 'practice' : 'practices'}`,
     );
 
+    if (resources.length > 0) {
+      setText(
+        '[data-resource-count]',
+        `${resources.length} ${resources.length === 1 ? 'resource' : 'resources'} submitted`,
+      );
+      document.querySelector<HTMLElement>('[data-resource-count-item]')!.hidden = false;
+      renderResources(resources);
+    }
+
     if (practices.length === 0) {
-      document.querySelector<HTMLElement>('[data-none]')!.hidden = false;
+      if (resources.length === 0) {
+        document.querySelector<HTMLElement>('[data-none]')!.hidden = false;
+      }
       loadingEl.hidden = true;
       contentEl.hidden = false;
       return;
@@ -209,9 +303,35 @@ import { path } from '../../lib/paths';
     for (const practice of practices) {
       listing.append(card(template, practice, staleness.get(practice.id) ?? 'unverified'));
     }
+    document.querySelector<HTMLElement>('[data-practices]')!.hidden = false;
 
     loadingEl.hidden = true;
     contentEl.hidden = false;
+  }
+
+  function renderResources(resources: FetchedResource[]): void {
+    const template = document.querySelector<HTMLTemplateElement>('[data-resource-card]')!;
+    const list = document.querySelector<HTMLElement>('[data-resource-list]')!;
+
+    for (const resource of resources) {
+      const node = (template.content.cloneNode(true) as DocumentFragment)
+        .firstElementChild as HTMLElement;
+
+      const title = node.querySelector<HTMLAnchorElement>('[data-title]')!;
+      title.textContent = resource.title;
+      title.href = resource.url;
+
+      if (resource.linkStatus === 'unreachable') {
+        node.querySelector<HTMLElement>('[data-broken]')!.hidden = false;
+      }
+
+      put(node, '[data-url]', resource.urlNormalised);
+      put(node, '[data-category]', categoryLabel(resource.category));
+
+      list.append(node);
+    }
+
+    document.querySelector<HTMLElement>('[data-resources]')!.hidden = false;
   }
 
   function card(
@@ -287,6 +407,15 @@ import { path } from '../../lib/paths';
       readonly country: string;
       readonly verifiedAt: string;
     } | null;
+  }
+
+  interface FetchedResource {
+    readonly id: string;
+    readonly title: string;
+    readonly url: string;
+    readonly urlNormalised: string;
+    readonly category: ResourceCategory;
+    readonly linkStatus: ResourceLinkStatus;
   }
 
   interface FetchedPractice {
@@ -385,6 +514,24 @@ import { path } from '../../lib/paths';
     }));
   }
 
+  /** This author's published resources, newest first. Same restated filters, same reason. */
+  async function fetchResources(id: string): Promise<FetchedResource[]> {
+    const rows = await ask<RawResource>(
+      'resources?select=id,title,url,url_normalised,category,link_status' +
+        `&submitter_id=eq.${encodeURIComponent(id)}` +
+        '&status=eq.published&deleted_at=is.null&order=created_at.desc',
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      url: row.url,
+      urlNormalised: row.url_normalised,
+      category: row.category,
+      linkStatus: row.link_status,
+    }));
+  }
+
   /** The tombstone status per practice, straight from public.practice_staleness. Never
    *  recomputed here: the same answer has to appear in a listing, on a page, and in the
    *  export. */
@@ -421,5 +568,14 @@ import { path } from '../../lib/paths';
   interface RawStaleness {
     practice_id: string;
     tombstone_status: TombstoneStatus;
+  }
+
+  interface RawResource {
+    id: string;
+    title: string;
+    url: string;
+    url_normalised: string;
+    category: ResourceCategory;
+    link_status: ResourceLinkStatus;
   }
 </script>

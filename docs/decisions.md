@@ -1422,3 +1422,48 @@ that variant exists rather than a line written somewhere else. And it sits *outs
 `.resource-card__submitter` rather than inside it, because `.badge-line` is a `<p>` and a
 `<p>` is not phrasing content — inside a `<span>` it is invalid markup. `.resource-card__meta`
 is a wrapping flex row, so a sibling lands where the child would have.
+
+## 2026-08-17 — Author pages cover resource submitters, and list what they submitted
+
+Two consequences of one fact: `getStaticPaths` built author pages from the practice corpus,
+so a person whose only contribution was a resource had no page — and `/resources/` linked
+their name to it anyway. Not a stale-export window like `/authors/view/` answers: a permanent
+404 that survived every rebuild.
+
+**`listContributors()` in src/lib/authors.ts** is the union of practice authors and resource
+submitters, and it is now the definition of which author pages exist. `listAuthors()` is gone
+rather than left as an unused export, because the next person looking for "the list of author
+pages" would have found it first and it is the wrong answer to that question.
+
+**Not everyone in data/profiles.json.** That file also holds people whose only contribution is
+a comment or a proposition, and nothing links a name from either — a page for them would be
+unreachable and Pagefind would index it as an almost-empty result. The rule is that a page
+exists exactly where a link to it exists. If comment authors ever become links, this is the
+function to change, not the page.
+
+**Its own file, not another function in practices.ts.** `resources.ts` statically imports
+data/resources.json, and practices.ts is imported by browser scripts including the submission
+form. Rollup does drop the JSON when only `categoryLabel` is reachable — checked, by grepping
+the built chunks for a string only the corpus contains — but "probably tree-shaken" is not a
+reason to put a build-time-only join into a module the browser loads.
+
+**Resources are listed, not carded.** Title, then the normalised URL and the category on one
+mono line under it. On this page the question is what someone thought worth passing on, not
+the full case for each link, which is what `/resources/` is for. A failed monthly link check
+is still stated — a broken link is a fact in the corpus — but in words, with no outcome colour
+and no tombstone: the glyph encodes verification of a *practice*, and spending it on link
+liveness would make all four states mean less.
+
+**Both kinds are labelled now.** With two sorts of contribution on one page, an unlabelled
+first list and a labelled second one would read as though the practices were the page and the
+resources an afterthought. The labels are set as every other label on this site is — mono,
+tracked out, quiet — and the two counts share one line, separated by the rule this site uses
+between facts rather than a middot, which at that size reads as part of the word after it.
+
+**The fresh listing cards link their author** to `/authors/view/?id=`, for the reason the card
+title already did: a practice new enough to arrive via the overlay is frequently somebody's
+first, so the static page may not exist yet. `FreshPractice` gained an `authorId`; the erased
+branch keeps the same italic "Author since erased" the static card shows.
+
+Verified against a local PostgREST stub — the resources branch of `/authors/view/` cannot be
+exercised against production, because no resource is published yet.

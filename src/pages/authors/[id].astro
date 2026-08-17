@@ -7,6 +7,14 @@
  * reader asks after an account they found useful. Anything more would turn a corpus into a
  * network, and the corpus is the point.
  *
+ * Practices first, then resources they have pointed at, because those are the two kinds of
+ * contribution anything links a name from. Resources are listed rather than carded: on this
+ * page the question is what someone found worth passing on, not the full case for each one,
+ * which is what /resources/ is for. The list is thin for the same reason the page is.
+ *
+ * A person can appear here with no practices at all — a resource submitter is a contributor.
+ * `listContributors()` is the union, and it is the definition of which pages exist.
+ *
  * The badge block says exactly what was verified and no more: an address at an
  * institution's domain was confirmed to work, on a date. Not employment, not position, not
  * seniority. A pseudonym is marked as one, at every tier, because a pseudonymous
@@ -17,21 +25,27 @@ import Badges from '../../components/Badges.astro';
 import PracticeCard from '../../components/PracticeCard.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
+import { listContributors } from '../../lib/authors';
 import { path } from '../../lib/paths';
-import { listAuthors, practicesByAuthor } from '../../lib/practices';
+import { practicesByAuthor } from '../../lib/practices';
+import { categoryLabel, resourcesBySubmitter } from '../../lib/resources';
 
 export async function getStaticPaths() {
-  const authors = await listAuthors();
+  const contributors = await listContributors();
 
   return Promise.all(
-    authors.map(async (author) => ({
+    contributors.map(async (author) => ({
       params: { id: author.id },
-      props: { author, practices: await practicesByAuthor(author.id) },
+      props: {
+        author,
+        practices: await practicesByAuthor(author.id),
+        resources: resourcesBySubmitter(author.id),
+      },
     })),
   );
 }
 
-const { author, practices } = Astro.props;
+const { author, practices, resources } = Astro.props;
 
 const outcomes = {
   worked: practices.filter((practice) => practice.outcome === 'worked').length,
@@ -42,7 +56,7 @@ const outcomes = {
 
 <Base
   title={author.displayName}
-  description={`Practices contributed to MathemAct by ${author.displayName}.`}
+  description={`Practices and resources contributed to MathemAct by ${author.displayName}.`}
 >
   <div class="shell corpus">
     <p class="breadcrumb">
@@ -65,23 +79,37 @@ const outcomes = {
         <Badges institution={author.institution} />
       </div>
 
-      <p class="author__summary">
-        <span class="meta">
-          {practices.length} published {practices.length === 1 ? 'practice' : 'practices'}
-        </span>
+      {/* Two counts, one line, separated by the rule this site uses between facts rather
+          than a middot — which at this size reads as part of the word after it. */}
+      <ul class="card__facts author__summary" role="list">
+        <li>
+          <span class="meta">
+            {practices.length} published {practices.length === 1 ? 'practice' : 'practices'}
+          </span>
+          {
+            practices.length > 0 && (
+              <span class="author__breakdown">
+                {' '}— {outcomes.worked} worked, {outcomes.partial} partly worked,{' '}
+                {outcomes.failed} did not
+              </span>
+            )
+          }
+        </li>
         {
-          practices.length > 0 && (
-            <span class="author__breakdown">
-              — {outcomes.worked} worked, {outcomes.partial} partly worked, {outcomes.failed}{' '}
-              did not
-            </span>
+          resources.length > 0 && (
+            <li>
+              <span class="meta">
+                {resources.length} {resources.length === 1 ? 'resource' : 'resources'}{' '}
+                submitted
+              </span>
+            </li>
           )
         }
-      </p>
+      </ul>
     </header>
 
     {
-      practices.length === 0 ? (
+      practices.length === 0 && resources.length === 0 && (
         <div class="empty">
           <p class="empty__heading">Nothing published yet.</p>
           <p>
@@ -89,12 +117,56 @@ const outcomes = {
             submissions are visible only to their author.
           </p>
         </div>
-      ) : (
-        <div>
+      )
+    }
+
+    {
+      practices.length > 0 && (
+        <section>
+          <h2 class="author__section">Practices</h2>
           {practices.map((practice) => (
             <PracticeCard practice={practice} showAuthor={false} />
           ))}
-        </div>
+        </section>
+      )
+    }
+
+    {
+      resources.length > 0 && (
+        <section>
+          <h2 class="author__section">Resources submitted</h2>
+
+          <ul class="author__resources" role="list">
+            {resources.map((resource) => (
+              <li class="author__resource">
+                <p class="author__resource-title">
+                  <a href={resource.url} rel="noopener noreferrer" target="_blank">
+                    {resource.title}
+                  </a>
+                  {resource.linkStatus === 'unreachable' && (
+                    <span
+                      class="author__broken"
+                      title="This link was unreachable at the last monthly check"
+                    >
+                      Link may be broken
+                    </span>
+                  )}
+                </p>
+
+                <ul class="card__facts" role="list">
+                  <li>
+                    <span class="meta">{resource.urlNormalised}</span>
+                  </li>
+                  <li>{categoryLabel(resource.category)}</li>
+                </ul>
+              </li>
+            ))}
+          </ul>
+
+          <p class="author__more">
+            <a href={path('/resources/')}>All resources</a>
+          </p>
+        </section>
       )
     }
   </div>
@@ -110,19 +182,65 @@ const outcomes = {
     margin-block-start: var(--space-md);
   }
 
+  /* Layout comes from .card__facts in corpus.css, which brings the rule between the two
+     counts with it. Only the spacing above is this page's business. */
   .author__summary {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3xs);
-    align-items: baseline;
     margin-block-start: var(--space-md);
-    color: var(--ink-muted);
-    font-size: var(--size-2);
   }
 
   .meta {
     font-family: var(--font-mono);
     font-size: var(--size-1);
     letter-spacing: var(--tracking-wide);
+  }
+
+  /* A section label rather than a title. There are two kinds of contribution on this page
+     now, so both are named — an unlabelled first list and a labelled second one would read
+     as though the practices were the page and the resources an afterthought. Set as the
+     labels elsewhere on this site are: mono, tracked out, quiet. */
+  .author__section {
+    margin-block: var(--space-xl) 0;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    font-weight: var(--weight-normal);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+
+  .author__resources {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .author__resource {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    padding-block: var(--space-sm);
+    border-block-start: var(--border);
+  }
+
+  .author__resource-title {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    align-items: baseline;
+    margin: 0;
+  }
+
+  /* Stated in words, not in colour. A resource whose link failed the monthly check is still
+     part of the corpus and still worth seeing — it is a fact about the link, not a verdict
+     on the contribution, so it gets no outcome colour and no tombstone. */
+  .author__broken {
+    font-size: var(--size-1);
+    font-style: italic;
+    color: var(--ink-muted);
+  }
+
+  .author__more {
+    margin-block-start: var(--space-md);
+    font-size: var(--size-2);
   }
 </style>
