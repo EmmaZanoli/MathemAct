@@ -124,26 +124,22 @@ const year = new Date().getFullYear();
                 )
               }
 
-              {
-                !landing && (
-                  <li class="nav__account" data-account-link="out" hidden>
-                    <a href={path('/account/sign-in/')}>Sign in</a>
-                  </li>
-                )
-              }
+              {/* Unconditional, unlike the search box and the moderation link above: the
+                  way back to your own account is the one header control that has to be in
+                  the same corner on every page, landing included. Exactly one of these two
+                  is revealed by the script below. */}
+              <li class="nav__account" data-account-link="out" hidden>
+                <a href={path('/account/sign-in/')}>Sign in</a>
+              </li>
 
-              {
-                !landing && (
-                  <li class="nav__account" data-account-link="in" hidden>
-                    <a
-                      href={path('/account/')}
-                      aria-current={here === path('/account/') ? 'page' : undefined}
-                    >
-                      Account
-                    </a>
-                  </li>
-                )
-              }
+              <li class="nav__account" data-account-link="in" hidden>
+                <a
+                  href={path('/account/')}
+                  aria-current={here === path('/account/') ? 'page' : undefined}
+                >
+                  Account
+                </a>
+              </li>
             </ul>
           </nav>
 
