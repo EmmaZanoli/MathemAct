@@ -137,6 +137,9 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
         <p class="submission__note-head">Changes asked for</p>
         <p data-note></p>
       </div>
+      <p class="actions" data-edit-block hidden>
+        <a class="button button--secondary" data-edit-link href="">Edit and resubmit</a>
+      </p>
     </li>
   </template>
 
@@ -195,6 +198,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 <script>
   import { readAuthErrorFromUrl } from '../../lib/auth';
   import { longDate, verificationMonth } from '../../lib/format';
+  import { path } from '../../lib/paths';
   import { loadOwnSubmissions } from '../../lib/practices';
   import type { OwnSubmission } from '../../lib/practices';
   import { loadProfile, saveProfile } from '../../lib/profile';
@@ -305,6 +309,14 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
         if (submission.note) {
           query<HTMLElement>('[data-note-block]', row).hidden = false;
           query<HTMLElement>('[data-note]', row).textContent = submission.note;
+
+          // "Sent back" means pending + has a note. Show the edit link.
+          if (submission.status === 'pending' && !submission.deletedAt) {
+            const editBlock = query<HTMLElement>('[data-edit-block]', row);
+            editBlock.hidden = false;
+            query<HTMLAnchorElement>('[data-edit-link]', row).href =
+              path(`/account/edit-submission/?id=${submission.id}`);
+          }
         }
 
         return row;

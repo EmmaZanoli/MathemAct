@@ -343,6 +343,160 @@ export async function loadOwnSubmissions(userId: string): Promise<Result<OwnSubm
   }
 }
 
+// ── Editing a pending submission ──────────────────────────────────────────────────────
+
+/** Full practice data needed to pre-fill the edit form. */
+export interface PendingPracticeForEdit {
+  readonly id: string;
+  readonly title: string;
+  readonly area: Area;
+  readonly taskType: TaskType;
+  readonly aim: string;
+  readonly method: string;
+  readonly outcome: Outcome;
+  readonly outcomeNotes: string;
+  readonly verification: string;
+  readonly transcriptExcerpt: string | null;
+  readonly transcriptUrl: string | null;
+  readonly caveats: string | null;
+  readonly thirdPartyMaterialConfirmed: boolean;
+  readonly timeSpentMinutes: number | null;
+  readonly wasPublished: boolean | null;
+  readonly wasDisclosed: boolean | null;
+  readonly authorConfidence: number | null;
+  readonly moderationNote: string | null;
+  readonly moderationNoteAt: string | null;
+  readonly tools: readonly { id: string; name: string; version: string; usedOn: string }[];
+  readonly tagCodes: readonly string[];
+}
+
+/**
+ * The full content of one pending practice, owned by the caller.
+ *
+ * Used to pre-fill the edit form. The explicit author_id and status filters agree with the
+ * practices_select_own and practices_update_own_pending policies, which are the true guards.
+ */
+export async function loadPendingPractice(
+  practiceId: string,
+  userId: string,
+): Promise<Result<PendingPracticeForEdit>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('practices')
+      .select(
+        'id, title, area, task_type, aim, method, outcome, outcome_notes, verification,' +
+        'transcript_excerpt, transcript_url, caveats, third_party_material_confirmed,' +
+        'time_spent_minutes, was_published, was_disclosed, author_confidence,' +
+        'moderation_note, moderation_note_at,' +
+        'practice_tools(id, tool_name, tool_version, used_on),' +
+        'practice_tags(tags(code))',
+      )
+      .eq('id', practiceId)
+      .eq('author_id', userId)
+      .eq('status', 'pending')
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return { ok: false, message: 'This submission was not found, or it is no longer pending.' };
+      }
+      return { ok: false, message: describe(error) };
+    }
+    if (!data) return { ok: false, message: 'Not found.' };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tools = ((data as any).practice_tools ?? []) as {
+      id: string; tool_name: string; tool_version: string; used_on: string;
+    }[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tagLinks = ((data as any).practice_tags ?? []) as { tags: { code: string } | null }[];
+
+    return {
+      ok: true,
+      value: {
+        id: data.id as string,
+        title: data.title as string,
+        area: data.area as Area,
+        taskType: data.task_type as TaskType,
+        aim: data.aim as string,
+        method: data.method as string,
+        outcome: data.outcome as Outcome,
+        outcomeNotes: data.outcome_notes as string,
+        verification: data.verification as string,
+        transcriptExcerpt: (data.transcript_excerpt as string | null) ?? null,
+        transcriptUrl: (data.transcript_url as string | null) ?? null,
+        caveats: (data.caveats as string | null) ?? null,
+        thirdPartyMaterialConfirmed: data.third_party_material_confirmed as boolean,
+        timeSpentMinutes: (data.time_spent_minutes as number | null) ?? null,
+        wasPublished: (data.was_published as boolean | null) ?? null,
+        wasDisclosed: (data.was_disclosed as boolean | null) ?? null,
+        authorConfidence: (data.author_confidence as number | null) ?? null,
+        moderationNote: (data.moderation_note as string | null) ?? null,
+        moderationNoteAt: (data.moderation_note_at as string | null) ?? null,
+        tools: tools.map((t) => ({
+          id: t.id,
+          name: t.tool_name,
+          version: t.tool_version,
+          usedOn: t.used_on,
+        })),
+        tagCodes: tagLinks.flatMap((pt) => (pt.tags ? [pt.tags.code] : [])),
+      },
+    };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/**
+ * Replace a pending practice's content in one transaction.
+ *
+ * Calls the resubmit_practice RPC, which is the only way to replace the tool set atomically
+ * while satisfying the deferred at-least-one-tool constraint. Same reasoning as submitPractice.
+ */
+export async function resubmitPractice(
+  practiceId: string,
+  submission: Submission,
+): Promise<Result<void>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { error } = await supabase.rpc('resubmit_practice', {
+      p_practice_id: practiceId,
+      p_title: submission.title.trim(),
+      p_area: submission.area,
+      p_task_type: submission.taskType,
+      p_tools: submission.tools.map((tool) => ({
+        name: tool.name.trim(),
+        version: tool.version.trim(),
+        used_on: tool.usedOn,
+      })),
+      p_aim: submission.aim.trim(),
+      p_method: submission.method.trim(),
+      p_outcome: submission.outcome,
+      p_outcome_notes: submission.outcomeNotes.trim(),
+      p_verification: submission.verification.trim(),
+      p_third_party_material_confirmed: submission.thirdPartyMaterialConfirmed,
+      p_transcript_excerpt: submission.transcriptExcerpt.trim() || null,
+      p_transcript_url: submission.transcriptUrl.trim() || null,
+      p_caveats: submission.caveats.trim() || null,
+      p_time_spent_minutes: submission.timeSpentMinutes,
+      p_was_published: submission.wasPublished,
+      p_was_disclosed: submission.wasDisclosed,
+      p_author_confidence: submission.authorConfidence,
+      p_tag_codes: submission.tagCodes,
+    });
+
+    if (error) return { ok: false, message: describe(error) };
+    return { ok: true, value: undefined };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
 // ── Still works / no longer works ─────────────────────────────────────────────────────
 
 export type Verdict = 'still_works' | 'no_longer_works';

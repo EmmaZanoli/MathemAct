@@ -11,6 +11,7 @@ import Base from '../../layouts/Base.astro';
 import Badges from '../../components/Badges.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
+import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { CATEGORIES, categoryLabel, listResources } from '../../lib/resources';
 import type { ResourceCategory } from '../../lib/resources';
@@ -25,7 +26,7 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
   title="Resources"
   description="Community-curated links to AI tools, educational materials, and guidelines for mathematicians."
 >
-  <div class="shell corpus resource-corpus" data-corpus>
+  <div class="shell corpus resource-corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
     <header class="corpus__header">
       <h1>Resources</h1>
       <p class="corpus__lead">
@@ -131,6 +132,25 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     <p class="corpus__submit">
       <a class="button button--primary" href={path('/resources/new/')}>Submit a resource</a>
     </p>
+
+    {/* Fresh resources link directly to the external URL — no view page needed, because
+        a resource is a pointer to an external thing, not a page on this site. */}
+    <template data-fresh-resource>
+      <li class="resource-card" data-fresh>
+        <p class="card__fresh">
+          <span class="mono">new since the last build</span>
+        </p>
+        <div class="resource-card__head">
+          <a class="resource-card__title" data-title rel="noopener noreferrer" target="_blank"></a>
+        </div>
+        <p class="resource-card__url mono" data-url></p>
+        <p class="resource-card__description" data-description></p>
+        <p class="resource-card__relevance" data-relevance></p>
+        <div class="resource-card__meta">
+          <span class="resource-card__category mono" data-category-label></span>
+        </div>
+      </li>
+    </template>
   </div>
 </Base>
 
@@ -192,6 +212,75 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
       applyFilter(input.value);
     });
   }
+
+  // ── Freshness overlay ─────────────────────────────────────────────────────────────────
+  //
+  // Resources link to external URLs, so fresh cards carry the real link directly — no
+  // view page needed. Everything here fails silently; see src/lib/fresh.ts.
+
+  void (async () => {
+    const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
+    const resourceList = document.querySelector<HTMLElement>('[data-resource-list]');
+    const template = document.querySelector<HTMLTemplateElement>('[data-fresh-resource]');
+    const emptyEl = document.querySelector<HTMLElement>('.corpus__empty');
+
+    if (!since || !template) return;
+
+    const { resourcesSince } = await import('../../lib/fresh');
+    const { categoryLabel } = await import('../../lib/resources');
+
+    const fresh = await resourcesSince(since);
+    if (fresh.length === 0) return;
+
+    // If the page was empty (no exported resources), hide the empty message and
+    // create a list to receive the fresh cards.
+    let targetList = resourceList;
+    if (!targetList) {
+      if (emptyEl) emptyEl.hidden = true;
+      targetList = document.createElement('ul');
+      targetList.className = 'resource-list';
+      targetList.setAttribute('role', 'list');
+      targetList.dataset.resourceList = '';
+      document.querySelector('[data-corpus]')?.insertBefore(
+        targetList,
+        document.querySelector('.corpus__submit'),
+      );
+    }
+
+    for (const resource of fresh) {
+      const node = (template.content.cloneNode(true) as DocumentFragment)
+        .firstElementChild as HTMLElement;
+
+      node.dataset.category = resource.category;
+
+      const titleEl = node.querySelector<HTMLAnchorElement>('[data-title]');
+      if (titleEl) {
+        titleEl.textContent = resource.title;
+        titleEl.href = resource.url;
+      }
+
+      const urlEl = node.querySelector<HTMLElement>('[data-url]');
+      if (urlEl) urlEl.textContent = resource.urlNormalised;
+
+      const descEl = node.querySelector<HTMLElement>('[data-description]');
+      if (descEl) descEl.textContent = resource.description;
+
+      const relEl = node.querySelector<HTMLElement>('[data-relevance]');
+      if (relEl) relEl.textContent = resource.relevance;
+
+      const catEl = node.querySelector<HTMLElement>('[data-category-label]');
+      if (catEl) catEl.textContent = categoryLabel(resource.category as Parameters<typeof categoryLabel>[0]);
+
+      targetList.prepend(node);
+    }
+
+    // Update the visible count.
+    const countEl = document.querySelector<HTMLElement>('[data-count]');
+    if (countEl) {
+      const total = targetList.querySelectorAll('.resource-card:not([hidden])').length;
+      countEl.textContent = `${total} resource${total === 1 ? '' : 's'}`;
+    }
+  })();
 </script>
 
 <style>

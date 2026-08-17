@@ -947,3 +947,19 @@
   background: var(--accent-wash);
   color: var(--accent-strong);
 }
+
+/* The freshness marker on cards and resource items that arrived after the last export.
+ * Lives here rather than in a page's scoped styles because practices and resources both
+ * show it, and scoped styles from one page cannot reach cloned template nodes in another. */
+.card__fresh {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3xs) var(--space-2xs);
+  font-size: var(--size-1);
+  color: var(--ink-muted);
+}
+
+.card__fresh .mono {
+  font-family: var(--font-mono);
+  letter-spacing: var(--tracking-wide);
+}

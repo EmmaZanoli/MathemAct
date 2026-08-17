@@ -138,12 +138,12 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
       )
     }
 
-    {/* One suggested since the export. Its statement is not a link for the same reason a
-        fresh practice's title is not: /propositions/<id>/ is generated at build time from
-        the export, so the page does not exist yet. */}
+    {/* One suggested since the export. Links to /propositions/view/?id=<id>, the
+        client-rendered viewer, because /propositions/<id>/ is generated at build time
+        from the export and does not exist yet for rows newer than the last build. */}
     <template data-fresh-proposition>
       <li class="proposition-item" data-fresh>
-        <p class="proposition-item__link" data-statement></p>
+        <a class="proposition-item__link" data-statement></a>
         <p class="card__facts proposition-item__facts">
           <span data-area></span>
           <span class="meta" data-fresh-mark>New since the last build</span>
@@ -181,9 +181,12 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
         const node = (template.content.cloneNode(true) as DocumentFragment)
           .firstElementChild as HTMLElement;
 
-        const statement = node.querySelector<HTMLElement>('[data-statement]');
+        const statement = node.querySelector<HTMLAnchorElement>('[data-statement]');
         const area = node.querySelector<HTMLElement>('[data-area]');
-        if (statement) statement.textContent = proposition.statement;
+        if (statement) {
+          statement.textContent = proposition.statement;
+          statement.href = `view/?id=${proposition.id}`;
+        }
         if (area) area.textContent = areaLabel(proposition.area);
 
         list.prepend(node);
