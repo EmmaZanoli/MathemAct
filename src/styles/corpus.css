@@ -1,4 +1,4 @@
-/* Reading the corpus: the listing, the practice page, and author pages.
+/* Reading the corpus: the listing, the report page, and author pages.
  *
  * Layered, like forms.css, and for the same two reasons: Astro's scoped styles are
  * unlayered so a component can always override one of these without a longer selector, and
@@ -6,7 +6,7 @@
  *
  * Discipline note, which is the brief for this whole file: the tombstone and the three
  * outcome colours carry the visual load. Nothing here introduces a colour, a shadow, or a
- * rounded corner beyond what tokens.css already allows, because a practice page competing
+ * rounded corner beyond what tokens.css already allows, because a report page competing
  * with its own status glyph would defeat the point of having one.
  */
 
@@ -102,7 +102,7 @@
     accent-color: var(--accent);
   }
 
-  /* How many practices a filter would leave. Shown so that choosing one is an informed
+  /* How many reports a filter would leave. Shown so that choosing one is an informed
      click rather than a guess followed by an empty page. */
   .filters__tally {
     font-family: var(--font-mono);
@@ -209,8 +209,8 @@
     color: var(--ink);
   }
 
-  /* ── Practice card ──────────────────────────────────────────────────────────────── */
-  /* Authored in PracticeCard.astro but styled here, because the practice page reuses the
+  /* ── Report card ────────────────────────────────────────────────────────────────── */
+  /* Authored in ReportCard.astro but styled here, because the report page reuses the
      fact list and the chips. A scoped block in the component would style them in a listing
      and leave them bare on the page that shows one — the scope attribute belongs to the
      file that authored the element, not to the class name. */
@@ -260,7 +260,7 @@
   }
 
   /* `> * + *`, not `> li + li`. Two of the places using this class are a <p> of <span>s
-     rather than a list — the proposition items on /propositions/ and on an author page — and
+     rather than a list — the debate items on /debates/ and on an author page — and
      the element selector silently skipped them. A flex container ignores the whitespace
      between its items and the column gap here is zero, so the result was `WritingActive
      since 20 July 2026`: no rule, and no space either. Identical for the list cases. */
@@ -335,9 +335,9 @@
     font-weight: var(--weight-semibold);
   }
 
-  /* ── Practice page ──────────────────────────────────────────────────────────────── */
+  /* ── Report page ────────────────────────────────────────────────────────────────── */
 
-  .practice {
+  .report {
     display: grid;
     grid-template-columns: minmax(0, var(--width-prose)) 15rem;
     gap: var(--space-xl);
@@ -345,12 +345,12 @@
   }
 
   @media (max-width: 58rem) {
-    .practice {
+    .report {
       grid-template-columns: 1fr;
     }
   }
 
-  .practice__body > * + * {
+  .report__body > * + * {
     margin-block-start: var(--space-xl);
   }
 
@@ -503,38 +503,38 @@
     overflow-wrap: break-word;
   }
 
-  /* ── Propositions ───────────────────────────────────────────────────────────────── */
+  /* ── Debates ────────────────────────────────────────────────────────────────────── */
 
-  .proposition {
+  .debate {
     --shell-width: var(--width-prose);
   }
 
-  .proposition > * + * {
+  .debate > * + * {
     margin-block-start: var(--space-xl);
   }
 
-  .proposition__label {
+  .debate__label {
     margin-block-end: var(--space-2xs);
   }
 
   /* The claim is the page. Serif, large, and quoted — it is a statement being reported
      rather than the site speaking, and the distinction matters on a site that takes no
      position on any of them. */
-  .proposition__statement {
+  .debate__statement {
     max-width: var(--measure);
     margin: 0;
     padding-inline-start: var(--space-md);
     border-inline-start: var(--border-width-thick) solid var(--accent);
   }
 
-  .proposition__statement p {
+  .debate__statement p {
     font-family: var(--font-serif);
     font-size: var(--size-6);
     line-height: var(--leading-snug);
     text-wrap: pretty;
   }
 
-  .proposition-list {
+  .debate-list {
     display: flex;
     flex-direction: column;
     margin: 0;
@@ -542,12 +542,12 @@
     list-style: none;
   }
 
-  .proposition-item {
+  .debate-item {
     padding-block: var(--space-md);
     border-block-start: var(--border);
   }
 
-  .proposition-item__link {
+  .debate-item__link {
     display: block;
     max-width: var(--measure);
     color: var(--ink);
@@ -558,12 +558,12 @@
     text-wrap: pretty;
   }
 
-  .proposition-item__link:hover {
+  .debate-item__link:hover {
     color: var(--accent-strong);
     text-decoration-color: currentColor;
   }
 
-  .proposition-item__facts {
+  .debate-item__facts {
     margin-block-start: var(--space-2xs);
   }
 
@@ -582,7 +582,7 @@
     font-size: var(--size-2);
   }
 
-  /* ── Proposition guidance ───────────────────────────────────────────────────────── */
+  /* ── Debate guidance ────────────────────────────────────────────────────────────── */
 
   .guidance dt {
     margin-block-start: var(--space-md);
@@ -871,7 +871,7 @@
   }
 
   .comment__editor,
-  .comment__report {
+  .comment__flag {
     margin-block-start: var(--space-sm);
     padding: var(--space-sm);
     border: var(--border);
@@ -953,8 +953,8 @@
   color: var(--accent-strong);
 }
 
-/* The freshness marker on cards and resource items that arrived after the last export.
- * Lives here rather than in a page's scoped styles because practices and resources both
+/* The freshness marker on cards and entry items that arrived after the last export.
+ * Lives here rather than in a page's scoped styles because reports and entries both
  * show it, and scoped styles from one page cannot reach cloned template nodes in another. */
 .card__fresh {
   display: flex;

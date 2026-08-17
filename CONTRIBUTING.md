@@ -1,8 +1,8 @@
 # Contributing to MathemAct
 
 MathemAct is a small project maintained by one person with volunteer moderators. Most
-contributions happen through the site itself — submitting a practice, rating a proposition,
-suggesting a resource — and that is the most valuable thing anyone can do.
+contributions happen through the site itself — submitting a report, rating a debate,
+suggesting an entry — and that is the most valuable thing anyone can do.
 
 This file is for people who want to contribute to the code or the database schema.
 

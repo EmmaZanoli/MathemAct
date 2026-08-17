@@ -1,9 +1,9 @@
 /**
- * Related practices: cosine similarity over precomputed sentence embeddings.
+ * Related reports: cosine similarity over precomputed sentence embeddings.
  *
  * Runs at build time only — this module is imported in Astro frontmatter, never in a
  * client <script>. The embeddings file is loaded via import.meta.glob (eager), so Vite
- * reads it once per build and caches it across all practice pages.
+ * reads it once per build and caches it across all report pages.
  *
  * Model: sentence-transformers/all-MiniLM-L6-v2 (Apache 2.0), 384 dimensions.
  * Each embedding is L2-normalised then stored as uint8 (0–255 per dimension) encoded in
@@ -12,14 +12,14 @@
  * unit vectors, so we renormalise before comparing.
  *
  * The reason string is rule-based: shared task type first, then shared tags, then shared
- * area, then a generic fallback. The words are always taken from the practice's own
+ * area, then a generic fallback. The words are always taken from the report's own
  * metadata — nothing is generated.
  *
  * If data/embeddings.json does not yet exist (before the first embed.yml run), findRelated
  * returns [] rather than failing the build.
  */
-import type { Practice } from './practices';
-import { areaLabel, taskTypeLabel } from './practice-schema';
+import type { Report } from './reports';
+import { areaLabel, taskTypeLabel } from './report-schema';
 
 interface StoredEntry {
   readonly id: string;
@@ -32,10 +32,10 @@ interface StoredEntry {
 }
 
 interface EmbeddingStore {
-  readonly practices: readonly StoredEntry[];
+  readonly reports: readonly StoredEntry[];
 }
 
-export interface RelatedPractice {
+export interface RelatedReport {
   readonly id: string;
   readonly title: string;
   /** One-line explanation derived from shared metadata, never generated prose. */
@@ -60,7 +60,7 @@ function getPrecomputed(): Array<StoredEntry & { readonly vec: Float32Array }> {
     return precomputed;
   }
 
-  precomputed = store.practices.map((e) => ({
+  precomputed = store.reports.map((e) => ({
     ...e,
     vec: dequantize(e.v),
   }));
@@ -98,7 +98,7 @@ function cosine(a: Float32Array, b: Float32Array): number {
 
 // ── Reason string ──────────────────────────────────────────────────────────────────────
 
-function buildReason(subject: Practice, candidate: StoredEntry): string {
+function buildReason(subject: Report, candidate: StoredEntry): string {
   if (subject.taskType === candidate.taskType) {
     return `Same task type: ${taskTypeLabel(subject.taskType as never)}`;
   }
@@ -127,24 +127,24 @@ const THRESHOLD = 0.70;
 const DEFAULT_COUNT = 4;
 
 /**
- * Find related practices for a given practice, using cosine similarity over the
+ * Find related reports for a given report, using cosine similarity over the
  * precomputed sentence embeddings. Returns up to `count` results above the similarity
  * threshold, sorted by descending similarity.
  *
  * Returns [] when the embeddings file is absent or when the subject has no embedding.
  */
 export function findRelated(
-  practice: Practice,
+  report: Report,
   count: number = DEFAULT_COUNT,
-): RelatedPractice[] {
+): RelatedReport[] {
   const entries = getPrecomputed();
   if (entries.length === 0) return [];
 
-  const subject = entries.find((e) => e.id === practice.id);
+  const subject = entries.find((e) => e.id === report.id);
   if (!subject) return [];
 
   return entries
-    .filter((e) => e.id !== practice.id)
+    .filter((e) => e.id !== report.id)
     .map((e) => ({ e, sim: cosine(subject.vec, e.vec) }))
     .filter(({ sim }) => sim > THRESHOLD)
     .sort((a, b) => b.sim - a.sim)
@@ -152,6 +152,6 @@ export function findRelated(
     .map(({ e }) => ({
       id: e.id,
       title: e.title,
-      reason: buildReason(practice, e),
+      reason: buildReason(report, e),
     }));
 }

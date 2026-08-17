@@ -1,6 +1,6 @@
 ---
 /**
- * One proposition, and what the community made of it.
+ * One debate, and what the community made of it.
  *
  * The rule that shapes the whole page: **the distribution is not shown until the reader has
  * answered.** Not hidden behind a click — absent from the page, fetched afterwards. Baking
@@ -25,57 +25,57 @@ import { referencesFrom, referencesTo } from '../../lib/citations';
 import { threadFor } from '../../lib/comments';
 import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
-import { areaLabel } from '../../lib/practice-schema';
-import { getProposition, listPropositions } from '../../lib/propositions';
+import { areaLabel } from '../../lib/report-schema';
+import { getDebate, listDebates } from '../../lib/debates';
 
 export async function getStaticPaths() {
-  const propositions = await listPropositions();
-  return propositions.map((proposition) => ({ params: { id: proposition.id } }));
+  const debates = await listDebates();
+  return debates.map((debate) => ({ params: { id: debate.id } }));
 }
 
 const { id } = Astro.params;
-const proposition = await getProposition(id!);
+const debate = await getDebate(id!);
 
-if (!proposition) return Astro.redirect(path('/propositions/'));
+if (!debate) return Astro.redirect(path('/debates/'));
 
 const [thread, incoming, outgoing] = await Promise.all([
-  threadFor('proposition', proposition.id),
-  referencesTo('proposition', proposition.id),
-  referencesFrom('proposition', proposition.id),
+  threadFor('debate', debate.id),
+  referencesTo('debate', debate.id),
+  referencesFrom('debate', debate.id),
 ]);
 ---
 
-<Base title={proposition.statement} description={proposition.rationale ?? proposition.statement}>
-  <div class="shell corpus proposition">
-    <p class="breadcrumb"><a href={path('/propositions/')}>← All propositions</a></p>
+<Base title={debate.statement} description={debate.rationale ?? debate.statement}>
+  <div class="shell corpus debate">
+    <p class="breadcrumb"><a href={path('/debates/')}>← All debates</a></p>
 
     {/* The statement and the rationale are quotable; the rating control is not. */}
     <header data-quotable data-pagefind-body>
       {/* Pagefind filter metadata. */}
-      <span data-pagefind-filter="type:proposition" hidden></span>
-      <p class="proposition__label">
+      <span data-pagefind-filter="type:debate" hidden></span>
+      <p class="debate__label">
         <span class="meta">
-          {proposition.status === 'active' ? 'Active proposition' : 'Proposed'}
+          {debate.status === 'active' ? 'Active debate' : 'Proposed'}
         </span>
       </p>
 
       {/* The statement is the page. Set as a blockquote because it is a claim being
           reported rather than the site speaking. */}
-      <blockquote class="proposition__statement">
-        <p>{proposition.statement}</p>
+      <blockquote class="debate__statement">
+        <p>{debate.statement}</p>
       </blockquote>
 
       <ul class="card__facts" role="list">
-        <li data-pagefind-filter="area">{areaLabel(proposition.area)}</li>
+        <li data-pagefind-filter="area">{areaLabel(debate.area)}</li>
         <li>
           {
-            proposition.author ? (
+            debate.author ? (
               <>
                 Proposed by{' '}
-                <a href={path(`/authors/${proposition.author.id}/`)}>
-                  {proposition.author.displayName}
+                <a href={path(`/authors/${debate.author.id}/`)}>
+                  {debate.author.displayName}
                 </a>
-                {proposition.author.isPseudonym && ' (a pseudonym)'}
+                {debate.author.isPseudonym && ' (a pseudonym)'}
               </>
             ) : (
               <span class="card__erased">Proposer since erased</span>
@@ -84,24 +84,24 @@ const [thread, incoming, outgoing] = await Promise.all([
         </li>
         <li>
           <span class="meta">
-            {proposition.activatedAt
-              ? `Active since ${longDate(proposition.activatedAt)}`
-              : `Proposed ${longDate(proposition.createdAt)}`}
+            {debate.activatedAt
+              ? `Active since ${longDate(debate.activatedAt)}`
+              : `Proposed ${longDate(debate.createdAt)}`}
           </span>
         </li>
       </ul>
     </header>
 
     {
-      proposition.rationale && (
+      debate.rationale && (
         <section class="field-block" data-quotable data-pagefind-body>
           <span class="field-block__label">Why this was proposed</span>
-          <p class="field-block__body">{proposition.rationale}</p>
+          <p class="field-block__body">{debate.rationale}</p>
         </section>
       )
     }
 
-    <section class="rate" data-rate data-proposition-id={proposition.id} data-pagefind-ignore>
+    <section class="rate" data-rate data-debate-id={debate.id} data-pagefind-ignore>
       <h2>Where do you stand?</h2>
 
       {/* Signed out. An anonymous reader cannot rate, so they cannot see the distribution
@@ -150,11 +150,11 @@ const [thread, incoming, outgoing] = await Promise.all([
 
     <div data-pagefind-ignore>
       <CommentThread
-        parentType="proposition"
-        parentId={proposition.id}
+        parentType="debate"
+        parentId={debate.id}
         nodes={thread}
-        title={proposition.statement}
-        href={path(`/propositions/${proposition.id}/`)}
+        title={debate.statement}
+        href={path(`/debates/${debate.id}/`)}
       />
     </div>
   </div>
@@ -162,13 +162,13 @@ const [thread, incoming, outgoing] = await Promise.all([
 
 <script>
   import { renderHistogram } from '../../lib/histogram';
-  import { loadAggregate, loadMyRating, saveRating } from '../../lib/propositions';
+  import { loadAggregate, loadMyRating, saveRating } from '../../lib/debates';
   import { loadProfile, mayPost } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
 
   const root = query<HTMLElement>('[data-rate]');
-  const propositionId = root.dataset.propositionId!;
+  const debateId = root.dataset.debateId!;
 
   const signedOut = query<HTMLElement>('[data-rate-signedout]', root);
   const unconfirmed = query<HTMLElement>('[data-rate-unconfirmed]', root);
@@ -212,7 +212,7 @@ const [thread, incoming, outgoing] = await Promise.all([
 
     form.hidden = false;
 
-    const mine = await loadMyRating(propositionId, id);
+    const mine = await loadMyRating(debateId, id);
     if (!mine.ok) {
       showStatus(status, 'error', mine.message);
       return;
@@ -236,7 +236,7 @@ const [thread, incoming, outgoing] = await Promise.all([
   }
 
   async function reveal(): Promise<void> {
-    const aggregate = await loadAggregate(propositionId);
+    const aggregate = await loadAggregate(debateId);
     if (!aggregate.ok) {
       showStatus(status, 'error', aggregate.message);
       return;
@@ -269,7 +269,7 @@ const [thread, incoming, outgoing] = await Promise.all([
     const editing = iRated;
 
     setBusy(submit, true, editing ? 'Updating…' : 'Recording…');
-    const result = await saveRating(propositionId, userId, score);
+    const result = await saveRating(debateId, userId, score);
     setBusy(submit, false);
 
     if (!result.ok) {

@@ -81,7 +81,7 @@
    * What must not happen is the drift in the other direction — using --accent for
    * anything outcome-shaped, or reaching for --outcome-failed because a warning needs to
    * look red. Those three values mean one thing each. If the proximity turns out to
-   * mislead readers once there are published practices to look at, the fix is to move
+   * mislead readers once there are published reports to look at, the fix is to move
    * --outcome-failed, not to move the accent back.
    */
   --outcome-worked: #2e6b4f; /*  5.8:1 */

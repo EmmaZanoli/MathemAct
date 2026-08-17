@@ -18,7 +18,7 @@ import { LICENCE, SITE } from '../../lib/site';
 
 <Account
   title="Submitted"
-  description="What happens to a practice after it is submitted."
+  description="What happens to a report after it is submitted."
   lead="It is in the queue. Nothing else is needed from you."
   gate="required"
 >
@@ -57,8 +57,8 @@ import { LICENCE, SITE } from '../../lib/site';
 
     <p>
       After it is published the text is fixed, which is deliberate: people confirm that a
-      practice still works, and those confirmations would otherwise attest to a version
-      nobody can read any more. Deleting a published practice is always possible.
+      report still works, and those confirmations would otherwise attest to a version
+      nobody can read any more. Deleting a published report is always possible.
     </p>
 
     <h2>The most useful thing you could do now</h2>
@@ -71,7 +71,7 @@ import { LICENCE, SITE } from '../../lib/site';
   </div>
 
   <div class="actions">
-    <a class="button button--primary" href={path('/practices/new/')}>Post another</a>
+    <a class="button button--primary" href={path('/reports/new/')}>Post another</a>
     <a class="button" href={path('/account/')}>Back to your profile</a>
   </div>
 </Account>

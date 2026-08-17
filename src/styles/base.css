@@ -60,7 +60,7 @@
    * This shipped three times before it was noticed, each time as something that looked
    * like a logic bug: a listing whose filters updated the count and the chips while hiding
    * no cards, a deletion form visible underneath the request it had just filed, and a
-   * disclosure question that appeared for practices that were never published.
+   * disclosure question that appeared for reports that were never published.
    *
    * Not wrapped in :where(), and !important on purpose. This is the one declaration in the
    * project that must beat everything, including a component's own scoped styles, which

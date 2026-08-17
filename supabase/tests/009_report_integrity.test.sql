@@ -1,4 +1,4 @@
--- The constraints that make a practice a report rather than a paragraph.
+-- The constraints that make a report structured rather than a paragraph.
 --
 -- These are the rules the submission form will also enforce, and the reason they are here
 -- as well is that PostgREST is a public endpoint: a rule that exists only in TypeScript
@@ -6,8 +6,8 @@
 -- database is the truth and the form is the convenience.
 --
 -- The child tables' policies are asserted here too, because they say something the parent's
--- do not: a tool row is visible exactly when its practice is, and that rule is expressed
--- once by deferring to public.practices rather than restated in each table where it could
+-- do not: a tool row is visible exactly when its report is, and that rule is expressed
+-- once by deferring to public.reports rather than restated in each table where it could
 -- drift.
 
 begin;
@@ -26,28 +26,28 @@ values
 
 update auth.users set email_confirmed_at = now();
 
--- A published practice and a pending one, both by the writer.
-insert into public.practices (
+-- A published report and a pending one, both by the writer.
+insert into public.reports (
   id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
   verification, third_party_material_confirmed
 ) values
   ('44444444-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
-   'published', 'A published practice', 'research', 'computation',
+   'published', 'A published report', 'research', 'computation',
    'Compute something.', 'Computed it.', 'worked', 'It computed.',
    'Reproduced the computation in Sage.', true),
   ('44444444-0000-0000-0000-000000000002', '33333333-0000-0000-0000-000000000001',
-   'pending', 'A pending practice', 'research', 'computation',
+   'pending', 'A pending report', 'research', 'computation',
    'Compute something else.', 'Computed that too.', 'worked', 'It computed.',
    'Reproduced it by hand.', true);
 
-insert into public.practice_tools (practice_id, tool_name, tool_version, used_on) values
+insert into public.report_tools (report_id, tool_name, tool_version, used_on) values
   ('44444444-0000-0000-0000-000000000001', 'GPT-5', '2026-05', current_date - 30),
   ('44444444-0000-0000-0000-000000000002', 'Lean', '4.9.0', current_date - 5);
 
 -- ── The field that makes the corpus serious ─────────────────────────────────────────
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('33333333-0000-0000-0000-000000000001', 'No verification', 'research', 'other',
@@ -57,7 +57,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('33333333-0000-0000-0000-000000000001', '   ', 'research', 'other',
@@ -67,7 +67,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('33333333-0000-0000-0000-000000000001', 'Unconfirmed material', 'research',
@@ -77,7 +77,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('33333333-0000-0000-0000-000000000001', 'Too long', 'research', 'other',
@@ -87,7 +87,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed, author_confidence)
      values ('33333333-0000-0000-0000-000000000001', 'Confident', 'research', 'other',
@@ -100,7 +100,7 @@ select throws_ok(
 -- with "not published, disclosed: no", which reads as a failure to disclose and is
 -- actually a question that did not apply.
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed, was_published, was_disclosed)
      values ('33333333-0000-0000-0000-000000000001', 'Undisclosed', 'research', 'other',
@@ -110,7 +110,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed, transcript_url)
      values ('33333333-0000-0000-0000-000000000001', 'Bad link', 'research', 'other',
@@ -120,7 +120,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ update public.practices set deleted_at = now()
+  $$ update public.reports set deleted_at = now()
       where id = '44444444-0000-0000-0000-000000000001' $$,
   '23514'::text, null::text,
   'half a soft-delete is refused: a deletion has a time and a hand'
@@ -138,16 +138,16 @@ select throws_ok(
 
 savepoint no_tools;
 
-insert into public.practices
+insert into public.reports
   (id, author_id, title, area, task_type, aim, method, outcome, outcome_notes,
    verification, third_party_material_confirmed)
 values ('44444444-0000-0000-0000-000000000009', '33333333-0000-0000-0000-000000000001',
-        'A practice with no tools', 'research', 'other', 'a', 'b', 'worked', 'c', 'd', true);
+        'A report with no tools', 'research', 'other', 'a', 'b', 'worked', 'c', 'd', true);
 
 select throws_ok(
   'set constraints all immediate',
   '23514'::text, null::text,
-  'a practice recording no tool at all is refused when the deferred check runs'
+  'a report recording no tool at all is refused when the deferred check runs'
 );
 
 rollback to savepoint no_tools;
@@ -155,40 +155,40 @@ set constraints all deferred;
 
 savepoint with_tools;
 
-insert into public.practices
+insert into public.reports
   (id, author_id, title, area, task_type, aim, method, outcome, outcome_notes,
    verification, third_party_material_confirmed)
 values ('44444444-0000-0000-0000-00000000000a', '33333333-0000-0000-0000-000000000001',
-        'A practice with a tool', 'research', 'other', 'a', 'b', 'worked', 'c', 'd', true);
+        'A report with a tool', 'research', 'other', 'a', 'b', 'worked', 'c', 'd', true);
 
-insert into public.practice_tools (practice_id, tool_name, tool_version, used_on)
+insert into public.report_tools (report_id, tool_name, tool_version, used_on)
 values ('44444444-0000-0000-0000-00000000000a', 'Claude', 'Opus 5', current_date);
 
 select lives_ok(
   'set constraints all immediate',
-  'the same practice passes once it records one'
+  'the same report passes once it records one'
 );
 
 rollback to savepoint with_tools;
 set constraints all deferred;
 
--- Removing the last tool from a practice that still exists is the other half of the rule.
+-- Removing the last tool from a report that still exists is the other half of the rule.
 savepoint last_tool;
 
-delete from public.practice_tools
- where practice_id = '44444444-0000-0000-0000-000000000002';
+delete from public.report_tools
+ where report_id = '44444444-0000-0000-0000-000000000002';
 
 select throws_ok(
   'set constraints all immediate',
   '23514'::text, null::text,
-  'removing the last tool from a practice is refused too'
+  'removing the last tool from a report is refused too'
 );
 
 rollback to savepoint last_tool;
 set constraints all deferred;
 
 select throws_ok(
-  $$ insert into public.practice_tools (practice_id, tool_name, tool_version, used_on)
+  $$ insert into public.report_tools (report_id, tool_name, tool_version, used_on)
      values ('44444444-0000-0000-0000-000000000001', 'Tomorrow''s model', '1', current_date + 1) $$,
   '23514'::text, null::text,
   'a tool cannot have been used in the future, which would pin it to the top of every listing'
@@ -224,9 +224,9 @@ reset role;
 set local role anon;
 
 select is(
-  (select count(*)::int from public.practice_tools),
+  (select count(*)::int from public.report_tools),
   1,
-  'anon sees the tools of published practices and not of pending ones'
+  'anon sees the tools of published reports and not of pending ones'
 );
 
 reset role;
@@ -235,24 +235,24 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33333333-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.practice_tools),
+  (select count(*)::int from public.report_tools),
   2,
-  'their author sees both, because they can see both practices'
+  'their author sees both, because they can see both reports'
 );
 
--- Editing a draft means adding and removing tools; editing a published practice does not.
-insert into public.practice_tools (practice_id, tool_name, tool_version, used_on)
+-- Editing a draft means adding and removing tools; editing a published report does not.
+insert into public.report_tools (report_id, tool_name, tool_version, used_on)
 values ('44444444-0000-0000-0000-000000000002', 'Sage', '10.3', current_date - 2);
 
 select is(
-  (select count(*)::int from public.practice_tools
-    where practice_id = '44444444-0000-0000-0000-000000000002'),
+  (select count(*)::int from public.report_tools
+    where report_id = '44444444-0000-0000-0000-000000000002'),
   2,
-  'an author may add a tool to their own pending practice'
+  'an author may add a tool to their own pending report'
 );
 
 select throws_ok(
-  $$ insert into public.practice_tools (practice_id, tool_name, tool_version, used_on)
+  $$ insert into public.report_tools (report_id, tool_name, tool_version, used_on)
      values ('44444444-0000-0000-0000-000000000001', 'Smuggled', '1', current_date) $$,
   '42501'::text, null::text,
   'but not to one that is already published'
@@ -264,16 +264,16 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33333333-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practice_tags (practice_id, tag_id)
+  $$ insert into public.report_tags (report_id, tag_id)
      select '44444444-0000-0000-0000-000000000002', id
        from public.tags where code = 'math.NT' $$,
   '42501'::text, null::text,
-  'a member cannot tag somebody else''s practice'
+  'a member cannot tag somebody else''s report'
 );
 
 reset role;
 
--- A retired tag stays resolvable on the practices that carry it and cannot be added to new
+-- A retired tag stays resolvable on the reports that carry it and cannot be added to new
 -- work. That is the whole reason it is retired rather than deleted.
 update public.tags set is_active = false where code = 'math.GM';
 
@@ -281,7 +281,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33333333-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practice_tags (practice_id, tag_id)
+  $$ insert into public.report_tags (report_id, tag_id)
      select '44444444-0000-0000-0000-000000000002', id
        from public.tags where code = 'math.GM' $$,
   '42501'::text, null::text,

@@ -24,8 +24,8 @@
  *                         anywhere below and there must never be one.
  *   pending, hidden       content nobody has approved, and content a moderator removed. The
  *                         second is worse: an export would republish exactly what was hidden.
- *   deleted               soft-deleted practices and the bodies of deleted comments.
- *   public.reports        who complained about whom.
+ *   deleted               soft-deleted reports and the bodies of deleted comments.
+ *   public.flags        who complained about whom.
  *   moderation_actions    the audit log, including the reasons moderators wrote each other.
  *   deletion_requests     who is leaving.
  *   public.ratings        individual answers. A rating row is readable only by its author,
@@ -72,7 +72,7 @@ Export the public corpus to JSON and CSV.
 Options
   --out <dir>      Where to write. Default: data
   --dry-run        Query and report; write nothing.
-  --allow-shrink   Permit an export that drops more than half the practices in the
+  --allow-shrink   Permit an export that drops more than half the reports in the
                    previous manifest. Refused otherwise, because the usual cause is a
                    broken query rather than a mass deletion.
 
@@ -111,18 +111,18 @@ function valueOf(flag) {
 // belt-and-braces here but the only belt there is.
 
 /**
- * Published practices, newest first, with their tools, their tags, and the derived staleness
+ * Published reports, newest first, with their tools, their tags, and the derived staleness
  * that drives the tombstone.
  *
  * Staleness is joined rather than recomputed. The same answer has to appear in a listing, on
- * a practice page, and in this file, and the one place it is decided is
- * public.practice_staleness.
+ * a report page, and in this file, and the one place it is decided is
+ * public.report_staleness.
  *
  * The author is embedded rather than left as an id, because every consumer needs the name
  * and the alternative is making them join two files. Four institution columns and nothing
  * else: no role, no ban flag, no source, and — it does not exist to select — no address.
  */
-const PRACTICES = `
+const REPORTS = `
   select
     p.id,
     p.title,
@@ -166,9 +166,9 @@ const PRACTICES = `
     coalesce(tools.rows, '[]'::json) as tools,
     coalesce(tags.rows,  '[]'::json) as tags
 
-  from public.practices p
+  from public.reports p
   left join public.profiles a on a.id = p.author_id
-  left join public.practice_staleness s on s.practice_id = p.id
+  left join public.report_staleness s on s.report_id = p.id
 
   left join lateral (
     select json_agg(
@@ -176,17 +176,17 @@ const PRACTICES = `
                                'usedOn', to_char(t.used_on, 'YYYY-MM-DD'))
              order by t.used_on desc, t.tool_name
            ) as rows
-      from public.practice_tools t
-     where t.practice_id = p.id
+      from public.report_tools t
+     where t.report_id = p.id
   ) tools on true
 
   left join lateral (
     select json_agg(
              json_build_object('code', g.code, 'label', g.label) order by g.sort_order, g.code
            ) as rows
-      from public.practice_tags pt
+      from public.report_tags pt
       join public.tags g on g.id = pt.tag_id
-     where pt.practice_id = p.id
+     where pt.report_id = p.id
   ) tags on true
 
   where p.status = 'published' and p.deleted_at is null
@@ -194,14 +194,14 @@ const PRACTICES = `
 `;
 
 /**
- * Propositions that are not hidden — proposed as well as active.
+ * Debates that are not hidden — proposed as well as active.
  *
  * "Active" is the promoted set, and exporting only those would drop every claim still
  * collecting answers from the site that lists them. Proposed is neither pending nor hidden:
  * it is public by policy, rateable, and being rated is how it gets promoted. Hidden is the
  * moderated-away state and is the one this filter is for.
  */
-const PROPOSITIONS = `
+const DEBATES = `
   select
     q.id,
     q.statement,
@@ -213,14 +213,14 @@ const PROPOSITIONS = `
     a.id           as author_id,
     a.display_name as author_display_name,
     a.is_pseudonym as author_is_pseudonym
-  from public.propositions q
+  from public.debates q
   left join public.profiles a on a.id = q.author_id
   where q.status <> 'hidden'
   order by q.created_at desc
 `;
 
 /**
- * The distribution per proposition: histogram, median, counts. **Never an individual rating,
+ * The distribution per debate: histogram, median, counts. **Never an individual rating,
  * and never a mean.**
  *
  * public.rating_aggregate() is the one place either is computed, and this reads the view over
@@ -235,21 +235,21 @@ const PROPOSITIONS = `
  */
 const AGGREGATES = `
   select
-    r.proposition_id,
+    r.debate_id,
     r.histogram,
     r.median,
     r.total_raters::int    as total_raters,
     r.opinion_count::int   as opinion_count,
     r.no_opinion_count::int as no_opinion_count,
     r.coverage
-  from public.proposition_ratings r
-  join public.propositions q on q.id = r.proposition_id
+  from public.debate_ratings r
+  join public.debates q on q.id = r.debate_id
   where q.status <> 'hidden'
-  order by r.proposition_id
+  order by r.debate_id
 `;
 
 /** The tag vocabulary: the 32 arXiv mathematics categories as seeded, minus any retired
- *  since. Retired tags are excluded here but stay on the practices that used them, which is
+ *  since. Retired tags are excluded here but stay on the reports that used them, which is
  *  correct — the tag was applied when it was current. */
 const TAGS = `
   select id, code, label, scheme, sort_order
@@ -282,16 +282,16 @@ const PROFILES = `
     f.created_at
   from public.profiles f
   where exists (
-          select 1 from public.practices p
+          select 1 from public.reports p
            where p.author_id = f.id and p.status = 'published' and p.deleted_at is null)
      or exists (
-          select 1 from public.propositions q
+          select 1 from public.debates q
            where q.author_id = f.id and q.status <> 'hidden')
      or exists (
           select 1 from public.comments c
            where c.author_id = f.id and c.status = 'published' and c.deleted_at is null)
      or exists (
-          select 1 from public.resources r
+          select 1 from public.network_entries r
            where r.submitter_id = f.id and r.status = 'published' and r.deleted_at is null)
   order by f.created_at
 `;
@@ -300,7 +300,7 @@ const PROFILES = `
  * Discussion. Published comments on a parent that is itself public.
  *
  * The parent condition is what stops a thread outliving the thing it is about: hide a
- * practice and its comments leave the export with it, without anything having to walk them.
+ * report and its comments leave the export with it, without anything having to walk them.
  * It is the same clause as the read policy on public.comments, restated because the policy is
  * not consulted on this connection.
  *
@@ -328,24 +328,24 @@ const COMMENTS = `
   left join public.profiles a on a.id = c.author_id
   where c.status = 'published'
     and (
-      (c.parent_type = 'practice' and exists (
-         select 1 from public.practices p
+      (c.parent_type = 'report' and exists (
+         select 1 from public.reports p
           where p.id = c.parent_id and p.status = 'published' and p.deleted_at is null))
       or
-      (c.parent_type = 'proposition' and exists (
-         select 1 from public.propositions q
+      (c.parent_type = 'debate' and exists (
+         select 1 from public.debates q
           where q.id = c.parent_id and q.status <> 'hidden'))
     )
   order by c.created_at
 `;
 
 /**
- * Published resources, newest first, with their submitter.
+ * Published entries, newest first, with their submitter.
  *
  * link_status is in the export so the listing can show broken-link badges without a live
  * query. link_checked_at tells researchers how fresh that status is.
  */
-const RESOURCES = `
+const NETWORK = `
   select
     r.id,
     r.title,
@@ -363,7 +363,7 @@ const RESOURCES = `
     a.institution_name        as submitter_institution_name,
     a.institution_country     as submitter_institution_country,
     a.institution_verified_at as submitter_institution_verified_at
-  from public.resources r
+  from public.network_entries r
   left join public.profiles a on a.id = r.submitter_id
   where r.status = 'published' and r.deleted_at is null
   order by r.created_at desc
@@ -391,21 +391,21 @@ const CITATIONS = `
     n.created_at
   from public.citations n
   where (
-      (n.source_type = 'practice' and exists (
-         select 1 from public.practices p
+      (n.source_type = 'report' and exists (
+         select 1 from public.reports p
           where p.id = n.source_id and p.status = 'published' and p.deleted_at is null))
       or
-      (n.source_type = 'proposition' and exists (
-         select 1 from public.propositions q
+      (n.source_type = 'debate' and exists (
+         select 1 from public.debates q
           where q.id = n.source_id and q.status <> 'hidden'))
     )
     and (
-      (n.target_type = 'practice' and exists (
-         select 1 from public.practices p
+      (n.target_type = 'report' and exists (
+         select 1 from public.reports p
           where p.id = n.target_id and p.status = 'published' and p.deleted_at is null))
       or
-      (n.target_type = 'proposition' and exists (
-         select 1 from public.propositions q
+      (n.target_type = 'debate' and exists (
+         select 1 from public.debates q
           where q.id = n.target_id and q.status <> 'hidden'))
     )
   order by n.created_at
@@ -419,7 +419,7 @@ const CITATIONS = `
 
 const iso = (value) => (value instanceof Date ? value.toISOString() : (value ?? null));
 
-function practiceAuthor(row) {
+function reportAuthor(row) {
   if (!row.author_id) return null;
 
   return {
@@ -439,7 +439,7 @@ function practiceAuthor(row) {
   };
 }
 
-function toPractice(row) {
+function toReport(row) {
   return {
     id: row.id,
     title: row.title,
@@ -458,7 +458,7 @@ function toPractice(row) {
     wasDisclosed: row.was_disclosed,
     authorConfidence: row.author_confidence,
     createdAt: iso(row.created_at),
-    author: practiceAuthor(row),
+    author: reportAuthor(row),
     tools: row.tools,
     tags: row.tags,
     staleness: {
@@ -466,7 +466,7 @@ function toPractice(row) {
       latestVerdict: row.latest_verdict ?? null,
       latestConfirmationAt: iso(row.latest_confirmation_at),
       confirmationCount: Number(row.confirmation_count ?? 0),
-      // A practice with no staleness row cannot happen — the view produces one per practice
+      // A report with no staleness row cannot happen — the view produces one per report
       // — but an unverified open square is the honest default for "we do not know".
       tombstoneStatus: row.tombstone_status ?? 'unverified',
       isVerified: row.is_verified ?? false,
@@ -474,7 +474,7 @@ function toPractice(row) {
   };
 }
 
-function toProposition(row) {
+function toDebate(row) {
   return {
     id: row.id,
     statement: row.statement,
@@ -495,7 +495,7 @@ function toProposition(row) {
 
 function toAggregate(row) {
   return {
-    propositionId: row.proposition_id,
+    debateId: row.debate_id,
     histogram: row.histogram,
     median: row.median === null ? null : Number(row.median),
     totalRaters: Number(row.total_raters ?? 0),
@@ -557,7 +557,7 @@ function toComment(row) {
   };
 }
 
-function toResource(row) {
+function toEntry(row) {
   return {
     id: row.id,
     title: row.title,
@@ -628,7 +628,7 @@ function csv(columns, rows) {
   return lines.join('\r\n') + '\r\n';
 }
 
-const PRACTICE_CSV_COLUMNS = [
+const REPORT_CSV_COLUMNS = [
   'id',
   'title',
   'area',
@@ -694,26 +694,26 @@ async function main() {
   let datasets;
 
   try {
-    // One transaction, read only, one snapshot. Without it a practice published between the
+    // One transaction, read only, one snapshot. Without it a report published between the
     // first query and the last would appear in citations.json and be absent from
-    // practices.json, and the site would build a reference to a page it never generated.
+    // reports.json, and the site would build a reference to a page it never generated.
     await client.query('begin isolation level repeatable read, read only');
 
-    const [practices, propositions, aggregates, tags, profiles, comments, citations, resources] =
+    const [reports, debates, aggregates, tags, profiles, comments, citations, entries] =
       await Promise.all([
-        client.query(PRACTICES),
-        client.query(PROPOSITIONS),
+        client.query(REPORTS),
+        client.query(DEBATES),
         client.query(AGGREGATES),
         client.query(TAGS),
         client.query(PROFILES),
         client.query(COMMENTS),
         client.query(CITATIONS),
-        client.query(RESOURCES),
+        client.query(NETWORK),
       ]);
 
     await client.query('commit');
 
-    datasets = { practices, propositions, aggregates, tags, profiles, comments, citations, resources };
+    datasets = { reports, debates, aggregates, tags, profiles, comments, citations, entries };
   } catch (error) {
     await client.query('rollback').catch(() => {});
     await client.end().catch(() => {});
@@ -726,34 +726,34 @@ async function main() {
 
   const files = new Map();
 
-  files.set('practices.json', datasets.practices.rows.map(toPractice));
-  files.set('propositions.json', datasets.propositions.rows.map(toProposition));
-  files.set('proposition-ratings.json', datasets.aggregates.rows.map(toAggregate));
+  files.set('reports.json', datasets.reports.rows.map(toReport));
+  files.set('debates.json', datasets.debates.rows.map(toDebate));
+  files.set('debate-ratings.json', datasets.aggregates.rows.map(toAggregate));
   files.set('tags.json', datasets.tags.rows.map(toTag));
   files.set('profiles.json', datasets.profiles.rows.map(toProfile));
   files.set('comments.json', datasets.comments.rows.map(toComment));
   files.set('citations.json', datasets.citations.rows.map(toCitation));
-  files.set('resources.json', datasets.resources.rows.map(toResource));
+  files.set('network.json', datasets.entries.rows.map(toEntry));
 
   assertNoAddressFields(files);
 
   const toolRows = [];
   const tagRows = [];
-  for (const row of datasets.practices.rows) {
+  for (const row of datasets.reports.rows) {
     for (const tool of row.tools) {
       toolRows.push({
-        practice_id: row.id,
+        report_id: row.id,
         tool_name: tool.name,
         tool_version: tool.version,
         used_on: tool.usedOn,
       });
     }
     for (const tag of row.tags) {
-      tagRows.push({ practice_id: row.id, tag_code: tag.code, tag_label: tag.label });
+      tagRows.push({ report_id: row.id, tag_code: tag.code, tag_label: tag.label });
     }
   }
 
-  const RESOURCE_CSV_COLUMNS = [
+  const NETWORK_CSV_COLUMNS = [
     'id',
     'title',
     'url',
@@ -772,13 +772,13 @@ async function main() {
   ];
 
   const csvFiles = new Map([
-    ['csv/practices.csv', csv(PRACTICE_CSV_COLUMNS, datasets.practices.rows)],
+    ['csv/reports.csv', csv(REPORT_CSV_COLUMNS, datasets.reports.rows)],
     [
-      'csv/practice-tools.csv',
-      csv(['practice_id', 'tool_name', 'tool_version', 'used_on'], toolRows),
+      'csv/report-tools.csv',
+      csv(['report_id', 'tool_name', 'tool_version', 'used_on'], toolRows),
     ],
-    ['csv/practice-tags.csv', csv(['practice_id', 'tag_code', 'tag_label'], tagRows)],
-    ['csv/resources.csv', csv(RESOURCE_CSV_COLUMNS, datasets.resources.rows)],
+    ['csv/report-tags.csv', csv(['report_id', 'tag_code', 'tag_label'], tagRows)],
+    ['csv/network.csv', csv(NETWORK_CSV_COLUMNS, datasets.entries.rows)],
   ]);
 
   // ── The shrink guard ────────────────────────────────────────────────────────────────
@@ -787,12 +787,12 @@ async function main() {
   // committing an empty corpus over a full one is a bad hour.
 
   const previous = await readPreviousManifest(options.out);
-  const before = previous?.files?.['practices.json']?.rows ?? 0;
-  const after = files.get('practices.json').length;
+  const before = previous?.files?.['reports.json']?.rows ?? 0;
+  const after = files.get('reports.json').length;
 
   if (!options.allowShrink && before > 0 && after < before / 2) {
     fail(
-      `Refusing to write: practices would go from ${before} to ${after}.\n` +
+      `Refusing to write: reports would go from ${before} to ${after}.\n` +
         'If that is genuinely right, re-run with --allow-shrink.',
     );
   }

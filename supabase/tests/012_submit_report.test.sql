@@ -1,4 +1,4 @@
--- public.submit_practice() — the one entry point the submission form uses.
+-- public.submit_report() — the one entry point the submission form uses.
 --
 -- The property under test is not "it inserts rows". It is that wrapping three inserts in a
 -- function bought a transaction and nothing else: every policy, grant, constraint and
@@ -31,15 +31,15 @@ update public.profiles set is_banned = true
 -- ── Who may call it ─────────────────────────────────────────────────────────────────
 
 select ok(
-  not has_function_privilege('anon', 'public.submit_practice(text, public.practice_area, '
-    'public.practice_task_type, jsonb, text, text, public.practice_outcome, text, text, '
+  not has_function_privilege('anon', 'public.submit_report(text, public.report_area, '
+    'public.report_task_type, jsonb, text, text, public.report_outcome, text, text, '
     'boolean, text, text, text, integer, boolean, boolean, integer, text[])', 'EXECUTE'),
-  'anon cannot execute submit_practice'
+  'anon cannot execute submit_report'
 );
 
 select ok(
-  has_function_privilege('authenticated', 'public.submit_practice(text, public.practice_area, '
-    'public.practice_task_type, jsonb, text, text, public.practice_outcome, text, text, '
+  has_function_privilege('authenticated', 'public.submit_report(text, public.report_area, '
+    'public.report_task_type, jsonb, text, text, public.report_outcome, text, text, '
     'boolean, text, text, text, integer, boolean, boolean, integer, text[])', 'EXECUTE'),
   'authenticated can'
 );
@@ -50,9 +50,9 @@ select is(
   (select p.prosecdef
      from pg_proc p
      join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public' and p.proname = 'submit_practice'),
+    where n.nspname = 'public' and p.proname = 'submit_report'),
   false,
-  'submit_practice is SECURITY INVOKER, so the policies underneath it still apply'
+  'submit_report is SECURITY INVOKER, so the policies underneath it still apply'
 );
 
 -- ── The happy path ──────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"99999999-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'Check a lemma with a proof assistant',
        'research', 'proof_checking',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"},
@@ -77,37 +77,37 @@ select lives_ok(
        95, true, true, 8,
        array['math.NT', 'math.LO']
      ) $$,
-  'a confirmed member can submit a practice, its tools and its tags in one call'
+  'a confirmed member can submit a report, its tools and its tags in one call'
 );
 
 reset role;
 
 select is(
-  (select count(*)::int from public.practices),
+  (select count(*)::int from public.reports),
   1,
-  'the practice is there'
+  'the report is there'
 );
 
 select is(
-  (select status::text from public.practices limit 1),
+  (select status::text from public.reports limit 1),
   'pending'::text,
   'and it is pending: the function is not a way to self-publish'
 );
 
 select is(
-  (select author_id from public.practices limit 1),
+  (select author_id from public.reports limit 1),
   '99999999-0000-0000-0000-000000000001'::uuid,
   'the author is the caller, taken from auth.uid() rather than from a parameter'
 );
 
 select is(
-  (select count(*)::int from public.practice_tools),
+  (select count(*)::int from public.report_tools),
   2,
   'both tools are recorded'
 );
 
 select is(
-  (select count(*)::int from public.practice_tags),
+  (select count(*)::int from public.report_tags),
   2,
   'and both tags, matched by code so the client never handles a uuid'
 );
@@ -118,7 +118,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"99999999-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'From an unconfirmed account', 'research', 'other',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
        'a', 'b', 'worked', 'c', 'd', true) $$,
@@ -132,7 +132,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"99999999-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'From a banned account', 'research', 'other',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
        'a', 'b', 'worked', 'c', 'd', true) $$,
@@ -146,7 +146,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"99999999-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'No tools', 'research', 'other', '[]'::jsonb,
        'a', 'b', 'worked', 'c', 'd', true) $$,
   '23514'::text, null::text,
@@ -154,7 +154,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'No verification', 'research', 'other',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
        'a', 'b', 'worked', 'c', '   ', true) $$,
@@ -163,7 +163,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'Unconfirmed material', 'research', 'other',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
        'a', 'b', 'worked', 'c', 'd', false) $$,
@@ -174,7 +174,7 @@ select throws_ok(
 -- A share link is supplementary and never the only record: links expire, are revoked, and
 -- may breach provider terms, while the excerpt is ours and is what the export carries.
 select throws_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'A link and nothing else', 'research', 'other',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
        'a', 'b', 'worked', 'c', 'd', true,
@@ -185,7 +185,7 @@ select throws_ok(
 
 -- The asymmetry is the rule. An excerpt with no link is ordinary.
 select lives_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'An excerpt and no link', 'research', 'other',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
        'a', 'b', 'worked', 'c', 'd', true,
@@ -197,14 +197,14 @@ reset role;
 
 -- ── All or nothing ──────────────────────────────────────────────────────────────────
 -- The reason this is a function rather than three requests. A tool row that fails must
--- take the practice with it, or the corpus accumulates accounts with no date of use --
+-- take the report with it, or the corpus accumulates accounts with no date of use --
 -- which the staleness view would render as permanently current.
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"99999999-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.submit_practice(
+  $$ select public.submit_report(
        'A tool used tomorrow', 'research', 'other',
        ('[{"name":"Lean","version":"4.9.0","used_on":"'
          || to_char(current_date + 1, 'YYYY-MM-DD') || '"}]')::jsonb,
@@ -216,9 +216,9 @@ select throws_ok(
 reset role;
 
 select is(
-  (select count(*)::int from public.practices),
+  (select count(*)::int from public.reports),
   2,
-  'and leaves no half-written practice behind'
+  'and leaves no half-written report behind'
 );
 
 select * from finish();

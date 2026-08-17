@@ -89,7 +89,7 @@ Moderators are responsible for clarifying and enforcing these standards and will
 appropriate and fair corrective action in response to any behaviour they deem inappropriate,
 threatening, offensive or harmful.
 
-Moderators have the right and responsibility to hide comments, practices, propositions and
+Moderators have the right and responsibility to hide comments, reports, debates and
 other contributions that are not aligned with this code of conduct, and will communicate
 reasons for moderation decisions when appropriate.
 
@@ -100,7 +100,7 @@ and a complaint about a moderator is handled by a different one.
 ## Scope
 
 This code of conduct applies within all community spaces: everything posted on MathemAct —
-practices, comments, propositions, ratings, reports — and messages sent to the addresses on
+reports, comments, debates, ratings, flags — and messages sent to the addresses on
 this site. It also applies when an individual is officially representing the community in
 public spaces.
 
@@ -110,24 +110,24 @@ made here and the harm depends on that.
 
 ## Enforcement
 
-Report abusive, harassing or otherwise unacceptable behaviour to the moderators at
-**<matesimpatica@gmail.com>**. Every practice and comment can also be reported from the page
+Flag abusive, harassing or otherwise unacceptable behaviour to the moderators at
+**<matesimpatica@gmail.com>**. Every report and comment can also be flagged from the page
 it appears on, which puts it in the same queue.
 
-Use the address rather than the in-page control when the report concerns a moderator, or when
+Use the address rather than the in-page control when the flag concerns a moderator, or when
 you would rather it did not go through the site.
 
 Tell us what you saw and where. You do not have to explain why it upset you and you will not
-be asked to justify reporting something.
+be asked to justify flagging something.
 
 All complaints will be reviewed and investigated promptly and fairly. Moderation here is
-volunteer-run, so it is careful rather than fast: a report may take days. Content that could
+volunteer-run, so it is careful rather than fast: a flag may take days. Content that could
 do real harm while it is looked at is hidden first, and hiding something is not a finding
 against anyone.
 
-All moderators are obliged to respect the privacy and security of the reporter of any
-incident. The report queue is readable only by moderators, and a report is never shown next
-to the content it names — a visible report count would turn reporting into a downvote.
+All moderators are obliged to respect the privacy and security of whoever flagged
+an incident. The flag queue is readable only by moderators, and a flag is never shown next
+to the content it names — a visible flag count would turn flagging into a downvote.
 
 ## Enforcement guidelines
 
@@ -161,7 +161,7 @@ inappropriate behaviour.
 **Consequence.** A temporary ban from any sort of interaction or public communication with
 the community for a specified period of time. No public or private interaction with the
 people involved is allowed during this period. Violating these terms may lead to a permanent
-ban. On this site a ban blocks posting, commenting, rating, confirming and reporting; it does
+ban. On this site a ban blocks posting, commenting, rating, confirming and flagging; it does
 not remove what was already contributed.
 
 ### 4. Permanent ban

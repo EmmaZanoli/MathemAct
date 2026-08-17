@@ -8,7 +8,7 @@ the community agrees and disagrees about how they should be used.
 
 The Leiden Declaration on AI and Mathematics supplies the principles, including its call
 for a "Tool and computational resource disclosure" section in papers. MathemAct is the
-practice layer underneath: a corpus concrete and well-structured enough that journals
+reporting layer underneath: a corpus concrete and well-structured enough that journals
 could adopt its posting schema as a disclosure template.
 
 Two consequences worth stating up front. **Failures are first-class content** — a corpus
@@ -31,12 +31,12 @@ confirmed their role via localStorage, using the same pattern as the sign-in ind
 | ✅ | Profiles, RLS, institutional badges derived server-side |
 | ✅ | ROR loader, 132,706 institutions, 116,985 domains |
 | ✅ | Sign up, confirm, sign in, reset, profile, erasure request |
-| ✅ | Practices schema: RLS, tags, confirmations, staleness, rate limits |
+| ✅ | Reports schema: RLS, tags, confirmations, staleness, rate limits |
 | ✅ | The submission form: twelve sections, draft autosave, one-transaction submit |
-| ✅ | Reading: listing with linkable filters, practice pages, author pages |
-| ✅ | Propositions, the agreement scale, and the histogram — median, never a mean |
-| ✅ | Resources: submission, moderation, and a monthly link check |
-| ✅ | Discussion, the citation graph, and the report queue |
+| ✅ | Reading: listing with linkable filters, report pages, author pages |
+| ✅ | Debates, the agreement scale, and the histogram — median, never a mean |
+| ✅ | Network: submission, moderation, and a monthly link check |
+| ✅ | Discussion, the citation graph, and the flag queue |
 | ✅ | Moderation: an audited queue, and erasure that erases |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |
 | ✅ | Editing and resubmitting a submission a moderator sent back |
@@ -68,7 +68,7 @@ unaffected.
 A nightly workflow exports published content to JSON committed to [`data/`](data/), and the
 site builds from those files — there is no fallback to a live query, so a build reads files
 or reads nothing. Browsers only talk to Supabase when someone logs in, submits, comments,
-votes, or confirms a practice. A traffic spike therefore never touches the egress quota, and
+votes, or confirms a report. A traffic spike therefore never touches the egress quota, and
 reading still works if the database is paused or over quota.
 
 The one read a browser makes is the freshness overlay: a listing hydrates from the static
@@ -76,12 +76,12 @@ page and then asks, once and with a cap, whether anything has been posted since 
 It fails silently, because the page is already correct without it.
 
 Anything the overlay surfaces has no static page yet, so it links to a client-rendered view
-page — `/practices/view/`, `/propositions/view/`, `/authors/view/` — which fetches the row at
+page — `/reports/view/`, `/debates/view/`, `/authors/view/` — which fetches the row at
 runtime and is replaced by the real page at the next build. A view page only ever links to
 other view pages: it exists precisely when the export cannot be trusted to contain the rows,
 so a link out of it into a generated page would be a 404 one level down. The governing rule
 is that **a page exists exactly where a link to it exists**, which is why an author page
-covers practice authors, proposition authors, and resource submitters — everyone whose name
+covers report authors, debate authors, and entry submitters — everyone whose name
 is a link — and why comment authors, whose names are not links, have none.
 
 That same nightly job is the backup, the citable CC BY dataset, and — because a free Supabase
@@ -163,12 +163,13 @@ production rather than a report after it.
 
 ### Database tests
 
-299 pgTAP assertions across fifteen files in `supabase/tests/`, covering domain matching, the
+397 pgTAP assertions across seventeen files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
-is allowed to set, who may file or read an erasure request, every practice policy from both
-directions, the constraints that make a practice a report, the tombstone rule, the rate
-limits, the submission RPC, the agreement scale, every comment policy including the nesting
-limit and what soft deletion destroys, and the citation and report queues.
+is allowed to set, who may file or read an erasure request, every report policy from both
+directions, the constraints that make a report structured rather than a paragraph, the
+tombstone rule, the rate limits, the submission RPC, the agreement scale, every comment
+policy including the nesting limit and what soft deletion destroys, and the citation and
+flag queues.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
 the feature works and says nothing about whether it is a door.
@@ -194,10 +195,10 @@ database monthly and reports what the matcher makes of real mathematics institut
 src/pages/              home, about, privacy, code of conduct, search, 404
 src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase,
                         edit and resubmit a submission sent back
-src/pages/practices/    the listing, a practice, the submission form
-src/pages/authors/      one contributor's practices, propositions, and submitted resources
-src/pages/propositions/ the index, a proposition, and the suggest form
-src/pages/resources/    the listing and the submission form
+src/pages/reports/      the listing, a report, the submission form
+src/pages/authors/      one contributor's reports, debates, and submitted entries
+src/pages/debates/      the index, a debate, and the suggest form
+src/pages/network/      the listing and the submission form
 src/pages/moderate/     the queues; ships as the 404 page and reveals itself to a moderator
 */view.astro            client-rendered stand-ins for pages the last export predates
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
@@ -205,8 +206,8 @@ src/layouts/            Base (shell), Page (long-form prose), Account (forms + s
 src/lib/                paths, site constants, status vocabulary, markdown, auth, session,
                         session-hint (sign-in localStorage guess), mod-hint (moderator
                         localStorage guess), profile queries, validation, formatting,
-                        form helpers, the corpus readers (practices, propositions,
-                        resources), authors (who gets a page), fresh (the overlay)
+                        form helpers, the corpus readers (reports, debates,
+                        entries), authors (who gets a page), fresh (the overlay)
 src/styles/             tokens.css (single source of truth), base.css, forms.css
 public/fonts/           self-hosted IBM Plex woff2 + the @font-face that loads them
 data/                   the committed export the site builds from, plus the CSV dataset
@@ -226,7 +227,7 @@ ones that turned out to be wrong — superseded entries are marked rather than d
 
 ## Licence
 
-Content contributed to MathemAct — practices, propositions, comments, and the exported
+Content contributed to MathemAct — reports, debates, comments, and the exported
 dataset — is published under
 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Contributors retain copyright
 and are credited; reuse requires attribution.

@@ -1,8 +1,8 @@
 /**
  * Carrying a passage from one page to another.
  *
- * Select text in a practice or a comment and two things become possible: quoting it in a
- * comment, and citing it in a proposition. Both need the passage to survive a navigation,
+ * Select text in a report or a comment and two things become possible: quoting it in a
+ * comment, and citing it in a debate. Both need the passage to survive a navigation,
  * because the place you want to use it is almost never the page you found it on.
  *
  * sessionStorage, not localStorage. A carried quotation is part of one sitting — you found
@@ -14,7 +14,7 @@
  * writing a survey, and this is a feature for making one point.
  */
 
-export type NodeType = 'practice' | 'proposition';
+export type NodeType = 'report' | 'debate';
 
 export interface Passage {
   /** The selected text, normalised and capped. Stored on the citation as the excerpt. */
@@ -101,7 +101,7 @@ export interface AffordanceOptions {
   /** Where "quote this in a comment" should put the text when the composer is on this
    *  page. Returning false means there is nowhere to put it and the button is not offered. */
   readonly quoteHere: (passage: Passage) => boolean;
-  /** Where "cite this in a proposition" goes. */
+  /** Where "cite this in a debate" goes. */
   readonly proposeHref: string;
 }
 
@@ -128,7 +128,7 @@ export function installQuoteAffordance(options: AffordanceOptions): void {
   const cite = document.createElement('button');
   cite.type = 'button';
   cite.className = 'quote-pop__action';
-  cite.textContent = 'Cite in a proposition';
+  cite.textContent = 'Cite in a debate';
 
   popover.append(quote, cite);
   document.body.append(popover);

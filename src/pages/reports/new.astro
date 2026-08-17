@@ -24,17 +24,17 @@ import TagPicker from '../../components/TagPicker.astro';
 import ConfidenceScale from '../../components/ConfidenceScale.astro';
 import { path } from '../../lib/paths';
 import { LICENCE, SITE } from '../../lib/site';
-import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practice-schema';
+import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-schema';
 ---
 
 <Account
-  title="Post a practice"
+  title="Post a report"
   description="Record how you used an AI tool in mathematical work, in a form that can be read as evidence."
   lead="Twelve sections. If you have the session in front of you it takes about ten minutes, and your draft is saved as you go."
   gate="required"
 >
   {/* Shown instead of the form when the account may not post. The same three conditions as
-      the insert policy on public.practices, checked here so nobody discovers them after
+      the insert policy on public.reports, checked here so nobody discovers them after
       writing a submission. */}
   <div class="panel" data-gate-unconfirmed hidden>
     <p class="panel__heading">Confirm your email address first</p>
@@ -68,15 +68,15 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
       <span class="draft__state" data-draft-state></span>
     </div>
 
-    <form class="practice-form" id="practice" novalidate>
-      <FormStatus id="practice-status" />
+    <form class="report-form" id="report" novalidate>
+      <FormStatus id="report-status" />
 
       <FormSection id="title" number={1} title="Title">
         <Field
           id="title"
           label="One line saying what you did"
           required
-          maxlength={PRACTICE_LIMITS.title}
+          maxlength={REPORT_LIMITS.title}
           counter
           hint={FIELD_COPY.title.hint}
           example={FIELD_COPY.title.example}
@@ -85,11 +85,11 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
 
       {/* Near-duplicate warning. Filled by the duplicate-detection script on blur of
           #title or #aim; hidden by default and never blocks submission. The link is a
-          discovery aid, not a gate — a practice that reaches the same conclusion a
+          discovery aid, not a gate — a report that reaches the same conclusion a
           different way is still worth recording. */}
       <div class="panel duplicate-warning" data-duplicate-warning hidden role="alert" aria-live="polite">
         <p>
-          <strong>Similar practice found.</strong> Before submitting, check whether your
+          <strong>Similar report found.</strong> Before submitting, check whether your
           experience overlaps with:
         </p>
         <p>
@@ -163,7 +163,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={4}
-          maxlength={PRACTICE_LIMITS.aim}
+          maxlength={REPORT_LIMITS.aim}
           counter
           hint={FIELD_COPY.aim.hint}
           example={FIELD_COPY.aim.example}
@@ -177,7 +177,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={10}
-          maxlength={PRACTICE_LIMITS.method}
+          maxlength={REPORT_LIMITS.method}
           counter
           hint={FIELD_COPY.method.hint}
           example={FIELD_COPY.method.example}
@@ -194,7 +194,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={5}
-          maxlength={PRACTICE_LIMITS.outcomeNotes}
+          maxlength={REPORT_LIMITS.outcomeNotes}
           counter
           hint={FIELD_COPY.outcomeNotes.hint}
           example={FIELD_COPY.outcomeNotes.example}
@@ -208,7 +208,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={6}
-          maxlength={PRACTICE_LIMITS.verification}
+          maxlength={REPORT_LIMITS.verification}
           counter
           example={FIELD_COPY.verification.example}
         >
@@ -239,7 +239,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           label="Paste the part that matters"
           type="textarea"
           rows={8}
-          maxlength={PRACTICE_LIMITS.transcriptExcerpt}
+          maxlength={REPORT_LIMITS.transcriptExcerpt}
           counter
           hint={FIELD_COPY.transcriptExcerpt.hint}
         />
@@ -248,7 +248,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           id="transcript_url"
           label="Share link"
           type="text"
-          maxlength={PRACTICE_LIMITS.transcriptUrl}
+          maxlength={REPORT_LIMITS.transcriptUrl}
           hint="Optional, and only alongside an excerpt. Never on its own."
         />
 
@@ -279,7 +279,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           label="What you would do differently"
           type="textarea"
           rows={4}
-          maxlength={PRACTICE_LIMITS.caveats}
+          maxlength={REPORT_LIMITS.caveats}
           counter
           hint={FIELD_COPY.caveats.hint}
           example={FIELD_COPY.caveats.example}
@@ -321,7 +321,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
         </fieldset>
 
         {/* Only meaningful once something is published, and the database says so too:
-            practices_disclosure_needs_publication refuses a disclosure answer without a
+            reports_disclosure_needs_publication refuses a disclosure answer without a
             publication. Hidden rather than disabled, because a disabled control that never
             becomes enabled reads as broken. */}
         <fieldset class="choices" data-disclosure hidden>
@@ -370,7 +370,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
 </Account>
 
 <script>
-  import { loadTags, submitPractice, type SubmissionTool } from '../../lib/practices';
+  import { loadTags, submitReport, type SubmissionTool } from '../../lib/reports';
   import { loadProfile, mayPost } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { debounce, discardDraft, loadDraft, saveDraft, savedAtLabel } from '../../lib/draft';
@@ -385,10 +385,10 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
   } from '../../lib/forms';
   import {
     EARLIEST_TOOL_USE,
-    PRACTICE_LIMITS,
+    REPORT_LIMITS,
     SECTIONS,
-  } from '../../lib/practice-schema';
-  import type { Area, TaskType } from '../../lib/practice-schema';
+  } from '../../lib/report-schema';
+  import type { Area, TaskType } from '../../lib/report-schema';
   import type { Outcome } from '../../lib/status';
   import {
     validateOptionalText,
@@ -399,9 +399,9 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
     validateVerification,
   } from '../../lib/validation';
 
-  const form = query<HTMLFormElement>('#practice');
+  const form = query<HTMLFormElement>('#report');
   const wrapper = query<HTMLElement>('[data-form-wrapper]');
-  const status = query<HTMLElement>('#practice-status');
+  const status = query<HTMLElement>('#report-status');
   const submit = query<HTMLButtonElement>('button[type="submit"]', form);
   const discardButton = query<HTMLButtonElement>('[data-discard]');
 
@@ -815,15 +815,15 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
 
     const tools = readTools();
     const problems: { id: string; error: string | null }[] = [
-      { id: 'title', error: validateRequiredText(value('title'), PRACTICE_LIMITS.title, 'A title') },
-      { id: 'aim', error: validateRequiredText(value('aim'), PRACTICE_LIMITS.aim, 'The aim') },
-      { id: 'method', error: validateRequiredText(value('method'), PRACTICE_LIMITS.method, 'The method') },
-      { id: 'outcome_notes', error: validateRequiredText(value('outcome_notes'), PRACTICE_LIMITS.outcomeNotes, 'The outcome notes') },
-      { id: 'verification', error: validateVerification(value('verification'), PRACTICE_LIMITS.verification) },
-      { id: 'transcript_excerpt', error: validateOptionalText(value('transcript_excerpt'), PRACTICE_LIMITS.transcriptExcerpt, 'The transcript excerpt') },
-      { id: 'transcript_url', error: validateTranscriptUrl(value('transcript_url'), PRACTICE_LIMITS.transcriptUrl) },
-      { id: 'caveats', error: validateOptionalText(value('caveats'), PRACTICE_LIMITS.caveats, 'The caveats') },
-      { id: 'time_spent_minutes', error: validateTimeSpent(value('time_spent_minutes'), PRACTICE_LIMITS.timeSpentMinutes) },
+      { id: 'title', error: validateRequiredText(value('title'), REPORT_LIMITS.title, 'A title') },
+      { id: 'aim', error: validateRequiredText(value('aim'), REPORT_LIMITS.aim, 'The aim') },
+      { id: 'method', error: validateRequiredText(value('method'), REPORT_LIMITS.method, 'The method') },
+      { id: 'outcome_notes', error: validateRequiredText(value('outcome_notes'), REPORT_LIMITS.outcomeNotes, 'The outcome notes') },
+      { id: 'verification', error: validateVerification(value('verification'), REPORT_LIMITS.verification) },
+      { id: 'transcript_excerpt', error: validateOptionalText(value('transcript_excerpt'), REPORT_LIMITS.transcriptExcerpt, 'The transcript excerpt') },
+      { id: 'transcript_url', error: validateTranscriptUrl(value('transcript_url'), REPORT_LIMITS.transcriptUrl) },
+      { id: 'caveats', error: validateOptionalText(value('caveats'), REPORT_LIMITS.caveats, 'The caveats') },
+      { id: 'time_spent_minutes', error: validateTimeSpent(value('time_spent_minutes'), REPORT_LIMITS.timeSpentMinutes) },
     ];
 
     // The rule the database also enforces: a share link is never the only record.
@@ -864,7 +864,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
     if (!confirmedThirdParty && !firstBad) firstBad = 'third_party_confirmed';
 
     const toolErrors = tools.map((tool) =>
-      validateTool(tool, { name: PRACTICE_LIMITS.toolName, version: PRACTICE_LIMITS.toolVersion }, EARLIEST_TOOL_USE),
+      validateTool(tool, { name: REPORT_LIMITS.toolName, version: REPORT_LIMITS.toolVersion }, EARLIEST_TOOL_USE),
     );
 
     [...toolList.children].forEach((row, index) => {
@@ -895,7 +895,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
 
     setBusy(submit, true, 'Submitting…');
 
-    const result = await submitPractice({
+    const result = await submitReport({
       title: value('title'),
       area: checked('area') as Area,
       taskType: checked('task_type') as TaskType,
@@ -926,7 +926,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
     // Only now. A draft discarded before the write was confirmed would be a draft lost to
     // a failed request.
     discardDraft(userId);
-    window.location.assign(path('/practices/submitted/'));
+    window.location.assign(path('/reports/submitted/'));
   });
 </script>
 
@@ -941,13 +941,13 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
    * On blur of #aim: embed title + aim with Xenova/all-MiniLM-L6-v2 (the browser-side
    * ONNX conversion of sentence-transformers/all-MiniLM-L6-v2) and compare against the
    * stored corpus embeddings. If the closest match exceeds 0.85 cosine similarity, show
-   * a non-blocking link to that practice.
+   * a non-blocking link to that report.
    *
    * The model is loaded from jsDelivr and the weights download from HuggingFace on first
    * use; both are cached by the browser afterwards. Every failure path is silent — the
    * warning either appears or it does not; it never blocks or errors the form.
    *
-   * The words in the warning are always the author's own (the linked practice's title).
+   * The words in the warning are always the author's own (the linked report's title).
    * Nothing is generated.
    */
 
@@ -990,7 +990,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
         });
         if (!res.ok) { storedEntries = []; return; }
         const json = await res.json();
-        storedEntries = json.practices ?? [];
+        storedEntries = json.reports ?? [];
       } catch {
         storedEntries = [];
       }
@@ -1062,7 +1062,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
         }
 
         if (bestSim > THRESHOLD) {
-          linkEl.href = `${BASE}practices/${bestId}/`;
+          linkEl.href = `${BASE}reports/${bestId}/`;
           linkEl.textContent = bestTitle;
           warningEl.hidden = false;
         } else {

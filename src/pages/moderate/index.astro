@@ -78,8 +78,8 @@ import { path } from '../../lib/paths';
       )
     }
 
-    <section class="queue__section" data-section="practices">
-      <h2>Practices waiting <span class="mono" data-count></span></h2>
+    <section class="queue__section" data-section="reports">
+      <h2>Reports waiting <span class="mono" data-count></span></h2>
       <p class="queue__note">
         Oldest first. The account below is the whole submission — decide from it rather than
         from the title. Text is shown as it was written; formulas are set when the site
@@ -89,18 +89,18 @@ import { path } from '../../lib/paths';
       <p class="queue__empty" data-empty hidden>Nothing waiting. The corpus is up to date.</p>
     </section>
 
-    <section class="queue__section" data-section="propositions">
-      <h2>Propositions waiting <span class="mono" data-count></span></h2>
+    <section class="queue__section" data-section="debates">
+      <h2>Debates waiting <span class="mono" data-count></span></h2>
       <p class="queue__note">
-        A proposition promotes itself once five people have answered it. Promoting one by
+        A debate promotes itself once five people have answered it. Promoting one by
         hand says it is worth asking, not that you agree with it.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
       <p class="queue__empty" data-empty hidden>Nothing waiting.</p>
     </section>
 
-    <section class="queue__section" data-section="resources">
-      <h2>Resources waiting <span class="mono" data-count></span></h2>
+    <section class="queue__section" data-section="entries">
+      <h2>Network waiting <span class="mono" data-count></span></h2>
       <p class="queue__note">
         Oldest first. Check that the link is real, the category is right, and the relevance
         section is specific rather than marketing copy.
@@ -109,21 +109,21 @@ import { path } from '../../lib/paths';
       <p class="queue__empty" data-empty hidden>Nothing waiting.</p>
     </section>
 
-    <section class="queue__section" data-section="reports">
-      <h2>Open reports <span class="mono" data-count></span></h2>
+    <section class="queue__section" data-section="flags">
+      <h2>Open flags <span class="mono" data-count></span></h2>
       <p class="queue__note">
-        Closing a report and acting on what it named are two decisions and produce two
+        Closing a flag and acting on what it named are two decisions and produce two
         entries in the log. Do the second first.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
-      <p class="queue__empty" data-empty hidden>No open reports.</p>
+      <p class="queue__empty" data-empty hidden>No open flags.</p>
     </section>
 
     <section class="queue__section" data-section="hidden">
       <h2>Hidden <span class="mono" data-count></span></h2>
       <p class="queue__note">
         Hidden content is still there and still readable by its author, who can see that it
-        was hidden. Unhiding a practice or resource publishes it.
+        was hidden. Unhiding a report or entry publishes it.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
       <p class="queue__empty" data-empty hidden>Nothing is hidden.</p>
@@ -133,7 +133,7 @@ import { path } from '../../lib/paths';
       <h2>Erasure requests <span class="mono" data-count></span></h2>
       <p class="queue__note">
         Admins only. Erasing removes the account and its profile, and detaches everything it
-        contributed — the practices stay in the corpus under CC BY with no name on them. It
+        contributed — the reports stay in the corpus under CC BY with no name on them. It
         cannot be undone and the log will not record whose account it was.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
@@ -148,7 +148,7 @@ import { path } from '../../lib/paths';
       built with createElement would carry no scope attribute and match none of the CSS
       below. Cloned template content does. */}
 
-  <template data-template="practice">
+  <template data-template="report">
     <li class="item">
       <div class="item__head">
         <h3 class="item__title" data-title></h3>
@@ -223,7 +223,7 @@ import { path } from '../../lib/paths';
     </li>
   </template>
 
-  <template data-template="proposition">
+  <template data-template="debate">
     <li class="item">
       <div class="item__head">
         <h3 class="item__title item__statement" data-title></h3>
@@ -250,26 +250,26 @@ import { path } from '../../lib/paths';
     </li>
   </template>
 
-  <template data-template="report">
+  <template data-template="flag">
     <li class="item">
       <div class="item__head">
         <h3 class="item__title" data-title></h3>
         <p class="mono item__meta" data-meta></p>
       </div>
 
-      <blockquote class="report__detail" data-optional hidden>
+      <blockquote class="flag__detail" data-optional hidden>
         <p data-detail></p>
       </blockquote>
 
-      <div class="report__subject">
-        <p class="mono report__subject-head" data-subject-meta></p>
-        <p class="report__subject-title" data-subject-title></p>
+      <div class="flag__subject">
+        <p class="mono flag__subject-head" data-subject-meta></p>
+        <p class="flag__subject-title" data-subject-title></p>
         <p class="pre" data-subject-body></p>
         <p data-optional hidden><a data-subject-link>Open the page</a></p>
       </div>
 
-      <p class="report__gone" data-gone hidden>
-        The reported row is no longer readable — it has been deleted outright rather than
+      <p class="flag__gone" data-gone hidden>
+        The flagged row is no longer readable — it has been deleted outright rather than
         hidden. Dismissing is usually right; the log will say why.
       </p>
 
@@ -277,21 +277,21 @@ import { path } from '../../lib/paths';
         <label class="reason__label" data-reason-label>Reason, or note on the decision</label>
         <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
         <p class="reason__hint">
-          Required to hide or to ban. Closing a report keeps whatever you write here as the
+          Required to hide or to ban. Closing a flag keeps whatever you write here as the
           note on the decision.
         </p>
       </div>
 
       <div class="actions">
-        <button class="button" data-act="hide">Hide what was reported</button>
+        <button class="button" data-act="hide">Hide what was flagged</button>
         <button class="button button--quiet" data-act="ban">Ban that account</button>
-        <button class="button button--primary" data-act="resolve_report">Close: acted</button>
-        <button class="button" data-act="dismiss_report">Close: nothing to do</button>
+        <button class="button button--primary" data-act="resolve_flag">Close: acted</button>
+        <button class="button" data-act="dismiss_flag">Close: nothing to do</button>
       </div>
     </li>
   </template>
 
-  <template data-template="resource">
+  <template data-template="entry">
     <li class="item">
       <div class="item__head">
         <h3 class="item__title" data-title></h3>
@@ -359,7 +359,7 @@ import { path } from '../../lib/paths';
         <p class="mono item__meta" data-meta></p>
       </div>
 
-      <blockquote class="report__detail" data-optional hidden>
+      <blockquote class="flag__detail" data-optional hidden>
         <p data-note></p>
       </blockquote>
 
@@ -376,10 +376,10 @@ import { path } from '../../lib/paths';
 </Base>
 
 <script>
-  import { areaLabel, taskTypeLabel } from '../../lib/practice-schema';
+  import { areaLabel, taskTypeLabel } from '../../lib/report-schema';
   import { longDate, verificationMonth } from '../../lib/format';
   import { query, showStatus, hideStatus } from '../../lib/forms';
-  import { REPORT_REASONS } from '../../lib/comments';
+  import { FLAG_REASONS } from '../../lib/comments';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { OUTCOME } from '../../lib/status';
   import { path } from '../../lib/paths';
@@ -397,10 +397,10 @@ import { path } from '../../lib/paths';
     QueueAuthor,
     QueueComment,
     QueueErasure,
-    QueuePractice,
-    QueueProposition,
     QueueReport,
-    QueueResource,
+    QueueDebate,
+    QueueFlag,
+    QueueEntry,
     Role,
     Target,
   } from '../../lib/moderation';
@@ -461,17 +461,17 @@ import { path } from '../../lib/paths';
 
     const queues = result.value;
 
-    section('practices', queues.practices, practiceItem);
-    section('propositions', queues.propositions, propositionItem);
-    section('resources', queues.resources, resourceItem);
     section('reports', queues.reports, reportItem);
+    section('debates', queues.debates, debateItem);
+    section('entries', queues.entries, entryItem);
+    section('flags', queues.flags, flagItem);
     section(
       'hidden',
       [
-        ...queues.hiddenPractices.map((row) => ({ kind: 'practice' as const, row })),
-        ...queues.hiddenPropositions.map((row) => ({ kind: 'proposition' as const, row })),
+        ...queues.hiddenReports.map((row) => ({ kind: 'report' as const, row })),
+        ...queues.hiddenDebates.map((row) => ({ kind: 'debate' as const, row })),
         ...queues.hiddenComments.map((row) => ({ kind: 'comment' as const, row })),
-        ...queues.hiddenResources.map((row) => ({ kind: 'resource' as const, row })),
+        ...queues.hiddenEntries.map((row) => ({ kind: 'entry' as const, row })),
       ],
       hiddenItem,
     );
@@ -481,17 +481,17 @@ import { path } from '../../lib/paths';
     if (role === 'admin') section('erasures', queues.erasures, erasureItem);
 
     const waiting =
-      queues.practices.length +
-      queues.propositions.length +
-      queues.resources.length +
-      queues.reports.length;
+      queues.reports.length +
+      queues.debates.length +
+      queues.entries.length +
+      queues.flags.length;
 
     tally.textContent =
       waiting === 0
         ? 'Nothing waiting'
-        : `${waiting} waiting · ${queues.practices.length} practices · ` +
-          `${queues.propositions.length} propositions · ${queues.resources.length} resources · ` +
-          `${queues.reports.length} reports`;
+        : `${waiting} waiting · ${queues.reports.length} reports · ` +
+          `${queues.debates.length} debates · ${queues.entries.length} entries · ` +
+          `${queues.flags.length} flags`;
   }
 
   function section<T>(
@@ -556,64 +556,64 @@ import { path } from '../../lib/paths';
     return parts.join(' ');
   }
 
-  function practiceItem(practice: QueuePractice): HTMLElement {
-    const item = clone('practice');
+  function reportItem(report: QueueReport): HTMLElement {
+    const item = clone('report');
 
-    put(item, '[data-title]', practice.title);
+    put(item, '[data-title]', report.title);
     put(
       item,
       '[data-meta]',
       [
-        name(practice.author),
-        `submitted ${longDate(practice.createdAt)}`,
-        areaLabel(practice.area),
-        taskTypeLabel(practice.taskType),
+        name(report.author),
+        `submitted ${longDate(report.createdAt)}`,
+        areaLabel(report.area),
+        taskTypeLabel(report.taskType),
       ].join(' · '),
     );
 
-    put(item, '[data-note]', practice.note);
-    put(item, '[data-note-at]', practice.noteAt ? longDate(practice.noteAt) : '');
+    put(item, '[data-note]', report.note);
+    put(item, '[data-note-at]', report.noteAt ? longDate(report.noteAt) : '');
 
     put(
       item,
       '[data-tools]',
-      practice.tools
+      report.tools
         .map((tool) => `${tool.name} ${tool.version} (used ${tool.usedOn})`)
         .join(' · '),
     );
 
-    put(item, '[data-aim]', practice.aim);
-    put(item, '[data-method]', practice.method);
-    put(item, '[data-outcome]', OUTCOME[practice.outcome].label);
-    put(item, '[data-outcome-notes]', practice.outcomeNotes);
-    put(item, '[data-verification]', practice.verification);
-    put(item, '[data-caveats]', practice.caveats);
-    put(item, '[data-transcript]', practice.transcriptExcerpt);
-    put(item, '[data-transcript-url]', practice.transcriptUrl);
+    put(item, '[data-aim]', report.aim);
+    put(item, '[data-method]', report.method);
+    put(item, '[data-outcome]', OUTCOME[report.outcome].label);
+    put(item, '[data-outcome-notes]', report.outcomeNotes);
+    put(item, '[data-verification]', report.verification);
+    put(item, '[data-caveats]', report.caveats);
+    put(item, '[data-transcript]', report.transcriptExcerpt);
+    put(item, '[data-transcript-url]', report.transcriptUrl);
     query<HTMLElement>('[data-transcript-block]', item).hidden =
-      !practice.transcriptExcerpt && !practice.transcriptUrl;
-    put(item, '[data-tags]', practice.tags.join(' · '));
+      !report.transcriptExcerpt && !report.transcriptUrl;
+    put(item, '[data-tags]', report.tags.join(' · '));
 
     // The structured metadata, spelled out. "Disclosed: no" on unpublished work would read
     // as a failure to disclose, so the two are stated together or not at all.
     const counting: string[] = [];
-    if (practice.timeSpentMinutes !== null) counting.push(`${practice.timeSpentMinutes} min`);
-    if (practice.authorConfidence !== null) {
-      counting.push(`confidence ${practice.authorConfidence}/10`);
+    if (report.timeSpentMinutes !== null) counting.push(`${report.timeSpentMinutes} min`);
+    if (report.authorConfidence !== null) {
+      counting.push(`confidence ${report.authorConfidence}/10`);
     }
-    if (practice.wasPublished === true) {
+    if (report.wasPublished === true) {
       counting.push(
-        practice.wasDisclosed === true
+        report.wasDisclosed === true
           ? 'published, use disclosed'
-          : practice.wasDisclosed === false
+          : report.wasDisclosed === false
             ? 'published, use not disclosed'
             : 'published',
       );
-    } else if (practice.wasPublished === false) {
+    } else if (report.wasPublished === false) {
       counting.push('not published');
     }
     counting.push(
-      practice.thirdPartyMaterialConfirmed
+      report.thirdPartyMaterialConfirmed
         ? 'third-party material confirmed removed'
         : 'THIRD-PARTY MATERIAL NOT CONFIRMED',
     );
@@ -621,138 +621,138 @@ import { path } from '../../lib/paths';
 
     wire(item, (action) => {
       if (action === 'ban') {
-        return practice.author
-          ? { target: 'account' as Target, id: practice.author.id, action: 'ban' as Action }
+        return report.author
+          ? { target: 'account' as Target, id: report.author.id, action: 'ban' as Action }
           : null;
       }
-      return { target: 'practice' as Target, id: practice.id, action };
-    }, practice.author !== null);
+      return { target: 'report' as Target, id: report.id, action };
+    }, report.author !== null);
 
     return item;
   }
 
-  function propositionItem(proposition: QueueProposition): HTMLElement {
-    const item = clone('proposition');
+  function debateItem(debate: QueueDebate): HTMLElement {
+    const item = clone('debate');
 
-    put(item, '[data-title]', proposition.statement);
+    put(item, '[data-title]', debate.statement);
     put(
       item,
       '[data-meta]',
       [
-        name(proposition.author),
-        `proposed ${longDate(proposition.createdAt)}`,
-        areaLabel(proposition.area),
-        `${proposition.ratingCount} answered`,
+        name(debate.author),
+        `proposed ${longDate(debate.createdAt)}`,
+        areaLabel(debate.area),
+        `${debate.ratingCount} answered`,
       ].join(' · '),
     );
-    put(item, '[data-rationale]', proposition.rationale);
+    put(item, '[data-rationale]', debate.rationale);
 
     wire(item, (action) => ({
-      target: 'proposition' as Target,
-      id: proposition.id,
+      target: 'debate' as Target,
+      id: debate.id,
       action,
     }));
 
     return item;
   }
 
-  function reportItem(report: QueueReport): HTMLElement {
-    const item = clone('report');
+  function flagItem(flag: QueueFlag): HTMLElement {
+    const item = clone('flag');
 
     const reason =
-      REPORT_REASONS.find((choice) => choice.value === report.reason)?.label ?? report.reason;
+      FLAG_REASONS.find((choice) => choice.value === flag.reason)?.label ?? flag.reason;
 
     put(item, '[data-title]', reason);
     put(
       item,
       '[data-meta]',
       [
-        `on a ${report.subjectType}`,
-        `reported by ${name(report.reporter)}`,
-        longDate(report.createdAt),
+        `on a ${flag.subjectType}`,
+        `flagged by ${name(flag.flagger)}`,
+        longDate(flag.createdAt),
       ].join(' · '),
     );
-    put(item, '[data-detail]', report.detail);
+    put(item, '[data-detail]', flag.detail);
 
     const gone = query<HTMLElement>('[data-gone]', item);
-    gone.hidden = report.subject !== null;
+    gone.hidden = flag.subject !== null;
 
-    if (report.subject) {
+    if (flag.subject) {
       put(
         item,
         '[data-subject-meta]',
-        [`${report.subject.kind} · ${report.subject.status}`, name(report.subject.author)].join(
+        [`${flag.subject.kind} · ${flag.subject.status}`, name(flag.subject.author)].join(
           ' · ',
         ),
       );
-      put(item, '[data-subject-title]', report.subject.heading);
-      put(item, '[data-subject-body]', report.subject.body);
+      put(item, '[data-subject-title]', flag.subject.heading);
+      put(item, '[data-subject-body]', flag.subject.body);
 
       const link = item.querySelector<HTMLAnchorElement>('[data-subject-link]');
       const optional = link?.closest<HTMLElement>('[data-optional]');
 
-      if (link && report.subject.status === 'published' && report.subjectType !== 'comment') {
-        link.href = path(`/${report.subjectType}s/${report.subjectId}/`);
+      if (link && flag.subject.status === 'published' && flag.subjectType !== 'comment') {
+        link.href = path(`/${flag.subjectType}s/${flag.subjectId}/`);
         if (optional) optional.hidden = false;
       }
     }
 
     wire(item, (action) => {
       if (action === 'ban') {
-        return report.subject?.author
-          ? { target: 'account' as Target, id: report.subject.author.id, action: 'ban' as Action }
+        return flag.subject?.author
+          ? { target: 'account' as Target, id: flag.subject.author.id, action: 'ban' as Action }
           : null;
       }
 
-      // The only `hide` a report offers is a hide of what it named. There is no such thing
-      // as hiding a report itself, which is why this reads as a redirection rather than as
+      // The only `hide` a flag offers is a hide of what it named. There is no such thing
+      // as hiding a flag itself, which is why this reads as a redirection rather than as
       // a special case.
       if (action === 'hide') {
-        return { target: report.subjectType as Target, id: report.subjectId, action };
+        return { target: flag.subjectType as Target, id: flag.subjectId, action };
       }
 
-      return { target: 'report' as Target, id: report.id, action };
-    }, Boolean(report.subject?.author));
+      return { target: 'flag' as Target, id: flag.id, action };
+    }, Boolean(flag.subject?.author));
 
     return item;
   }
 
-  function resourceItem(resource: QueueResource): HTMLElement {
-    const item = clone('resource');
+  function entryItem(entry: QueueEntry): HTMLElement {
+    const item = clone('entry');
 
-    put(item, '[data-title]', resource.title);
+    put(item, '[data-title]', entry.title);
     put(
       item,
       '[data-meta]',
-      [name(resource.author), `submitted ${longDate(resource.createdAt)}`, resource.category].join(
+      [name(entry.author), `submitted ${longDate(entry.createdAt)}`, entry.category].join(
         ' · ',
       ),
     );
 
-    put(item, '[data-note]', resource.note);
-    put(item, '[data-note-at]', resource.noteAt ? longDate(resource.noteAt) : '');
-    put(item, '[data-url]', resource.url);
-    put(item, '[data-category]', resource.category);
-    put(item, '[data-description]', resource.description);
-    put(item, '[data-relevance]', resource.relevance);
+    put(item, '[data-note]', entry.note);
+    put(item, '[data-note-at]', entry.noteAt ? longDate(entry.noteAt) : '');
+    put(item, '[data-url]', entry.url);
+    put(item, '[data-category]', entry.category);
+    put(item, '[data-description]', entry.description);
+    put(item, '[data-relevance]', entry.relevance);
 
     wire(item, (action) => {
       if (action === 'ban') {
-        return resource.author
-          ? { target: 'account' as Target, id: resource.author.id, action: 'ban' as Action }
+        return entry.author
+          ? { target: 'account' as Target, id: entry.author.id, action: 'ban' as Action }
           : null;
       }
-      return { target: 'resource' as Target, id: resource.id, action };
-    }, resource.author !== null);
+      return { target: 'entry' as Target, id: entry.id, action };
+    }, entry.author !== null);
 
     return item;
   }
 
   type Hidden =
-    | { kind: 'practice'; row: QueuePractice }
-    | { kind: 'proposition'; row: QueueProposition }
+    | { kind: 'report'; row: QueueReport }
+    | { kind: 'debate'; row: QueueDebate }
     | { kind: 'comment'; row: QueueComment }
-    | { kind: 'resource'; row: QueueResource };
+    | { kind: 'entry'; row: QueueEntry };
 
   function hiddenItem(entry: Hidden): HTMLElement {
     const item = clone('hidden');
@@ -761,11 +761,11 @@ import { path } from '../../lib/paths';
     put(
       item,
       '[data-title]',
-      entry.kind === 'practice'
+      entry.kind === 'report'
         ? entry.row.title
-        : entry.kind === 'proposition'
+        : entry.kind === 'debate'
           ? entry.row.statement
-          : entry.kind === 'resource'
+          : entry.kind === 'entry'
             ? entry.row.title
             : 'Comment',
     );
@@ -779,11 +779,11 @@ import { path } from '../../lib/paths';
     put(
       item,
       '[data-body]',
-      entry.kind === 'practice'
+      entry.kind === 'report'
         ? entry.row.aim
-        : entry.kind === 'proposition'
+        : entry.kind === 'debate'
           ? (entry.row.rationale ?? '')
-          : entry.kind === 'resource'
+          : entry.kind === 'entry'
             ? entry.row.description
             : entry.row.body,
     );
@@ -802,7 +802,7 @@ import { path } from '../../lib/paths';
     put(
       item,
       '[data-counts]',
-      `${request.practiceCount} practices · ${request.commentCount} comments`,
+      `${request.reportCount} reports · ${request.commentCount} comments`,
     );
 
     wire(item, () => ({
@@ -871,7 +871,7 @@ import { path } from '../../lib/paths';
         if (call.action === 'ban' || call.action === 'erase_account') {
           const question =
             call.action === 'ban'
-              ? 'Ban this account? They will not be able to post, comment, rate or report until it is lifted.'
+              ? 'Ban this account? They will not be able to post, comment, rate or flag until it is lifted.'
               : 'Erase this account? The account and its profile go, its contributions stay without a name on them, and this cannot be undone.';
 
           if (!window.confirm(question)) return;
@@ -891,7 +891,7 @@ import { path } from '../../lib/paths';
         showStatus(status, 'success', `Done, and recorded. ${DONE[call.action]}`);
 
         // Reloaded rather than patched. Half the actions here move a row between queues —
-        // hiding what a report named changes both the report and the hidden list — and a
+        // hiding what a flag named changes both the flag and the hidden list — and a
         // screen that guessed at the new state would eventually guess wrong in front of
         // somebody making a decision from it.
         void fill();
@@ -905,8 +905,8 @@ import { path } from '../../lib/paths';
     hide: 'It is out of sight and its author can see that it was hidden.',
     unhide: 'It is readable again.',
     promote: 'It is part of the record.',
-    resolve_report: 'The report is closed.',
-    dismiss_report: 'The report is closed with nothing done.',
+    resolve_flag: 'The flag is closed.',
+    dismiss_flag: 'The flag is closed with nothing done.',
     ban: 'The account cannot post until this is lifted.',
     unban: 'The account can post again.',
     erase_account: 'The account is gone and its contributions stay without a name.',
@@ -1068,32 +1068,32 @@ import { path } from '../../lib/paths';
     line-height: var(--leading-relaxed);
   }
 
-  /* ── A report and what it named ──────────────────────────────────────────────────── */
-  .report__detail {
+  /* ── A flag and what it named ────────────────────────────────────────────────────── */
+  .flag__detail {
     margin: var(--space-md) 0 0;
     padding-inline-start: var(--space-md);
     border-inline-start: var(--border);
     color: var(--ink-muted);
   }
 
-  .report__subject {
+  .flag__subject {
     margin-block-start: var(--space-md);
     padding: var(--space-md);
     border: var(--border);
     background-color: var(--ground);
   }
 
-  .report__subject-head {
+  .flag__subject-head {
     font-size: var(--size-1);
     color: var(--ink-muted);
   }
 
-  .report__subject-title {
+  .flag__subject-title {
     margin-block-start: var(--space-3xs);
     font-weight: var(--weight-semibold);
   }
 
-  .report__subject p + p {
+  .flag__subject p + p {
     margin-block-start: var(--space-2xs);
   }
 
@@ -1101,7 +1101,7 @@ import { path } from '../../lib/paths';
     margin-block-start: var(--space-md);
   }
 
-  .report__gone {
+  .flag__gone {
     margin-block-start: var(--space-md);
     font-size: var(--size-2);
     color: var(--outcome-partial);

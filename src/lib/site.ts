@@ -61,12 +61,12 @@ export interface NavLink {
   readonly href: string;
 }
 
-/** Header navigation. Grows as sections ship. Practices comes first because it is what the
+/** Header navigation. Grows as sections ship. Reports comes first because it is what the
  *  site is for; About explains it to someone who has already seen one. */
 export const NAV: readonly NavLink[] = [
-  { label: 'Practices', href: '/practices/' },
-  { label: 'Propositions', href: '/propositions/' },
-  { label: 'Resources', href: '/resources/' },
+  { label: 'Reports', href: '/reports/' },
+  { label: 'Debates', href: '/debates/' },
+  { label: 'Network', href: '/network/' },
   { label: 'About', href: '/about/' },
 ];
 

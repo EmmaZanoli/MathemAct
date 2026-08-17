@@ -4,7 +4,7 @@
  * Everything here runs in a browser. That is unlike the rest of src/lib/, where reads happen
  * at build time and only writes reach the database — and it is forced rather than chosen. A
  * queue is made of exactly the rows the static export does not contain: pending submissions,
- * hidden content, open reports, standing erasure requests. None of them may be built into a
+ * hidden content, open flags, standing erasure requests. None of them may be built into a
  * public file, and none of them is visible to the anonymous key the build uses. So the
  * moderation screen is the one page on this site that genuinely needs a live session, and it
  * is the only reading page that loads the Supabase client.
@@ -24,9 +24,9 @@
  * which something is hidden and no row says who hid it.
  */
 import { getSupabase } from './supabase';
-import type { Area, TaskType } from './practice-schema';
+import type { Area, TaskType } from './report-schema';
 import type { Outcome } from './status';
-import type { ReportReason, ReportSubject } from './comments';
+import type { FlagReason, FlagSubject } from './comments';
 
 export type Result<T> =
   | { readonly ok: true; readonly value: T }
@@ -87,7 +87,7 @@ export interface QueueTool {
   readonly usedOn: string;
 }
 
-export interface QueuePractice {
+export interface QueueReport {
   readonly id: string;
   readonly status: 'pending' | 'published' | 'hidden';
   readonly title: string;
@@ -115,7 +115,7 @@ export interface QueuePractice {
   readonly noteAt: string | null;
 }
 
-export interface QueueProposition {
+export interface QueueDebate {
   readonly id: string;
   readonly status: 'proposed' | 'active' | 'hidden';
   readonly statement: string;
@@ -132,11 +132,11 @@ export interface QueueComment {
   readonly createdAt: string;
   readonly status: 'published' | 'hidden';
   readonly author: QueueAuthor | null;
-  readonly parentType: 'practice' | 'proposition';
+  readonly parentType: 'report' | 'debate';
   readonly parentId: string;
 }
 
-export interface QueueResource {
+export interface QueueEntry {
   readonly id: string;
   readonly status: 'pending' | 'published' | 'hidden';
   readonly title: string;
@@ -150,18 +150,18 @@ export interface QueueResource {
   readonly noteAt: string | null;
 }
 
-export interface QueueReport {
+export interface QueueFlag {
   readonly id: string;
-  readonly subjectType: ReportSubject;
+  readonly subjectType: FlagSubject;
   readonly subjectId: string;
-  readonly reason: ReportReason;
+  readonly reason: FlagReason;
   readonly detail: string | null;
   readonly createdAt: string;
-  readonly reporter: QueueAuthor | null;
-  /** The reported thing itself, so the decision can be made on this screen. Null when it
+  readonly flagger: QueueAuthor | null;
+  /** The flagged thing itself, so the decision can be made on this screen. Null when it
    *  has since been deleted outright — a soft-deleted comment keeps no text. */
   readonly subject: {
-    readonly kind: ReportSubject;
+    readonly kind: FlagSubject;
     readonly heading: string;
     readonly body: string;
     readonly status: string;
@@ -174,21 +174,21 @@ export interface QueueErasure {
   readonly requestedAt: string;
   readonly note: string | null;
   readonly member: QueueAuthor | null;
-  /** What erasure will detach. Shown because "this will unname 14 practices" is the fact an
+  /** What erasure will detach. Shown because "this will unname 14 reports" is the fact an
    *  admin needs before pressing the button, and it is not recoverable afterwards. */
-  readonly practiceCount: number;
+  readonly reportCount: number;
   readonly commentCount: number;
 }
 
 export interface Queues {
-  readonly practices: readonly QueuePractice[];
-  readonly propositions: readonly QueueProposition[];
-  readonly resources: readonly QueueResource[];
   readonly reports: readonly QueueReport[];
-  readonly hiddenPractices: readonly QueuePractice[];
-  readonly hiddenPropositions: readonly QueueProposition[];
+  readonly debates: readonly QueueDebate[];
+  readonly entries: readonly QueueEntry[];
+  readonly flags: readonly QueueFlag[];
+  readonly hiddenReports: readonly QueueReport[];
+  readonly hiddenDebates: readonly QueueDebate[];
   readonly hiddenComments: readonly QueueComment[];
-  readonly hiddenResources: readonly QueueResource[];
+  readonly hiddenEntries: readonly QueueEntry[];
   /** Empty for a moderator: erasure is an account action and only admins see it. */
   readonly erasures: readonly QueueErasure[];
 }
@@ -198,19 +198,19 @@ export interface Queues {
 const AUTHOR_COLUMNS =
   'id,display_name,is_pseudonym,institution_name,institution_country';
 
-const PRACTICE_COLUMNS = [
+const REPORT_COLUMNS = [
   'id,status,title,area,task_type,aim,method,outcome,outcome_notes,verification',
   'transcript_excerpt,transcript_url,caveats,third_party_material_confirmed',
   'time_spent_minutes,was_published,was_disclosed,author_confidence,created_at',
   'moderation_note,moderation_note_at',
-  `author:profiles!practices_author_id_fkey(${AUTHOR_COLUMNS})`,
-  'practice_tools(tool_name,tool_version,used_on)',
-  'practice_tags(tags(code))',
+  `author:profiles!reports_author_id_fkey(${AUTHOR_COLUMNS})`,
+  'report_tools(tool_name,tool_version,used_on)',
+  'report_tags(tags(code))',
 ].join(',');
 
-const PROPOSITION_COLUMNS = [
+const DEBATE_COLUMNS = [
   'id,status,statement,rationale,area,created_at',
-  `author:profiles!propositions_author_id_fkey(${AUTHOR_COLUMNS})`,
+  `author:profiles!debates_author_id_fkey(${AUTHOR_COLUMNS})`,
 ].join(',');
 
 const COMMENT_COLUMNS = [
@@ -218,10 +218,10 @@ const COMMENT_COLUMNS = [
   `author:profiles!comments_author_id_fkey(${AUTHOR_COLUMNS})`,
 ].join(',');
 
-const RESOURCE_COLUMNS = [
+const NETWORK_COLUMNS = [
   'id,status,title,url,category,description,relevance,created_at',
   'moderation_note,moderation_note_at',
-  `author:profiles!resources_submitter_id_fkey(${AUTHOR_COLUMNS})`,
+  `author:profiles!network_entries_submitter_id_fkey(${AUTHOR_COLUMNS})`,
 ].join(',');
 
 interface RawAuthor {
@@ -247,7 +247,7 @@ function toAuthor(row: RawAuthor | null | undefined): QueueAuthor | null {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function toPractice(row: any): QueuePractice {
+function toReport(row: any): QueueReport {
   return {
     id: row.id,
     status: row.status,
@@ -269,12 +269,12 @@ function toPractice(row: any): QueuePractice {
     authorConfidence: row.author_confidence,
     createdAt: row.created_at,
     author: toAuthor(row.author),
-    tools: (row.practice_tools ?? []).map((tool: any) => ({
+    tools: (row.report_tools ?? []).map((tool: any) => ({
       name: tool.tool_name,
       version: tool.tool_version,
       usedOn: tool.used_on,
     })),
-    tags: (row.practice_tags ?? []).flatMap((link: any) =>
+    tags: (row.report_tags ?? []).flatMap((link: any) =>
       link.tags ? [link.tags.code] : [],
     ),
     note: row.moderation_note ?? null,
@@ -283,12 +283,12 @@ function toPractice(row: any): QueuePractice {
 }
 
 /**
- * The rating count comes from public.proposition_ratings rather than from the ratings table,
+ * The rating count comes from public.debate_ratings rather than from the ratings table,
  * and it has to. A rating row is readable only by the person who wrote it — that is the rule
  * that keeps individual answers unattributable — so counting through an embed would report
  * how many times the moderator had rated it, which is a plausible-looking zero.
  */
-function toProposition(row: any, raters: Map<string, number>): QueueProposition {
+function toDebate(row: any, raters: Map<string, number>): QueueDebate {
   return {
     id: row.id,
     status: row.status,
@@ -313,7 +313,7 @@ function toComment(row: any): QueueComment {
   };
 }
 
-function toResource(row: any): QueueResource {
+function toEntry(row: any): QueueEntry {
   return {
     id: row.id,
     status: row.status,
@@ -347,48 +347,48 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
 
   try {
     const [
-      practices,
-      propositions,
-      resources,
       reports,
-      hiddenPractices,
-      hiddenPropositions,
+      debates,
+      entries,
+      flags,
+      hiddenReports,
+      hiddenDebates,
       hiddenComments,
-      hiddenResources,
+      hiddenEntries,
     ] = await Promise.all([
       supabase
-        .from('practices')
-        .select(PRACTICE_COLUMNS)
+        .from('reports')
+        .select(REPORT_COLUMNS)
         .eq('status', 'pending')
         .is('deleted_at', null)
         // Oldest first: the submission that has waited longest is the one to look at next.
         .order('created_at', { ascending: true }),
       supabase
-        .from('propositions')
-        .select(PROPOSITION_COLUMNS)
+        .from('debates')
+        .select(DEBATE_COLUMNS)
         .eq('status', 'proposed')
         .order('created_at', { ascending: true }),
       supabase
-        .from('resources')
-        .select(RESOURCE_COLUMNS)
+        .from('network_entries')
+        .select(NETWORK_COLUMNS)
         .eq('status', 'pending')
         .is('deleted_at', null)
         .order('created_at', { ascending: true }),
       supabase
-        .from('reports')
+        .from('flags')
         .select(
-          `id,subject_type,subject_id,reason,detail,created_at,reporter:profiles!reports_reporter_id_fkey(${AUTHOR_COLUMNS})`,
+          `id,subject_type,subject_id,reason,detail,created_at,flagger:profiles!flags_flagger_id_fkey(${AUTHOR_COLUMNS})`,
         )
         .eq('status', 'open')
         .order('created_at', { ascending: true }),
       supabase
-        .from('practices')
-        .select(PRACTICE_COLUMNS)
+        .from('reports')
+        .select(REPORT_COLUMNS)
         .eq('status', 'hidden')
         .order('created_at', { ascending: false }),
       supabase
-        .from('propositions')
-        .select(PROPOSITION_COLUMNS)
+        .from('debates')
+        .select(DEBATE_COLUMNS)
         .eq('status', 'hidden')
         .order('created_at', { ascending: false }),
       supabase
@@ -397,42 +397,42 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
         .eq('status', 'hidden')
         .order('created_at', { ascending: false }),
       supabase
-        .from('resources')
-        .select(RESOURCE_COLUMNS)
+        .from('network_entries')
+        .select(NETWORK_COLUMNS)
         .eq('status', 'hidden')
         .is('deleted_at', null)
         .order('created_at', { ascending: false }),
     ]);
 
     const failed = [
-      practices,
-      propositions,
-      resources,
       reports,
-      hiddenPractices,
-      hiddenPropositions,
+      debates,
+      entries,
+      flags,
+      hiddenReports,
+      hiddenDebates,
       hiddenComments,
-      hiddenResources,
+      hiddenEntries,
     ].find((response) => response.error);
 
     if (failed?.error) return { ok: false, message: describe(failed.error) };
 
     const raters = await countRaters([
-      ...(propositions.data ?? []),
-      ...(hiddenPropositions.data ?? []),
+      ...(debates.data ?? []),
+      ...(hiddenDebates.data ?? []),
     ]);
 
     const value: Queues = {
-      practices: (practices.data ?? []).map(toPractice),
-      propositions: (propositions.data ?? []).map((row) => toProposition(row, raters)),
-      resources: (resources.data ?? []).map(toResource),
-      reports: await withSubjects(reports.data ?? []),
-      hiddenPractices: (hiddenPractices.data ?? []).map(toPractice),
-      hiddenPropositions: (hiddenPropositions.data ?? []).map((row) =>
-        toProposition(row, raters),
+      reports: (reports.data ?? []).map(toReport),
+      debates: (debates.data ?? []).map((row) => toDebate(row, raters)),
+      entries: (entries.data ?? []).map(toEntry),
+      flags: await withSubjects(flags.data ?? []),
+      hiddenReports: (hiddenReports.data ?? []).map(toReport),
+      hiddenDebates: (hiddenDebates.data ?? []).map((row) =>
+        toDebate(row, raters),
       ),
       hiddenComments: (hiddenComments.data ?? []).map(toComment),
-      hiddenResources: (hiddenResources.data ?? []).map(toResource),
+      hiddenEntries: (hiddenEntries.data ?? []).map(toEntry),
       erasures: role === 'admin' ? await loadErasures() : [],
     };
 
@@ -442,7 +442,7 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
   }
 }
 
-/** How many people have answered each of these propositions, from the aggregate view. Five
+/** How many people have answered each of these debates, from the aggregate view. Five
  *  is the threshold that promotes one without a moderator, so this number is the difference
  *  between "promote it" and "leave it, it will promote itself". */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -453,51 +453,51 @@ async function countRaters(rows: any[]): Promise<Map<string, number>> {
   if (!supabase || !rows.length) return counts;
 
   const { data } = await supabase
-    .from('proposition_ratings')
-    .select('proposition_id,total_raters')
+    .from('debate_ratings')
+    .select('debate_id,total_raters')
     .in(
-      'proposition_id',
+      'debate_id',
       rows.map((row) => row.id),
     );
 
   for (const row of data ?? []) {
-    counts.set(row.proposition_id as string, Number(row.total_raters ?? 0));
+    counts.set(row.debate_id as string, Number(row.total_raters ?? 0));
   }
 
   return counts;
 }
 
 /**
- * Attach the reported content to each report.
+ * Attach the flagged content to each flag.
  *
- * A report names a row by kind and id, which no join can follow — the subject is
+ * A flag names a row by kind and id, which no join can follow — the subject is
  * polymorphic. So this is three queries by id, and it is worth them: a queue that showed
- * "comment reported as abusive" without the comment would send a volunteer to another page
- * to find out, and the decision would get made on the reporter's summary instead of on the
+ * "comment flagged as abusive" without the comment would send a volunteer to another page
+ * to find out, and the decision would get made on the flagger's summary instead of on the
  * thing itself.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function withSubjects(rows: any[]): Promise<QueueReport[]> {
+async function withSubjects(rows: any[]): Promise<QueueFlag[]> {
   const supabase = getSupabase();
   if (!supabase) return [];
 
-  const idsOf = (kind: ReportSubject) =>
+  const idsOf = (kind: FlagSubject) =>
     rows.filter((row) => row.subject_type === kind).map((row) => row.subject_id);
 
-  const [practices, propositions, comments] = await Promise.all([
-    idsOf('practice').length
+  const [reports, debates, comments] = await Promise.all([
+    idsOf('report').length
       ? supabase
-          .from('practices')
-          .select(`id,title,aim,status,author:profiles!practices_author_id_fkey(${AUTHOR_COLUMNS})`)
-          .in('id', idsOf('practice'))
+          .from('reports')
+          .select(`id,title,aim,status,author:profiles!reports_author_id_fkey(${AUTHOR_COLUMNS})`)
+          .in('id', idsOf('report'))
       : Promise.resolve({ data: [], error: null }),
-    idsOf('proposition').length
+    idsOf('debate').length
       ? supabase
-          .from('propositions')
+          .from('debates')
           .select(
-            `id,statement,rationale,status,author:profiles!propositions_author_id_fkey(${AUTHOR_COLUMNS})`,
+            `id,statement,rationale,status,author:profiles!debates_author_id_fkey(${AUTHOR_COLUMNS})`,
           )
-          .in('id', idsOf('proposition'))
+          .in('id', idsOf('debate'))
       : Promise.resolve({ data: [], error: null }),
     idsOf('comment').length
       ? supabase.from('comments').select(COMMENT_COLUMNS).in('id', idsOf('comment'))
@@ -509,8 +509,8 @@ async function withSubjects(rows: any[]): Promise<QueueReport[]> {
   // can only do for a literal. Ours are assembled from constants so that the author embed is
   // written once, so the rows arrive untyped and are shaped by hand below.
   const index = new Map<string, any>();
-  for (const row of (practices.data ?? []) as any[]) index.set(`practice:${row.id}`, row);
-  for (const row of (propositions.data ?? []) as any[]) index.set(`proposition:${row.id}`, row);
+  for (const row of (reports.data ?? []) as any[]) index.set(`report:${row.id}`, row);
+  for (const row of (debates.data ?? []) as any[]) index.set(`debate:${row.id}`, row);
   for (const row of (comments.data ?? []) as any[]) index.set(`comment:${row.id}`, row);
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -524,20 +524,20 @@ async function withSubjects(rows: any[]): Promise<QueueReport[]> {
       reason: row.reason,
       detail: row.detail,
       createdAt: row.created_at,
-      reporter: toAuthor(row.reporter),
+      flagger: toAuthor(row.flagger),
       subject: found
         ? {
             kind: row.subject_type,
             heading:
-              row.subject_type === 'practice'
+              row.subject_type === 'report'
                 ? found.title
-                : row.subject_type === 'proposition'
+                : row.subject_type === 'debate'
                   ? found.statement
                   : 'Comment',
             body:
-              row.subject_type === 'practice'
+              row.subject_type === 'report'
                 ? found.aim
-                : row.subject_type === 'proposition'
+                : row.subject_type === 'debate'
                   ? (found.rationale ?? '')
                   : found.body,
             status: found.status,
@@ -577,9 +577,9 @@ async function loadErasures(): Promise<QueueErasure[]> {
     data.map(async (row) => {
       const userId = row.user_id as string;
 
-      const [practices, comments] = await Promise.all([
+      const [reports, comments] = await Promise.all([
         supabase
-          .from('practices')
+          .from('reports')
           .select('id', { count: 'exact', head: true })
           .eq('author_id', userId),
         supabase
@@ -593,7 +593,7 @@ async function loadErasures(): Promise<QueueErasure[]> {
         requestedAt: row.requested_at as string,
         note: (row.note as string | null) ?? null,
         member: byId.get(userId) ?? null,
-        practiceCount: practices.count ?? 0,
+        reportCount: reports.count ?? 0,
         commentCount: comments.count ?? 0,
       };
     }),
@@ -602,7 +602,7 @@ async function loadErasures(): Promise<QueueErasure[]> {
 
 // ── Acting ────────────────────────────────────────────────────────────────────────────
 
-export type Target = 'practice' | 'proposition' | 'comment' | 'report' | 'resource' | 'account';
+export type Target = 'report' | 'debate' | 'comment' | 'flag' | 'entry' | 'account';
 
 export type Action =
   | 'publish'
@@ -610,8 +610,8 @@ export type Action =
   | 'hide'
   | 'unhide'
   | 'promote'
-  | 'resolve_report'
-  | 'dismiss_report'
+  | 'resolve_flag'
+  | 'dismiss_flag'
   | 'ban'
   | 'unban'
   | 'erase_account';
@@ -763,7 +763,7 @@ const NOOR: QueueAuthor = {
 };
 
 const FIXTURES: Queues = {
-  practices: [
+  reports: [
     {
       id: '00000000-0000-4000-9000-000000000001',
       status: 'pending',
@@ -859,7 +859,7 @@ const FIXTURES: Queues = {
     },
   ],
 
-  propositions: [
+  debates: [
     {
       id: '00000000-0000-4000-a000-000000000001',
       status: 'proposed',
@@ -883,7 +883,7 @@ const FIXTURES: Queues = {
     },
   ],
 
-  reports: [
+  flags: [
     {
       id: '00000000-0000-4000-b000-000000000001',
       subjectType: 'comment',
@@ -892,7 +892,7 @@ const FIXTURES: Queues = {
       detail:
         'This quotes a referee report I wrote. It was not published and I did not agree to it being posted.',
       createdAt: '2026-08-15T06:12:00Z',
-      reporter: NOOR,
+      flagger: NOOR,
       subject: {
         kind: 'comment',
         heading: 'Comment',
@@ -903,14 +903,14 @@ const FIXTURES: Queues = {
     },
     {
       id: '00000000-0000-4000-b000-000000000002',
-      subjectType: 'practice',
+      subjectType: 'report',
       subjectId: '00000000-0000-4000-9000-000000000009',
       reason: 'inaccurate',
       detail: 'Version 4.9.0 of Lean cannot do what this describes. I think the version is wrong.',
       createdAt: '2026-08-15T10:48:00Z',
-      reporter: TOMAS,
+      flagger: TOMAS,
       subject: {
-        kind: 'practice',
+        kind: 'report',
         heading: 'Close a goal in Lean with a tactic suggestion',
         body: 'Get a stuck goal closed without reading the whole of Mathlib.',
         status: 'published',
@@ -919,7 +919,7 @@ const FIXTURES: Queues = {
     },
   ],
 
-  resources: [
+  entries: [
     {
       id: '00000000-0000-4000-e000-000000000001',
       status: 'pending' as const,
@@ -936,9 +936,9 @@ const FIXTURES: Queues = {
     },
   ],
 
-  hiddenPractices: [],
+  hiddenReports: [],
 
-  hiddenPropositions: [],
+  hiddenDebates: [],
 
   hiddenComments: [
     {
@@ -947,7 +947,7 @@ const FIXTURES: Queues = {
       createdAt: '2026-08-10T21:07:00Z',
       status: 'hidden',
       // Hiding keeps the name. Only deleting strips it, and a deleted comment keeps no text
-      // to show here either — which is why a moderator handling a report about one is told
+      // to show here either — which is why a moderator handling a flag about one is told
       // to hide rather than wait.
       author: {
         id: '00000000-0000-4000-8000-000000000006',
@@ -955,25 +955,25 @@ const FIXTURES: Queues = {
         isPseudonym: false,
         institution: { name: 'Universität Bonn', country: 'DE' },
       },
-      parentType: 'practice',
+      parentType: 'report',
       parentId: '00000000-0000-4000-9000-000000000001',
     },
   ],
 
-  hiddenResources: [],
+  hiddenEntries: [],
 
   erasures: [
     {
       id: '00000000-0000-4000-d000-000000000001',
       requestedAt: '2026-08-14T13:26:00Z',
-      note: 'Please detach my practices rather than removing them — I would rather they stayed in the corpus without my name.',
+      note: 'Please detach my reports rather than removing them — I would rather they stayed in the corpus without my name.',
       member: {
         id: '00000000-0000-4000-8000-000000000005',
         displayName: 'Kolmogorov Complexity Enjoyer',
         isPseudonym: true,
         institution: null,
       },
-      practiceCount: 3,
+      reportCount: 3,
       commentCount: 11,
     },
   ],

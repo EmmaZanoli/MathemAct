@@ -1,10 +1,10 @@
 ---
 /**
- * The distribution of answers to one proposition.
+ * The distribution of answers to one debate.
  *
  * A histogram and a median, and no mean — the whole reason CLAUDE.md insists on this shape
  * is that the mean of an 11-point bipolar scale is misleading exactly when the distribution
- * is bimodal, and bimodal is what to expect on the contested propositions. A single number
+ * is bimodal, and bimodal is what to expect on the contested debates. A single number
  * would report "6.2, mild agreement" for a community that had split cleanly into two camps.
  * The bars are the finding; the median is a summary of them that cannot invent a middle
  * nobody occupies.
@@ -22,9 +22,9 @@
  * table.
  *
  * Rendered empty and filled by script: the aggregate is deliberately not in the page source
- * until the reader has answered. See the header of src/lib/propositions.ts.
+ * until the reader has answered. See the header of src/lib/debates.ts.
  */
-import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/propositions';
+import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
 ---
 
 <div class="histogram" data-histogram hidden>

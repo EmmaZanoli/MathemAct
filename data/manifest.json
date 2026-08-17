@@ -4,15 +4,15 @@
   "licence": "CC BY 4.0",
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
   "files": {
-    "practices.json": {
+    "reports.json": {
       "rows": 0,
       "bytes": 3
     },
-    "propositions.json": {
+    "debates.json": {
       "rows": 0,
       "bytes": 3
     },
-    "proposition-ratings.json": {
+    "debate-ratings.json": {
       "rows": 0,
       "bytes": 3
     },
@@ -32,23 +32,23 @@
       "rows": 0,
       "bytes": 3
     },
-    "resources.json": {
+    "network.json": {
       "rows": 0,
       "bytes": 3
     },
-    "csv/practices.csv": {
+    "csv/reports.csv": {
       "rows": 0,
       "bytes": 369
     },
-    "csv/practice-tools.csv": {
+    "csv/report-tools.csv": {
       "rows": 0,
       "bytes": 44
     },
-    "csv/practice-tags.csv": {
+    "csv/report-tags.csv": {
       "rows": 0,
       "bytes": 32
     },
-    "csv/resources.csv": {
+    "csv/network.csv": {
       "rows": 0,
       "bytes": 215
     }

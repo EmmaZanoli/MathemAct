@@ -1,7 +1,7 @@
 /**
  * Discussion: reading a thread at build time, and the four things a browser does to one.
  *
- * Same shape as src/lib/practices.ts — `readComments()` is the single swap point, reads
+ * Same shape as src/lib/reports.ts — `readComments()` is the single swap point, reads
  * happen during the build, writes happen in a browser — with one consequence that is worth
  * stating plainly because it shows on screen.
  *
@@ -18,7 +18,7 @@
  */
 import { getSupabase } from './supabase';
 
-export type ParentType = 'practice' | 'proposition';
+export type ParentType = 'report' | 'debate';
 
 export interface CommentAuthor {
   readonly id: string;
@@ -290,11 +290,11 @@ export async function deleteComment(id: string): Promise<Result<null>> {
   }
 }
 
-// ── Reporting ─────────────────────────────────────────────────────────────────────────
+// ── Flagging ──────────────────────────────────────────────────────────────────────────
 
-export type ReportSubject = 'practice' | 'proposition' | 'comment';
+export type FlagSubject = 'report' | 'debate' | 'comment';
 
-export type ReportReason =
+export type FlagReason =
   | 'off_topic'
   | 'abusive'
   | 'third_party_material'
@@ -305,7 +305,7 @@ export type ReportReason =
 /** The wording shown in the control. `third_party_material` is first among the specific
  *  reasons because it is the hazard this site creates: the submission form asks people to
  *  paste real conversations, and those contain other people's unpublished work. */
-export const REPORT_REASONS: readonly { value: ReportReason; label: string }[] = [
+export const FLAG_REASONS: readonly { value: FlagReason; label: string }[] = [
   { value: 'third_party_material', label: "Contains someone else's unpublished work" },
   { value: 'inaccurate', label: 'Says something about a tool that is not true' },
   { value: 'abusive', label: 'Abusive, or breaches the code of conduct' },
@@ -314,21 +314,21 @@ export const REPORT_REASONS: readonly { value: ReportReason; label: string }[] =
   { value: 'other', label: 'Something else' },
 ];
 
-export async function fileReport(
-  subjectType: ReportSubject,
+export async function fileFlag(
+  subjectType: FlagSubject,
   subjectId: string,
-  reporterId: string,
-  reason: ReportReason,
+  flaggerId: string,
+  reason: FlagReason,
   detail: string,
 ): Promise<Result<null>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const { error } = await supabase.from('reports').insert({
+    const { error } = await supabase.from('flags').insert({
       subject_type: subjectType,
       subject_id: subjectId,
-      reporter_id: reporterId,
+      flagger_id: flaggerId,
       reason,
       detail: detail.trim() || null,
     });
@@ -374,7 +374,7 @@ function describe(error: unknown): string {
       return 'That comment is no longer available to reply to. Reload the page.';
 
     case '23505':
-      return 'You have already reported this. One report per person — sending it twice is not a stronger signal.';
+      return 'You have already flagged this. One flag per person — sending it twice is not a stronger signal.';
 
     case '42501':
       return 'This account cannot do that. It usually means the email address has not been confirmed yet — check the confirmation email.';

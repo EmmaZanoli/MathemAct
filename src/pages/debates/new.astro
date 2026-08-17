@@ -1,9 +1,9 @@
 ---
 /**
- * Suggesting a proposition.
+ * Suggesting a debate.
  *
  * Most of this page is the guidance, and that is the right proportion. A badly formed
- * proposition is worse than none: it collects ratings that cannot be interpreted, and once
+ * debate is worse than none: it collects ratings that cannot be interpreted, and once
  * people have answered it the wording is fixed, so there is no fixing it afterwards. Ten
  * seconds of reading here saves a claim that nobody can read an answer off.
  *
@@ -15,11 +15,11 @@ import Account from '../../layouts/Account.astro';
 import Field from '../../components/Field.astro';
 import FormStatus from '../../components/FormStatus.astro';
 import { path } from '../../lib/paths';
-import { AREAS } from '../../lib/practice-schema';
+import { AREAS } from '../../lib/report-schema';
 ---
 
 <Account
-  title="Suggest a proposition"
+  title="Suggest a debate"
   description="Propose a single claim about AI use in mathematics for the community to rate."
   lead="One claim, in a sentence, that somebody could reasonably disagree with."
   gate="required"
@@ -27,7 +27,7 @@ import { AREAS } from '../../lib/practice-schema';
   <div class="panel" data-gate-unconfirmed hidden>
     <p class="panel__heading">Confirm your email address first</p>
     <p>
-      Proposing needs a confirmed address, for the same reason posting a practice does.
+      Proposing needs a confirmed address, for the same reason posting a report does.
       <a href={path('/account/confirm/')}>Get another confirmation link</a>.
     </p>
   </div>
@@ -85,7 +85,7 @@ import { AREAS } from '../../lib/practice-schema';
 
       <p>
         Propose the claim you think is <em>contested</em>, not the one everybody already
-        agrees with. A proposition that scores ten across the board records nothing; the
+        agrees with. A debate that scores ten across the board records nothing; the
         useful ones are those where the histogram comes out with two peaks.
       </p>
 
@@ -100,7 +100,7 @@ import { AREAS } from '../../lib/practice-schema';
       <FormStatus id="propose-status" />
 
       {/* Only ever visible when somebody arrived here by selecting a passage and choosing
-          "cite this in a proposition". The claim is theirs to write; this is the evidence
+          "cite this in a debate". The claim is theirs to write; this is the evidence
           they had in hand when they decided it was worth asking. */}
       <div class="quote-strip" data-quote-strip hidden>
         <p class="quote-strip__label meta">Responding to</p>
@@ -180,7 +180,7 @@ import { AREAS } from '../../lib/practice-schema';
 
       <div class="actions">
         <button class="button button--primary" type="submit">Suggest it</button>
-        <a href={path('/propositions/')}>Back to the propositions</a>
+        <a href={path('/debates/')}>Back to the debates</a>
       </div>
 
       <p class="field__hint">
@@ -193,7 +193,7 @@ import { AREAS } from '../../lib/practice-schema';
 
 <script>
   import { createCitation } from '../../lib/citations';
-  import { proposeProposition } from '../../lib/propositions';
+  import { proposeDebate } from '../../lib/debates';
   import { loadProfile, mayPost } from '../../lib/profile';
   import { clearPassage, getPassage, type Passage } from '../../lib/quote';
   import { startSession, subscribeToSession } from '../../lib/session';
@@ -206,7 +206,7 @@ import { AREAS } from '../../lib/practice-schema';
     showStatus,
   } from '../../lib/forms';
   import { validateRequiredText, validateOptionalText } from '../../lib/validation';
-  import type { Area } from '../../lib/practice-schema';
+  import type { Area } from '../../lib/report-schema';
 
   const form = query<HTMLFormElement>('#propose');
   const wrap = query<HTMLElement>('[data-propose-wrap]');
@@ -294,7 +294,7 @@ import { AREAS } from '../../lib/practice-schema';
     }
 
     setBusy(submit, true, 'Suggesting…');
-    const result = await proposeProposition(
+    const result = await proposeDebate(
       userId,
       statement.value,
       rationale.value,
@@ -307,7 +307,7 @@ import { AREAS } from '../../lib/practice-schema';
       return;
     }
 
-    // The reference is recorded second, against the proposition that now exists. A failure
+    // The reference is recorded second, against the debate that now exists. A failure
     // here leaves a proposed claim with no citation attached, which is a smaller loss than
     // withdrawing something already written — and the message says which half went through.
     let citationFailed: string | null = null;
@@ -315,7 +315,7 @@ import { AREAS } from '../../lib/practice-schema';
     if (attached) {
       const linked = await createCitation(
         {
-          sourceType: 'proposition',
+          sourceType: 'debate',
           sourceId: result.value,
           targetType: attached.sourceType,
           targetId: attached.sourceId,
@@ -337,7 +337,7 @@ import { AREAS } from '../../lib/practice-schema';
       status,
       citationFailed ? 'notice' : 'success',
       citationFailed
-        ? [citationFailed, 'The proposition itself is proposed and open for answers.']
+        ? [citationFailed, 'The debate itself is proposed and open for answers.']
         : [
             'Proposed. It is open for answers straight away.',
             'It will appear in the listing after the next rebuild, which is nightly.',

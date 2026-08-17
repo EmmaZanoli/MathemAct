@@ -102,7 +102,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   </section>
 
   <section class="section">
-    <h2>Post a practice</h2>
+    <h2>Post a report</h2>
 
     <p>
       An account of how you used an AI tool in mathematical work: twelve sections, about ten
@@ -111,7 +111,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     </p>
 
     <p class="actions">
-      <a class="button button--primary" href={path('/practices/new/')}>Post a practice</a>
+      <a class="button button--primary" href={path('/reports/new/')}>Post a report</a>
     </p>
   </section>
 
@@ -199,8 +199,8 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   import { readAuthErrorFromUrl } from '../../lib/auth';
   import { longDate, verificationMonth } from '../../lib/format';
   import { path } from '../../lib/paths';
-  import { loadOwnSubmissions } from '../../lib/practices';
-  import type { OwnSubmission } from '../../lib/practices';
+  import { loadOwnSubmissions } from '../../lib/reports';
+  import type { OwnSubmission } from '../../lib/reports';
   import { loadProfile, saveProfile } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import {
@@ -282,7 +282,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   }
 
   /**
-   * Your own practices, and any change a moderator has asked for.
+   * Your own reports, and any change a moderator has asked for.
    *
    * The section stays hidden when there is nothing in it. Somebody who has not posted yet
    * does not need an empty box telling them so — the invitation to post is already above

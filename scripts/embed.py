@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Compute sentence embeddings for published practices and write data/embeddings.json.
+Compute sentence embeddings for published reports and write data/embeddings.json.
 
 Model:   sentence-transformers/all-MiniLM-L6-v2
 Licence: Apache 2.0  (https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
@@ -24,7 +24,7 @@ Usage
 
 Flags
 -----
-  --allow-shrink   Allow the output file to shrink (e.g. after practices are removed).
+  --allow-shrink   Allow the output file to shrink (e.g. after reports are removed).
                    Without it the script aborts if the count drops below half the
                    previous count — a safeguard against an empty input file.
 
@@ -32,7 +32,7 @@ CI
 --
   .github/workflows/embed.yml runs this weekly. The model is cached in
   ~/.cache/huggingface/hub between runs. The output is committed to data/ only when the
-  practice set has changed; the manifest timestamp is not compared.
+  report set has changed; the manifest timestamp is not compared.
 """
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ except ImportError:
 
 REPO = Path(__file__).parent.parent
 DATA = REPO / "data"
-PRACTICES_FILE = DATA / "practices.json"
+REPORTS_FILE = DATA / "reports.json"
 EMBEDDINGS_FILE = DATA / "embeddings.json"
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
@@ -72,30 +72,30 @@ def main() -> None:
     parser.add_argument("--allow-shrink", action="store_true", help="Allow output to shrink without aborting")
     args = parser.parse_args()
 
-    if not PRACTICES_FILE.exists():
+    if not REPORTS_FILE.exists():
         sys.exit(
-            f"  {PRACTICES_FILE} not found.\n"
+            f"  {REPORTS_FILE} not found.\n"
             "  Run scripts/export.mjs (or let .github/workflows/export.yml commit it) first."
         )
 
-    practices: list[dict] = json.loads(PRACTICES_FILE.read_text(encoding="utf-8"))
+    reports: list[dict] = json.loads(REPORTS_FILE.read_text(encoding="utf-8"))
 
     # Direct connection bypasses RLS; the export already filters to published rows.
-    # Guard here as well: only embed practices that carry content.
+    # Guard here as well: only embed reports that carry content.
     published = [
-        p for p in practices
+        p for p in reports
         if p.get("aim") and not p.get("deletedAt")
     ]
 
     if not published:
-        print("No published practices with content — nothing to embed.")
+        print("No published reports with content — nothing to embed.")
         return
 
     print(f"Loading {MODEL_NAME} …")
     model = SentenceTransformer(MODEL_NAME)
 
     texts = [f"{p['title']} {p['aim']}" for p in published]
-    print(f"Embedding {len(texts)} practices (CPU) …")
+    print(f"Embedding {len(texts)} reports (CPU) …")
     embeddings: np.ndarray = model.encode(
         texts,
         normalize_embeddings=True,
@@ -131,12 +131,12 @@ def main() -> None:
         "modelLicence": MODEL_LICENCE,
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "count": len(records),
-        "practices": records,
+        "reports": records,
     }
 
     EMBEDDINGS_FILE.write_text(json.dumps(output, ensure_ascii=False), encoding="utf-8")
     size_kb = EMBEDDINGS_FILE.stat().st_size / 1024
-    print(f"Written {EMBEDDINGS_FILE.relative_to(REPO)} ({size_kb:.1f} KB, {len(records)} practices)")
+    print(f"Written {EMBEDDINGS_FILE.relative_to(REPO)} ({size_kb:.1f} KB, {len(records)} reports)")
 
 
 if __name__ == "__main__":
