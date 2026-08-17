@@ -17,7 +17,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(35);
+select plan(28);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────────
 
