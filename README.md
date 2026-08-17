@@ -18,9 +18,9 @@ mathematics are part of the intended audience.
 
 ## Status
 
-Public site, identity layer, account flows, the submission form, and reading built.
-**Nothing is moderated yet** — no submission can reach the corpus until a moderator can
-publish it.
+Public site, identity layer, account flows, the submission form, reading, and moderation
+built. Moderators reach the queue at `/moderate/` — a nav link appears once the page has
+confirmed their role via localStorage, using the same pattern as the sign-in indicator.
 
 | | |
 |---|---|
@@ -188,7 +188,9 @@ src/pages/propositions/ the index, a proposition, and the suggest form
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
 src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)
 src/lib/                paths, site constants, status vocabulary, markdown, auth, session,
-                        profile queries, validation, formatting, form helpers
+                        session-hint (sign-in localStorage guess), mod-hint (moderator
+                        localStorage guess), profile queries, validation, formatting,
+                        form helpers
 src/styles/             tokens.css (single source of truth), base.css, forms.css
 public/fonts/           self-hosted IBM Plex woff2 + the @font-face that loads them
 data/                   the committed export the site builds from, plus the CSV dataset
