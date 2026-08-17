@@ -1,23 +1,23 @@
 ---
 /**
- * How old a practice is, and whether that matters.
+ * How old a report is, and whether that matters.
  *
- * A practice written against a 2025 model is misleading by 2026, and the interface has to
+ * A report written against a 2025 model is misleading by 2026, and the interface has to
  * say so without being read closely. The tombstone does that at a glance; this adds the two
  * things a glance cannot carry — when the tool was actually used, and, where it matters, a
  * sentence saying plainly that the account describes an older version of the tool.
  *
- * The wording of that sentence is careful. It does not say the practice is wrong, because
+ * The wording of that sentence is careful. It does not say the report is wrong, because
  * nobody has checked; it says the tool has moved, which is a fact, and leaves the reader to
  * draw the conclusion. Anything stronger would be a claim the corpus has not earned, and
  * anything weaker would be the hedge that made the note not worth printing.
  *
- * Every judgement here comes from public.practice_staleness. Nothing is recomputed: the
+ * Every judgement here comes from public.report_staleness. Nothing is recomputed: the
  * same answer has to appear in a listing, on this page, and in the export.
  */
 import Tombstone from './Tombstone.astro';
 import { longDate, monthsAgo, monthsSince } from '../lib/format';
-import type { Staleness } from '../lib/practices';
+import type { Staleness } from '../lib/reports';
 import type { Outcome } from '../lib/status';
 
 interface Props {
@@ -52,7 +52,7 @@ const isOld = age !== null && age >= 12;
       <p class="staleness__age">
         <span class="meta">
           {staleness.confirmationCount}
-          {staleness.confirmationCount === 1 ? ' report' : ' reports'}
+          {staleness.confirmationCount === 1 ? ' confirmation' : ' confirmations'}
         </span>
         <span class="staleness__relative">
           — most recent {monthsAgo(staleness.latestConfirmationAt)}
@@ -66,7 +66,7 @@ const isOld = age !== null && age >= 12;
       <p class="staleness__warning">
         This account describes a version of the tool that is over a year old. Models change
         underneath the same name, so what happened here may not be what happens now — and
-        nobody has reported either way since.
+        nobody has confirmed either way since.
       </p>
     )
   }

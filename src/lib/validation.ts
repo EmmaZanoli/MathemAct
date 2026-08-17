@@ -87,7 +87,7 @@ export function validatePassword(value: string): string | null {
   return null;
 }
 
-// ── Practices ─────────────────────────────────────────────────────────────────────────
+// ── Reports ───────────────────────────────────────────────────────────────────────────
 // Each of these mirrors a CHECK constraint in
 // supabase/migrations/20260815100200_practices.sql and _100300_practice_tools.sql. Same
 // direction as everything above: the constraint is the truth, this is the convenience.
@@ -129,13 +129,13 @@ export function validateOptionalText(
  */
 export function validateVerification(value: string, max: number): string | null {
   if (!value.trim()) {
-    return 'Say how you checked the result. This field is what separates an account somebody can rely on from one that records that something felt right — there is no version of a practice without it.';
+    return 'Say how you checked the result. This field is what separates an account somebody can rely on from one that records that something felt right — there is no version of a report without it.';
   }
 
   return validateOptionalText(value, max, 'The verification');
 }
 
-/** Shape only, matching practices_transcript_url_shape. Whether a link resolves is not
+/** Shape only, matching reports_transcript_url_shape. Whether a link resolves is not
  *  something a constraint or a form can know. */
 export function validateTranscriptUrl(value: string, max: number): string | null {
   const trimmed = value.trim();
@@ -180,7 +180,7 @@ export function validateTool(
     return `Shorten the version to ${limits.version} characters or fewer.`;
   }
 
-  if (!tool.usedOn) return 'Give the date you used it. Listings sort by it, and it is what makes a practice visibly stale later.';
+  if (!tool.usedOn) return 'Give the date you used it. Listings sort by it, and it is what makes a report visibly stale later.';
 
   // Compared as strings. Both are ISO yyyy-mm-dd, which sorts lexicographically, and this
   // avoids the timezone question a Date comparison would raise for no benefit.

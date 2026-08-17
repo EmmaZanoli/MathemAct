@@ -11,8 +11,8 @@
  * shape — which is the entire point of showing a histogram rather than a number — would be
  * invisible.
  */
-import { NO_OPINION_LABEL, SCALE_ANCHORS, SCALE_POINTS } from './propositions';
-import type { Aggregate } from './propositions';
+import { NO_OPINION_LABEL, SCALE_ANCHORS, SCALE_POINTS } from './debates';
+import type { Aggregate } from './debates';
 
 export function renderHistogram(
   root: HTMLElement,

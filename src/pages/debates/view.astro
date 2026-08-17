@@ -1,15 +1,15 @@
 ---
 /**
- * Client-rendered proposition viewer for propositions that do not yet have a static page.
+ * Client-rendered debate viewer for debates that do not yet have a static page.
  *
- * A proposition is added to the export by the nightly workflow, so between the moment
- * someone posts one and the following build there is no /propositions/<id>/ to visit. The
- * freshness overlay on the listing shows those new propositions but cannot link them — that
+ * A debate is added to the export by the nightly workflow, so between the moment
+ * someone posts one and the following build there is no /debates/<id>/ to visit. The
+ * freshness overlay on the listing shows those new debates but cannot link them — that
  * link would be a 404 dressed as a result.
  *
- * This page is the answer. It fetches the proposition from Supabase at runtime, exactly as
- * /moderate/ does, and renders the same layout as the static proposition pages. The
- * canonical URL for a proposition is still /propositions/<id>/ once the build has run; this
+ * This page is the answer. It fetches the debate from Supabase at runtime, exactly as
+ * /moderate/ does, and renders the same layout as the static debate pages. The
+ * canonical URL for a debate is still /debates/<id>/ once the build has run; this
  * page is only ever reached from the freshness overlay.
  *
  * One Supabase read (anon, plain fetch) gets the statement, rationale, area, author, and
@@ -27,27 +27,27 @@ import '../../styles/forms.css';
 import { path } from '../../lib/paths';
 ---
 
-<Base title="Proposition" description="A proposition submitted to MathemAct.">
-  <div class="shell corpus proposition">
-    <p class="breadcrumb"><a href={path('/propositions/')}>← All propositions</a></p>
+<Base title="Debate" description="A debate submitted to MathemAct.">
+  <div class="shell corpus debate">
+    <p class="breadcrumb"><a href={path('/debates/')}>← All debates</a></p>
 
     <div data-loading>
       <p class="field__hint">Loading…</p>
     </div>
 
     <div data-error hidden>
-      <p>This proposition could not be found, or has been removed.</p>
-      <p><a href={path('/propositions/')}>Back to all propositions</a></p>
+      <p>This debate could not be found, or has been removed.</p>
+      <p><a href={path('/debates/')}>Back to all debates</a></p>
     </div>
 
     <div data-content hidden>
       <header data-quotable>
-        <span data-pagefind-filter="type:proposition" hidden></span>
-        <p class="proposition__label">
+        <span data-pagefind-filter="type:debate" hidden></span>
+        <p class="debate__label">
           <span class="meta" data-status-label></span>
         </p>
 
-        <blockquote class="proposition__statement">
+        <blockquote class="debate__statement">
           <p data-statement></p>
         </blockquote>
 
@@ -63,7 +63,7 @@ import { path } from '../../lib/paths';
         <p class="field-block__body" data-rationale-text></p>
       </section>
 
-      <section class="rate" data-rate data-proposition-id="" data-pagefind-ignore>
+      <section class="rate" data-rate data-debate-id="" data-pagefind-ignore>
         <h2>Where do you stand?</h2>
 
         <div class="panel" data-rate-signedout hidden>
@@ -106,7 +106,7 @@ import { path } from '../../lib/paths';
 
       <div data-pagefind-ignore>
         <CommentThread
-          parentType="proposition"
+          parentType="debate"
           parentId=""
           nodes={[]}
           title=""
@@ -119,11 +119,11 @@ import { path } from '../../lib/paths';
 
 <script>
   import { renderHistogram } from '../../lib/histogram';
-  import { loadAggregate, loadMyRating, saveRating } from '../../lib/propositions';
+  import { loadAggregate, loadMyRating, saveRating } from '../../lib/debates';
   import { loadProfile, mayPost } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
-  import { areaLabel } from '../../lib/practice-schema';
+  import { areaLabel } from '../../lib/report-schema';
   import { longDate } from '../../lib/format';
   import { path } from '../../lib/paths';
 
@@ -141,38 +141,38 @@ import { path } from '../../lib/paths';
     await init(id);
   }
 
-  async function init(propositionId: string): Promise<void> {
-    const proposition = await fetchProposition(propositionId);
+  async function init(debateId: string): Promise<void> {
+    const debate = await fetchDebate(debateId);
 
-    if (!proposition) {
+    if (!debate) {
       loadingEl.hidden = true;
       errorEl.hidden = false;
       return;
     }
 
     // Populate static content.
-    document.title = `${proposition.statement} | MathemAct`;
+    document.title = `${debate.statement} | MathemAct`;
 
     const statusLabel = document.querySelector<HTMLElement>('[data-status-label]')!;
     statusLabel.textContent =
-      proposition.status === 'active' ? 'Active proposition' : 'Proposed';
+      debate.status === 'active' ? 'Active debate' : 'Proposed';
 
     const statementEl = document.querySelector<HTMLElement>('[data-statement]')!;
-    statementEl.textContent = proposition.statement;
+    statementEl.textContent = debate.statement;
 
     const areaEl = document.querySelector<HTMLElement>('[data-area]')!;
-    areaEl.textContent = areaLabel(proposition.area);
+    areaEl.textContent = areaLabel(debate.area);
 
     const authorEl = document.querySelector<HTMLElement>('[data-author]')!;
-    if (proposition.author) {
+    if (debate.author) {
       authorEl.append('Proposed by ');
       // /authors/view/, not /authors/<id>/, for the same reason this page exists: a
-      // proposition reached here is newer than the last build, and its author may be too.
+      // debate reached here is newer than the last build, and its author may be too.
       const link = document.createElement('a');
-      link.href = path(`/authors/view/?id=${proposition.author.id}`);
-      link.textContent = proposition.author.displayName;
+      link.href = path(`/authors/view/?id=${debate.author.id}`);
+      link.textContent = debate.author.displayName;
       authorEl.append(link);
-      if (proposition.author.isPseudonym) authorEl.append(' (a pseudonym)');
+      if (debate.author.isPseudonym) authorEl.append(' (a pseudonym)');
     } else {
       const erased = document.createElement('span');
       erased.className = 'card__erased';
@@ -181,37 +181,37 @@ import { path } from '../../lib/paths';
     }
 
     const dateEl = document.querySelector<HTMLElement>('[data-date]')!;
-    dateEl.textContent = proposition.activatedAt
-      ? `Active since ${longDate(proposition.activatedAt)}`
-      : `Proposed ${longDate(proposition.createdAt)}`;
+    dateEl.textContent = debate.activatedAt
+      ? `Active since ${longDate(debate.activatedAt)}`
+      : `Proposed ${longDate(debate.createdAt)}`;
 
-    if (proposition.rationale) {
+    if (debate.rationale) {
       const rationaleSection = document.querySelector<HTMLElement>('[data-rationale]')!;
       const rationaleText = document.querySelector<HTMLElement>('[data-rationale-text]')!;
-      rationaleText.textContent = proposition.rationale;
+      rationaleText.textContent = debate.rationale;
       rationaleSection.hidden = false;
     }
 
     // Wire up the interactive sections with the now-known ID.
     const rateSection = query<HTMLElement>('[data-rate]');
-    rateSection.dataset.propositionId = propositionId;
+    rateSection.dataset.debateId = debateId;
 
     const thread = document.querySelector<HTMLElement>('[data-thread]')!;
-    thread.dataset.parentId = propositionId;
-    thread.dataset.nodeTitle = proposition.statement;
-    thread.dataset.nodeHref = path(`/propositions/${propositionId}/`);
+    thread.dataset.parentId = debateId;
+    thread.dataset.nodeTitle = debate.statement;
+    thread.dataset.nodeHref = path(`/debates/${debateId}/`);
 
     // Reveal the content.
     loadingEl.hidden = true;
     contentEl.hidden = false;
 
-    // Initialise the rating section — same logic as the static proposition page.
-    initRating(propositionId);
+    // Initialise the rating section — same logic as the static debate page.
+    initRating(debateId);
   }
 
   // ── Rating ────────────────────────────────────────────────────────────────────────────
 
-  function initRating(propositionId: string): void {
+  function initRating(debateId: string): void {
     const root = query<HTMLElement>('[data-rate]');
     const signedOut = query<HTMLElement>('[data-rate-signedout]', root);
     const unconfirmed = query<HTMLElement>('[data-rate-unconfirmed]', root);
@@ -255,7 +255,7 @@ import { path } from '../../lib/paths';
 
       form.hidden = false;
 
-      const mine = await loadMyRating(propositionId, id);
+      const mine = await loadMyRating(debateId, id);
       if (!mine.ok) {
         showStatus(status, 'error', mine.message);
         return;
@@ -279,7 +279,7 @@ import { path } from '../../lib/paths';
     }
 
     async function reveal(): Promise<void> {
-      const aggregate = await loadAggregate(propositionId);
+      const aggregate = await loadAggregate(debateId);
       if (!aggregate.ok) {
         showStatus(status, 'error', aggregate.message);
         return;
@@ -312,7 +312,7 @@ import { path } from '../../lib/paths';
       const editing = iRated;
 
       setBusy(submit, true, editing ? 'Updating…' : 'Recording…');
-      const result = await saveRating(propositionId, userId, score);
+      const result = await saveRating(debateId, userId, score);
       setBusy(submit, false);
 
       if (!result.ok) {
@@ -338,7 +338,7 @@ import { path } from '../../lib/paths';
 
   // ── Data fetch ────────────────────────────────────────────────────────────────────────
 
-  interface FetchedProposition {
+  interface FetchedDebate {
     readonly id: string;
     readonly statement: string;
     readonly rationale: string | null;
@@ -353,19 +353,19 @@ import { path } from '../../lib/paths';
     } | null;
   }
 
-  async function fetchProposition(id: string): Promise<FetchedProposition | null> {
+  async function fetchDebate(id: string): Promise<FetchedDebate | null> {
     const base = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
     const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
     if (!base || !key) return null;
 
     const select = [
       'id,statement,rationale,status,area,created_at,activated_at',
-      'author:profiles!propositions_author_id_fkey(id,display_name,is_pseudonym)',
+      'author:profiles!debates_author_id_fkey(id,display_name,is_pseudonym)',
     ].join(',');
 
     try {
       const response = await fetch(
-        `${base}/rest/v1/propositions` +
+        `${base}/rest/v1/debates` +
           `?select=${encodeURIComponent(select)}` +
           `&id=eq.${encodeURIComponent(id)}` +
           `&status=neq.hidden`,

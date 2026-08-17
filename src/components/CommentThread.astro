@@ -1,10 +1,10 @@
 ---
 /**
- * The discussion under a practice or a proposition.
+ * The discussion under a report or a debate.
  *
  * One component for both, because a thread is a thread — the only thing that differs is
- * what it is attached to, which is two props. Anything that made the practice thread and
- * the proposition thread separate components would guarantee they drifted, and the whole
+ * what it is attached to, which is two props. Anything that made the report thread and
+ * the debate thread separate components would guarantee they drifted, and the whole
  * argument for citations is that the two halves of the site are one thing.
  *
  * What is rendered when
@@ -58,7 +58,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
   data-parent-id={parentId}
   data-node-title={title}
   data-node-href={href}
-  data-propose-href={path('/propositions/new/')}
+  data-propose-href={path('/debates/new/')}
 >
   <div class="thread__head">
     <h2>Discussion</h2>
@@ -114,7 +114,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
             <button class="link-button" type="button" data-action="reply" hidden>Reply</button>
             <button class="link-button" type="button" data-action="edit" hidden>Edit</button>
             <button class="link-button" type="button" data-action="delete" hidden>Delete</button>
-            <button class="link-button" type="button" data-action="report" hidden>Report</button>
+            <button class="link-button" type="button" data-action="flag" hidden>Flag</button>
           </div>
 
           <div class="comment__slot" data-comment-slot />
@@ -162,7 +162,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
                 <div class="comment__actions" data-comment-actions>
                   <button class="link-button" type="button" data-action="edit" hidden>Edit</button>
                   <button class="link-button" type="button" data-action="delete" hidden>Delete</button>
-                  <button class="link-button" type="button" data-action="report" hidden>Report</button>
+                  <button class="link-button" type="button" data-action="flag" hidden>Flag</button>
                 </div>
 
                 <div class="comment__slot" data-comment-slot />
@@ -258,13 +258,13 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
   import {
     deleteComment,
     editComment,
-    fileReport,
+    fileFlag,
     loadThread,
     postComment,
-    REPORT_REASONS,
+    FLAG_REASONS,
     type Comment,
     type ParentType,
-    type ReportReason,
+    type FlagReason,
   } from '../lib/comments';
   import { longDate } from '../lib/format';
   import { hideStatus, query, setBusy, showStatus } from '../lib/forms';
@@ -410,7 +410,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
             case 'delete':
               control.hidden = !mine || removed;
               break;
-            case 'report':
+            case 'flag':
               control.hidden = viewerId === null || mine || removed;
               break;
           }
@@ -536,8 +536,8 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       actions.dataset.commentActions = '';
 
       for (const action of comment.inReplyTo
-        ? ['edit', 'delete', 'report']
-        : ['reply', 'edit', 'delete', 'report']) {
+        ? ['edit', 'delete', 'flag']
+        : ['reply', 'edit', 'delete', 'flag']) {
         const control = document.createElement('button');
         control.type = 'button';
         control.className = 'link-button';
@@ -584,8 +584,8 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
         case 'delete':
           void remove(item);
           break;
-        case 'report':
-          openReport(item);
+        case 'flag':
+          openFlag(item);
           break;
       }
     });
@@ -733,20 +733,20 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       applyViewer();
     }
 
-    function openReport(item: HTMLElement): void {
+    function openFlag(item: HTMLElement): void {
       const slot = query<HTMLElement>(':scope > [data-comment-slot]', item);
 
-      const reportForm = document.createElement('form');
-      reportForm.className = 'form comment__report';
+      const flagForm = document.createElement('form');
+      flagForm.className = 'form comment__flag';
 
       const legend = document.createElement('p');
       legend.className = 'field__label';
-      legend.textContent = 'Report this to the moderators';
+      legend.textContent = 'Flag this to the moderators';
 
       const select = document.createElement('select');
       select.className = 'field__control';
-      select.setAttribute('aria-label', 'Why you are reporting this');
-      for (const reason of REPORT_REASONS) {
+      select.setAttribute('aria-label', 'Why you are flagging this');
+      for (const reason of FLAG_REASONS) {
         const option = document.createElement('option');
         option.value = reason.value;
         option.textContent = reason.label;
@@ -763,8 +763,8 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       const hint = document.createElement('p');
       hint.className = 'field__hint';
       hint.textContent =
-        'Reports are read by volunteers and are never shown on the page. Nothing about ' +
-        'reporting is visible to the person you report.';
+        'Flags are read by volunteers and are never shown on the page. Nothing about ' +
+        'flagging is visible to the person you flag.';
 
       const actions = document.createElement('div');
       actions.className = 'actions';
@@ -772,7 +772,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       const send = document.createElement('button');
       send.type = 'submit';
       send.className = 'button button--primary';
-      send.textContent = 'Send report';
+      send.textContent = 'Send flag';
 
       const abandon = document.createElement('button');
       abandon.type = 'button';
@@ -786,24 +786,24 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       message.hidden = true;
 
       actions.append(send, abandon);
-      reportForm.append(legend, select, detail, hint, actions, message);
-      slot.replaceChildren(reportForm);
+      flagForm.append(legend, select, detail, hint, actions, message);
+      slot.replaceChildren(flagForm);
       select.focus();
 
       abandon.addEventListener('click', () => slot.replaceChildren());
 
-      reportForm.addEventListener('submit', async (event) => {
+      flagForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         hideStatus(message);
 
         if (!viewerId) return;
 
         setBusy(send, true, 'Sending…');
-        const result = await fileReport(
+        const result = await fileFlag(
           'comment',
           item.dataset.commentId!,
           viewerId,
-          select.value as ReportReason,
+          select.value as FlagReason,
           detail.value,
         );
         setBusy(send, false);
@@ -814,7 +814,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
         }
 
         slot.replaceChildren();
-        showStatus(status, 'notice', 'Reported. A moderator will look at it.');
+        showStatus(status, 'notice', 'Flagged. A moderator will look at it.');
       });
     }
 

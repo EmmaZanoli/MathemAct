@@ -1,6 +1,6 @@
 name: link-check
 
-# Monthly check of all published resource URLs.
+# Monthly check of all published entry URLs.
 #
 # Runs on the first of each month. A moderator can also trigger it from the Actions tab
 # using workflow_dispatch.
@@ -80,10 +80,10 @@ jobs:
             })")
 
           gh issue create \
-            --title "Monthly link check: $BROKEN unreachable resource$([[ $BROKEN -eq 1 ]] && echo '' || echo 's') ($CHECKED_AT)" \
+            --title "Monthly link check: $BROKEN unreachable $([[ $BROKEN -eq 1 ]] && echo 'entry' || echo 'entries') ($CHECKED_AT)" \
             --label link-check \
             --body "$(cat <<BODY
-          ## Unreachable resources
+          ## Unreachable entries
 
           The monthly link check found **${BROKEN}** unreachable URL${BROKEN:-1} (${NEWLY} newly broken) out of ${CHECKED} checked on ${CHECKED_AT}.
 
@@ -94,7 +94,7 @@ jobs:
           ### What to do
 
           For each broken URL:
-          1. Open the resource in the [moderation queue](/moderate/) and verify the link.
+          1. Open the entry in the [moderation queue](/moderate/) and verify the link.
           2. If the content has moved, consider whether the submitter should update it (send back with a note) or whether it should be hidden.
           3. If the site is temporarily down, wait for next month's check.
           4. Close this issue when all broken links have been reviewed.

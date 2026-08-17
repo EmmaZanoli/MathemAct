@@ -1,5 +1,5 @@
 /**
- * The two status axes a practice carries, and the words used for them.
+ * The two status axes a report carries, and the words used for them.
  *
  * These are kept apart on purpose, because they are independent facts and collapsing
  * them into one enum produces twelve meaningless combinations:
@@ -8,7 +8,7 @@
  *                  is filled or open. This is the signature element of the whole site.
  *   Outcome      — what the author reports happened. Drives the glyph's colour only.
  *
- * A practice can report "did not work" and still be verified and current; a practice can
+ * A report can report "did not work" and still be verified and current; a report can
  * report "worked" and be three model generations stale. Both are worth knowing, and the
  * second is the one people forget to ask about.
  *
@@ -36,7 +36,7 @@ interface TombstoneDescriptor extends Descriptor {
 
 /**
  * A filled square requires both halves: a correctness verification on record *and*
- * confirmation that it still works. Everything else is open. A practice written against
+ * confirmation that it still works. Everything else is open. A report written against
  * a 2025 model is misleading by 2026, and the glyph has to say so without being read.
  */
 export const TOMBSTONE_STATUS: Record<TombstoneStatus, TombstoneDescriptor> = {

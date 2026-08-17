@@ -1,7 +1,7 @@
 /**
  * Markdown with TeX, rendered to HTML at build time.
  *
- * Everything a contributor writes — the practice narrative, comments, proposition text —
+ * Everything a contributor writes — the report narrative, comments, debate text —
  * goes through here. It is therefore a security boundary, and the ordering below is the
  * part worth understanding before changing anything.
  *

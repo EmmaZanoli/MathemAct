@@ -1,14 +1,14 @@
 /**
  * Who gets an author page, and where their name and badge come from.
  *
- * This is its own file rather than another function in practices.ts for a bundling reason.
- * `resources.ts` does a static `import` of data/resources.json, so anything that imports it
- * carries the resource corpus — and practices.ts is imported by browser scripts, the
+ * This is its own file rather than another function in reports.ts for a bundling reason.
+ * `network.ts` does a static `import` of data/network.json, so anything that imports it
+ * carries the entry corpus — and reports.ts is imported by browser scripts, the
  * submission form among them. Tree-shaking would probably drop it; probably is not a good
  * enough reason to put a build-time-only join into a module the browser loads.
  *
- * **Membership: anyone whose name is linked from something.** That is practice authors,
- * proposition authors, and resource submitters. Deliberately not everyone in
+ * **Membership: anyone whose name is linked from something.** That is report authors,
+ * debate authors, and entry submitters. Deliberately not everyone in
  * data/profiles.json, which also holds people whose only contribution is a comment — nothing
  * links a name from a comment, so a page for them would be one no reader can reach and
  * Pagefind would index it as an almost-empty result. The rule is that a page exists exactly
@@ -16,17 +16,17 @@
  * thing to change.
  *
  * **Identity: data/profiles.json, with the corpus as a fallback.** The three corpora do not
- * agree on how much they carry about a person. A practice and a resource each embed the
- * institution triple a badge is built from; a proposition embeds only the name and the
+ * agree on how much they carry about a person. A report and an entry each embed the
+ * institution triple a badge is built from; a debate embeds only the name and the
  * pseudonym flag. Taking identity from the corpus that happened to mention someone first
  * would therefore drop the institutional badge from the page of anyone who has only ever
- * posted a proposition — silently, and in the one direction that matters, since a badge that
+ * posted a debate — silently, and in the one direction that matters, since a badge that
  * fails to appear looks like an account that was never verified.
  */
-import type { CorpusAuthor } from './practices';
-import { listPractices } from './practices';
-import { listPropositions } from './propositions';
-import { listResources } from './resources';
+import type { CorpusAuthor } from './reports';
+import { listReports } from './reports';
+import { listDebates } from './debates';
+import { listNetwork } from './network';
 
 /** A row of data/profiles.json. A superset of CorpusAuthor, and the same shape for the
  *  fields they share, because scripts/export.mjs writes both from public.profiles. */
@@ -60,16 +60,16 @@ export async function listContributors(): Promise<CorpusAuthor[]> {
     contributors.set(author.id, profiles.get(author.id) ?? author);
   };
 
-  for (const practice of await listPractices()) add(practice.author);
+  for (const report of await listReports()) add(report.author);
 
-  for (const proposition of await listPropositions()) {
-    // Propositions carry no institution. Passing null here is safe rather than lossy: `add`
+  for (const debate of await listDebates()) {
+    // Debates carry no institution. Passing null here is safe rather than lossy: `add`
     // prefers the profile, and this value is used only if the export has no profile row for
     // somebody it also lists as an author, which the export's own query rules out.
-    if (proposition.author) add({ ...proposition.author, institution: null });
+    if (debate.author) add({ ...debate.author, institution: null });
   }
 
-  for (const resource of listResources()) add(resource.submitter);
+  for (const entry of listNetwork()) add(entry.submitter);
 
   return [...contributors.values()];
 }

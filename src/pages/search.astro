@@ -1,6 +1,6 @@
 ---
 /**
- * Full-text search over the practice and proposition corpus.
+ * Full-text search over the report and debate corpus.
  *
  * Pagefind indexes the generated HTML at build time. This page uses the Pagefind JS API
  * directly (not the default UI) so that results can be grouped by content type and the
@@ -15,7 +15,7 @@
  */
 import Base from '../layouts/Base.astro';
 import { path } from '../lib/paths';
-import { AREAS, TASK_TYPES } from '../lib/practice-schema';
+import { AREAS, TASK_TYPES } from '../lib/report-schema';
 
 const q = Astro.url.searchParams.get('q') ?? '';
 const filterType = Astro.url.searchParams.get('type') ?? '';
@@ -25,7 +25,7 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
 
 <Base
   title="Search"
-  description="Search practices and propositions in the MathemAct corpus."
+  description="Search reports and debates in the MathemAct corpus."
 >
   <div class="shell search-page" data-base={import.meta.env.BASE_URL}>
     <header class="search-header">
@@ -39,7 +39,7 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
           type="search"
           name="q"
           value={q}
-          placeholder="Search practices and propositions…"
+          placeholder="Search reports and debates…"
           aria-label="Search query"
           autofocus
         />
@@ -51,7 +51,7 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
 
         <div class="filter-group">
           <span class="filter-group__label">Type</span>
-          {(['', 'practice', 'proposition'] as const).map((t) => (
+          {(['', 'report', 'debate'] as const).map((t) => (
             <label class="filter-chip">
               <input
                 type="radio"
@@ -59,12 +59,12 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
                 value={t}
                 checked={filterType === t}
               />
-              <span>{t === '' ? 'All' : t === 'practice' ? 'Practices' : 'Propositions'}</span>
+              <span>{t === '' ? 'All' : t === 'report' ? 'Reports' : 'Debates'}</span>
             </label>
           ))}
         </div>
 
-        {(filterType === '' || filterType === 'practice') && (
+        {(filterType === '' || filterType === 'report') && (
           <>
             <div class="filter-group">
               <span class="filter-group__label">Area</span>
@@ -103,14 +103,14 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
     </div>
 
     <div class="search-results" data-results>
-      <section class="results-group" data-group="practice" hidden>
-        <h2 class="results-group__heading">Practices</h2>
-        <ul class="results-list" role="list" data-list="practice"></ul>
+      <section class="results-group" data-group="report" hidden>
+        <h2 class="results-group__heading">Reports</h2>
+        <ul class="results-list" role="list" data-list="report"></ul>
       </section>
 
-      <section class="results-group" data-group="proposition" hidden>
-        <h2 class="results-group__heading">Propositions</h2>
-        <ul class="results-list" role="list" data-list="proposition"></ul>
+      <section class="results-group" data-group="debate" hidden>
+        <h2 class="results-group__heading">Debates</h2>
+        <ul class="results-list" role="list" data-list="debate"></ul>
       </section>
 
       <section class="results-group" data-group="other" hidden>
@@ -139,8 +139,8 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
    * and must be resolved at runtime from the deployed site. In development (npm run dev)
    * the file is absent and the page shows an appropriate message.
    *
-   * Results are grouped by the `type` filter value written into each practice and
-   * proposition page with data-pagefind-filter="type:practice" etc.
+   * Results are grouped by the `type` filter value written into each report and
+   * debate page with data-pagefind-filter="type:report" etc.
    */
 
   const page = document.querySelector<HTMLElement>('[data-base]');
@@ -204,15 +204,15 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
 
     status.textContent = `${raw.length}${raw.length === MAX ? '+' : ''} result${raw.length === 1 ? '' : 's'} for "${q}"`;
 
-    const groups: Record<'practice' | 'proposition' | 'other', PagefindResult[]> = {
-      practice: [],
-      proposition: [],
+    const groups: Record<'report' | 'debate' | 'other', PagefindResult[]> = {
+      report: [],
+      debate: [],
       other: [],
     };
     for (const r of raw) {
       const t = (r.meta?.type ?? '') as string;
-      if (t === 'practice') groups.practice.push(r);
-      else if (t === 'proposition') groups.proposition.push(r);
+      if (t === 'report') groups.report.push(r);
+      else if (t === 'debate') groups.debate.push(r);
       else groups.other.push(r);
     }
 

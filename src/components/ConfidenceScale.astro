@@ -2,7 +2,7 @@
 /**
  * How confident the author is in the result, on the site's 11-point scale.
  *
- * The same 0 to 10 range as the agreement scale that propositions will use, so the whole
+ * The same 0 to 10 range as the agreement scale that debates will use, so the whole
  * site has one legend. Two rules carried over from that scale, both of which exist because
  * they change what the numbers mean:
  *
@@ -15,7 +15,7 @@
  * Radios rather than a range slider. A slider has no keyboard-obvious granularity, gives no
  * way to express "not answered", and reads to a screen reader as a number with no anchors.
  */
-import { CONFIDENCE } from '../lib/practice-schema';
+import { CONFIDENCE } from '../lib/report-schema';
 
 interface Props {
   name: string;

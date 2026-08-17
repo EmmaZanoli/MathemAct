@@ -5,8 +5,8 @@
  * --------------------
  * The site is served from `https://emmazanoli.github.io/MathemAct/`, so internal URLs
  * carry a `/MathemAct` prefix. Astro exposes that prefix as `import.meta.env.BASE_URL`
- * but does not rewrite markup for you — a literal `href="/practices/"` resolves to
- * `emmazanoli.github.io/practices/`, outside our site, and 404s.
+ * but does not rewrite markup for you — a literal `href="/reports/"` resolves to
+ * `emmazanoli.github.io/reports/`, outside our site, and 404s.
  *
  * Three reasons to funnel every path through here rather than writing them by hand:
  *
@@ -19,7 +19,7 @@
  *  3. Hardcoded prefixes rot silently. `/MathemAct/MathemAct/...` is the classic
  *     symptom of someone half-remembering that a prefix is needed.
  *
- * Pass site-root-relative paths: `path('/practices/')`, not `path('../practices/')`.
+ * Pass site-root-relative paths: `path('/reports/')`, not `path('../reports/')`.
  * Absolute URLs and `mailto:` links are returned untouched, so it is safe to call on a
  * href that might be either.
  */
@@ -42,10 +42,10 @@ function join(to: string): string {
  * Any `?query` or `#fragment` is preserved and stays after the slash.
  *
  *   path('/')                   // '/MathemAct/'
- *   path('/practices/')         // '/MathemAct/practices/'
- *   path('/practices')          // '/MathemAct/practices/'
- *   path('/practices/?area=research')
- *                               // '/MathemAct/practices/?area=research'
+ *   path('/reports/')         // '/MathemAct/reports/'
+ *   path('/reports')          // '/MathemAct/reports/'
+ *   path('/reports/?area=research')
+ *                               // '/MathemAct/reports/?area=research'
  *   path('https://ror.org')     // unchanged
  */
 export function path(to: string): string {

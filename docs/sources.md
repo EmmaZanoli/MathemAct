@@ -121,7 +121,7 @@ indication. Attribution may be met "in any reasonable manner based on the medium
 and context".
 
 **Recommended attribution practice**
-URL: https://wiki.creativecommons.org/wiki/Recommended_practices_for_attribution
+URL: https://wiki.creativecommons.org/wiki/Recommended_reports_for_attribution
 Format: Title — Author — Source URL — Licence name + link.
 
 Commercial use: permitted. Derivative works: permitted. Relicensing derivatives: permitted.

@@ -1,7 +1,7 @@
 /**
  * The freshness overlay: what has been posted since the site was last built.
  *
- * The corpus is served as static files exported nightly, which means a practice posted this
+ * The corpus is served as static files exported nightly, which means a report posted this
  * morning is invisible until tomorrow. For most of this site that is the right trade — it is
  * what keeps a free tier viable — but for somebody who has just posted, and for anybody
  * arriving from a link they were sent, a day-long silence looks like the submission was
@@ -16,7 +16,7 @@
  * one GET against PostgREST with the publishable key, which is public by design.
  *
  * **Capped.** At most two dozen rows, and never a second page. This is a nudge toward the
- * newest handful, not a substitute for the export: if a hundred practices arrive in a day,
+ * newest handful, not a substitute for the export: if a hundred reports arrive in a day,
  * the answer is the nightly build, not a listing that quietly turns into a live query.
  *
  * **Time-limited.** A few seconds, then abandoned. The static content is already on screen
@@ -39,7 +39,7 @@ const TIMEOUT_MS = 4000;
 const URL_BASE = import.meta.env.PUBLIC_SUPABASE_URL;
 const KEY = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
-export interface FreshPractice {
+export interface FreshReport {
   readonly id: string;
   readonly title: string;
   readonly aim: string;
@@ -54,14 +54,14 @@ export interface FreshPractice {
   readonly tags: readonly string[];
 }
 
-export interface FreshProposition {
+export interface FreshDebate {
   readonly id: string;
   readonly statement: string;
   readonly area: string;
   readonly createdAt: string;
 }
 
-export interface FreshResource {
+export interface FreshEntry {
   readonly id: string;
   readonly title: string;
   readonly url: string;
@@ -102,23 +102,23 @@ async function ask<T>(query: string): Promise<T[]> {
 }
 
 /**
- * Published practices created after `since`.
+ * Published reports created after `since`.
  *
  * The filters restate what row level security already enforces for the anonymous key. That
  * is not redundancy for its own sake: this is the one query in the project whose result is
  * prepended to a page as though it came from the corpus, and the day somebody widens a
  * policy is the day it would start showing pending submissions to everybody.
  */
-export async function practicesSince(since: string): Promise<FreshPractice[]> {
+export async function reportsSince(since: string): Promise<FreshReport[]> {
   const select = [
     'id,title,aim,area,task_type,outcome,created_at',
-    'author:profiles!practices_author_id_fkey(id,display_name,is_pseudonym)',
-    'practice_tools(tool_name,tool_version)',
-    'practice_tags(tags(code))',
+    'author:profiles!reports_author_id_fkey(id,display_name,is_pseudonym)',
+    'report_tools(tool_name,tool_version)',
+    'report_tags(tags(code))',
   ].join(',');
 
-  const rows = await ask<RawFreshPractice>(
-    `practices?select=${encodeURIComponent(select)}` +
+  const rows = await ask<RawFreshReport>(
+    `reports?select=${encodeURIComponent(select)}` +
       `&status=eq.published&deleted_at=is.null&created_at=gt.${encodeURIComponent(since)}` +
       `&order=created_at.desc&limit=${LIMIT}`,
   );
@@ -135,19 +135,19 @@ export async function practicesSince(since: string): Promise<FreshPractice[]> {
     // attestation with a date on it and the date is not in this query.
     authorName: row.author?.display_name ?? null,
     authorId: row.author?.id ?? null,
-    tools: (row.practice_tools ?? []).map((tool) => ({
+    tools: (row.report_tools ?? []).map((tool) => ({
       name: tool.tool_name,
       version: tool.tool_version,
     })),
-    tags: (row.practice_tags ?? []).flatMap((link) => (link.tags ? [link.tags.code] : [])),
+    tags: (row.report_tags ?? []).flatMap((link) => (link.tags ? [link.tags.code] : [])),
   }));
 }
 
-/** Propositions created after `since`. Anything this new is `proposed`: nothing is born
+/** Debates created after `since`. Anything this new is `proposed`: nothing is born
  *  active, and the threshold that promotes one takes five people. */
-export async function propositionsSince(since: string): Promise<FreshProposition[]> {
-  const rows = await ask<RawFreshProposition>(
-    'propositions?select=id,statement,area,created_at' +
+export async function debatesSince(since: string): Promise<FreshDebate[]> {
+  const rows = await ask<RawFreshDebate>(
+    'debates?select=id,statement,area,created_at' +
       `&status=eq.proposed&created_at=gt.${encodeURIComponent(since)}` +
       `&order=created_at.desc&limit=${LIMIT}`,
   );
@@ -160,7 +160,7 @@ export async function propositionsSince(since: string): Promise<FreshProposition
   }));
 }
 
-interface RawFreshPractice {
+interface RawFreshReport {
   id: string;
   title: string;
   aim: string;
@@ -169,14 +169,14 @@ interface RawFreshPractice {
   outcome: 'worked' | 'partial' | 'failed';
   created_at: string;
   author: { id: string; display_name: string; is_pseudonym: boolean } | null;
-  practice_tools: { tool_name: string; tool_version: string }[];
-  practice_tags: { tags: { code: string } | null }[];
+  report_tools: { tool_name: string; tool_version: string }[];
+  report_tags: { tags: { code: string } | null }[];
 }
 
-/** Published resources created after `since`. */
-export async function resourcesSince(since: string): Promise<FreshResource[]> {
-  const rows = await ask<RawFreshResource>(
-    'resources?select=id,title,url,url_normalised,category,description,relevance,created_at' +
+/** Published entries created after `since`. */
+export async function networkSince(since: string): Promise<FreshEntry[]> {
+  const rows = await ask<RawFreshEntry>(
+    'network_entries?select=id,title,url,url_normalised,category,description,relevance,created_at' +
       `&status=eq.published&created_at=gt.${encodeURIComponent(since)}` +
       `&order=created_at.desc&limit=${LIMIT}`,
   );
@@ -193,14 +193,14 @@ export async function resourcesSince(since: string): Promise<FreshResource[]> {
   }));
 }
 
-interface RawFreshProposition {
+interface RawFreshDebate {
   id: string;
   statement: string;
   area: string;
   created_at: string;
 }
 
-interface RawFreshResource {
+interface RawFreshEntry {
   id: string;
   title: string;
   url: string;

@@ -3,9 +3,9 @@
 -- Three behaviours here are the ones worth having tests for, because each looks wrong from
 -- the outside and each is deliberate:
 --
---   A comment on a hidden practice is invisible, without anything having walked the thread
+--   A comment on a hidden report is invisible, without anything having walked the thread
 --   and hidden each row. The select policy requires a parent the caller can see, so it
---   composes with whatever public.practices already says.
+--   composes with whatever public.reports already says.
 --
 --   Soft deletion empties the body and nulls the author in a BEFORE trigger, and the
 --   policy's WITH CHECK then requires exactly that shape. The test asserts the outcome
@@ -57,24 +57,24 @@ select is(
 
 -- ── Things to comment on ────────────────────────────────────────────────────────────
 
-insert into public.practices (
+insert into public.reports (
   id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
   verification, third_party_material_confirmed
 ) values
   ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001',
-   'published', 'A published practice', 'research', 'proof_checking',
+   'published', 'A published report', 'research', 'proof_checking',
    'Confirm a lemma.', 'Stated it in Lean.', 'worked', 'It closed.', 'Lean accepted it.', true),
 
   ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001',
-   'pending', 'A practice still in the queue', 'writing', 'exposition',
+   'pending', 'A report still in the queue', 'writing', 'exposition',
    'Draft a seminar note.', 'Asked, then rewrote.', 'partial', 'Half usable.',
    'Checked by hand.', true),
 
   ('22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001',
-   'hidden', 'A practice a moderator has hidden', 'research', 'other',
+   'hidden', 'A report a moderator has hidden', 'research', 'other',
    'Something.', 'Something else.', 'failed', 'It did not.', 'Checked it.', true);
 
-insert into public.propositions (id, author_id, statement, status, activated_at, area)
+insert into public.debates (id, author_id, statement, status, activated_at, area)
 values
   ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001',
    'Every AI-generated proof step must be checked by a human before publication.',
@@ -84,32 +84,32 @@ values
 
 insert into public.comments (id, parent_type, parent_id, author_id, in_reply_to, body, status, created_at)
 values
-  ('44444444-0000-0000-0000-000000000001', 'practice', '22222222-0000-0000-0000-000000000001',
+  ('44444444-0000-0000-0000-000000000001', 'report', '22222222-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000002', null,
    'Did the missing hypothesis turn out to be necessary, or only convenient?', 'published', now()),
 
-  ('44444444-0000-0000-0000-000000000002', 'practice', '22222222-0000-0000-0000-000000000001',
+  ('44444444-0000-0000-0000-000000000002', 'report', '22222222-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000001', '44444444-0000-0000-0000-000000000001',
    'Necessary. The statement is false without it.', 'published', now()),
 
-  ('44444444-0000-0000-0000-000000000003', 'practice', '22222222-0000-0000-0000-000000000001',
+  ('44444444-0000-0000-0000-000000000003', 'report', '22222222-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000002', null,
    'A remark a moderator has since hidden.', 'hidden', now()),
 
   -- Authored by 1, not by 2. The reader who tries to reply to this below has to be somebody
   -- who genuinely cannot see it: an author can always read their own comment, whatever has
-  -- happened to the practice it hangs off, so making this 2's own would test nothing.
-  ('44444444-0000-0000-0000-000000000004', 'practice', '22222222-0000-0000-0000-000000000003',
+  -- happened to the report it hangs off, so making this 2's own would test nothing.
+  ('44444444-0000-0000-0000-000000000004', 'report', '22222222-0000-0000-0000-000000000003',
    '11111111-0000-0000-0000-000000000001', null,
-   'A remark on a practice that is no longer visible.', 'published', now()),
+   'A remark on a report that is no longer visible.', 'published', now()),
 
-  ('44444444-0000-0000-0000-000000000005', 'proposition', '33333333-0000-0000-0000-000000000001',
+  ('44444444-0000-0000-0000-000000000005', 'debate', '33333333-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000001', null,
    'Checked how? $\pi_1$ of the wrong space is still a check.', 'published', now()),
 
   -- Older than the edit window, and with nothing under it, so it isolates the age rule
   -- from the replies rule.
-  ('44444444-0000-0000-0000-000000000006', 'practice', '22222222-0000-0000-0000-000000000001',
+  ('44444444-0000-0000-0000-000000000006', 'report', '22222222-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000001', null,
    'Written three days ago and never touched since.', 'published', now() - interval '3 days');
 
@@ -130,13 +130,13 @@ select is_empty(
 
 select is_empty(
   $$ select id from public.comments where parent_id = '22222222-0000-0000-0000-000000000003' $$,
-  'anon sees no comment on a hidden practice, without those rows having been hidden too'
+  'anon sees no comment on a hidden report, without those rows having been hidden too'
 );
 
 select is(
-  (select count(*)::int from public.comments where parent_type = 'proposition'),
+  (select count(*)::int from public.comments where parent_type = 'debate'),
   1,
-  'the same thread machinery serves propositions'
+  'the same thread machinery serves debates'
 );
 
 reset role;
@@ -169,7 +169,7 @@ set local role anon;
 
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, body)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
+     values ('report', '22222222-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000002', 'From nowhere.') $$,
   '42501'::text, null::text,
   'anon cannot comment'
@@ -182,7 +182,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","
 
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, body)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
+     values ('report', '22222222-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000003', 'Unconfirmed.') $$,
   '42501'::text, null::text,
   'an unconfirmed account cannot comment'
@@ -195,7 +195,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000004","
 
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, body)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
+     values ('report', '22222222-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000004', 'Banned.') $$,
   '42501'::text, null::text,
   'a banned account cannot comment'
@@ -208,7 +208,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","
 
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, body)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
+     values ('report', '22222222-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000001', 'Under a false name.') $$,
   '42501'::text, null::text,
   'a member cannot comment under somebody else''s name'
@@ -218,7 +218,7 @@ select throws_ok(
 -- must not be discoverable by commenting on its id.
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, body)
-     values ('practice', '22222222-0000-0000-0000-000000000002',
+     values ('report', '22222222-0000-0000-0000-000000000002',
              '11111111-0000-0000-0000-000000000002', 'On a queued submission.') $$,
   '42501'::text, null::text,
   'a member cannot comment on a parent they cannot see'
@@ -226,7 +226,7 @@ select throws_ok(
 
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, status, body)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
+     values ('report', '22222222-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000002', 'hidden', 'Born hidden.') $$,
   '42501'::text, null::text,
   'nobody can choose a comment''s status: it has no INSERT grant'
@@ -234,7 +234,7 @@ select throws_ok(
 
 -- The allowed case.
 insert into public.comments (parent_type, parent_id, author_id, body)
-values ('practice', '22222222-0000-0000-0000-000000000001',
+values ('report', '22222222-0000-0000-0000-000000000001',
         '11111111-0000-0000-0000-000000000002',
         'An ordinary remark from a confirmed member.');
 
@@ -254,7 +254,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","
 
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, in_reply_to, body)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
+     values ('report', '22222222-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000002',
              '44444444-0000-0000-0000-000000000002', 'A reply to a reply.') $$,
   '23514'::text, null::text,
@@ -263,7 +263,7 @@ select throws_ok(
 
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, in_reply_to, body)
-     values ('proposition', '33333333-0000-0000-0000-000000000001',
+     values ('debate', '33333333-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000002',
              '44444444-0000-0000-0000-000000000001', 'A reply from another discussion.') $$,
   '23514'::text, null::text,
@@ -274,16 +274,16 @@ select throws_ok(
 -- deliberately: distinguishing them would make the endpoint a way to probe by id.
 select throws_ok(
   $$ insert into public.comments (parent_type, parent_id, author_id, in_reply_to, body)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
+     values ('report', '22222222-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000002',
-             '44444444-0000-0000-0000-000000000004', 'A reply to a comment on a hidden practice.') $$,
+             '44444444-0000-0000-0000-000000000004', 'A reply to a comment on a hidden report.') $$,
   '23503'::text, null::text,
   'a reply to a comment the caller cannot see is refused, and says nothing about why'
 );
 
 -- The allowed case: one reply, to a top-level comment, in its own discussion.
 insert into public.comments (parent_type, parent_id, author_id, in_reply_to, body)
-values ('practice', '22222222-0000-0000-0000-000000000001',
+values ('report', '22222222-0000-0000-0000-000000000001',
         '11111111-0000-0000-0000-000000000002',
         '44444444-0000-0000-0000-000000000006', 'A perfectly ordinary reply.');
 
@@ -341,7 +341,7 @@ select throws_ok(
 );
 
 -- Somebody else's comment matches no policy's USING clause, so this is a silent no-op
--- rather than an error -- the same shape as editing another member's practice.
+-- rather than an error -- the same shape as editing another member's report.
 update public.comments set body = 'Hijacked.'
  where id = '44444444-0000-0000-0000-000000000005';
 
@@ -483,7 +483,7 @@ select ok(
 
 select has_trigger(
   'public', 'comments', 'comments_daily_limit',
-  'comments are rate limited by the same trigger as practices'
+  'comments are rate limited by the same trigger as reports'
 );
 
 -- ── Erasure detaches rather than destroys ───────────────────────────────────────────

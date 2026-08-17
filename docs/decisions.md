@@ -9,7 +9,7 @@ new entry saying so and leave the old one standing.
 ## 2026-08-13 — Astro as the site generator
 
 Static output is a hard requirement (GitHub Pages, no application server), and the site is
-overwhelmingly content: practice pages, proposition pages, listings. Astro ships zero
+overwhelmingly content: report pages, debate pages, listings. Astro ships zero
 JavaScript by default and lets the few genuinely interactive parts — the submission form,
 the rating widget, the auth flow — opt in individually.
 
@@ -19,14 +19,14 @@ a client-side framework to render its own text.
 
 Rejected: Next.js and SvelteKit, whose static export modes are a supported side path
 rather than the primary one. Rejected: a bare static site generator with no component
-model, because the practice page is a dense, repeated, structured layout and building it
+model, because the report page is a dense, repeated, structured layout and building it
 from string templates would not survive contact with a dozen field types.
 
 ## 2026-08-13 — Reads are static; the database serves writes and auth only
 
 A nightly job exports published content and rating aggregates to JSON committed to
 `data/`, and the site builds from those files. Browsers reach Supabase only to log in,
-submit, comment, rate, or confirm a practice.
+submit, comment, rate, or confirm a report.
 
 This is what makes the free tier viable in production rather than merely cheap:
 
@@ -640,7 +640,7 @@ contribution stays in the corpus under CC BY without a name on it. A cascade her
 make "delete my account" also mean "delete the discussion other people had about my work",
 which is not what anyone is asking for and not what the licence permits us to promise.
 
-`practice_confirmations.user_id` cascades, and the contrast is deliberate. A confirmation
+`report_confirmations.user_id` cascades, and the contrast is deliberate. A confirmation
 is one person's report rather than a durable contribution: an unattributed one could not be
 corrected, replaced, or counted against the one-per-person rule.
 
@@ -655,7 +655,7 @@ settings lookup would fail for exactly the readers the view exists to serve.
 Changing it is therefore a migration. That is the right weight for a number that changes
 the meaning of every tombstone on the site at once.
 
-## 2026-08-15 — An author may confirm their own practice
+## 2026-08-15 — An author may confirm their own report
 
 This looks like a hole and is not. The most valuable confirmation anyone will ever file is
 an author returning to their own account a year later to report that it no longer
@@ -666,42 +666,42 @@ most recent verdict, whoever filed it.
 
 ## 2026-08-15 — The status column grant is wide, and the policy is what narrows it
 
-`grant update (status, ...) on public.practices to authenticated` includes a column most
+`grant update (status, ...) on public.reports to authenticated` includes a column most
 callers must never write. It has to: moderators reach PostgREST as the same `authenticated`
 role as everybody else, so no column grant can distinguish them. The moderator policy and
-`private.protect_practice_columns()` are what actually restrict it, and both are asserted
-in `008_practice_rls.test.sql`.
+`private.protect_report_columns()` are what actually restrict it, and both are asserted
+in `008_report_rls.test.sql`.
 
 `author_id` is the contrast worth noticing. It has no column grant at all, so reassigning a
-practice fails with a permission error before any trigger runs — and the guard reverts it
+report fails with a permission error before any trigger runs — and the guard reverts it
 too, which the test proves by widening the grant and trying anyway.
 
 ## 2026-08-15 — Submission is one RPC, because a deferred constraint made it one
 
-`practices` must record at least one tool, enforced by a DEFERRABLE INITIALLY DEFERRED
+`reports` must record at least one tool, enforced by a DEFERRABLE INITIALLY DEFERRED
 constraint trigger. Deferred means at the end of the transaction, and PostgREST gives every
-request its own — so a browser inserting the practice and then its tools fails on the first
+request its own — so a browser inserting the report and then its tools fails on the first
 request, at commit, before the tools exist. No ordering fixes it: the tools reference an id
-that does not exist until the practice is inserted. The form could not submit at all
-without `public.submit_practice`.
+that does not exist until the report is inserted. The form could not submit at all
+without `public.submit_report`.
 
 It is **SECURITY INVOKER**, and that is the whole safety argument: it buys a transaction and
 nothing else. Every policy, grant, constraint and trigger that guards those tables directly
-still guards them through it, and `012_submit_practice.test.sql` asserts it — unconfirmed
+still guards them through it, and `012_submit_report.test.sql` asserts it — unconfirmed
 and banned accounts are refused by the *policy* rather than by the function, and `author_id`
 is `auth.uid()` rather than a parameter. A DEFINER function here would be a hole around all
 of it and would look exactly the same.
 
 `p_author_confidence` is `integer` although the column is `smallint`. Postgres will not
 implicitly narrow an integer literal while resolving which function to call, so a smallint
-parameter makes `submit_practice(..., 8, ...)` fail with "function does not exist" — which
+parameter makes `submit_report(..., 8, ...)` fail with "function does not exist" — which
 sends you looking for a missing migration rather than a missing cast.
 
 ## 2026-08-15 — A transcript link may not stand alone
 
 CLAUDE.md's content model says a share link is never the only record: links expire, get
 revoked, and may breach provider terms. The schema was not enforcing it, so
-`practices_link_needs_excerpt` now does. A practice carrying a link and no excerpt is one
+`reports_link_needs_excerpt` now does. A report carrying a link and no excerpt is one
 whose evidence lives on somebody else's server, under terms they can change, for as long as
 they feel like hosting it — a hole in a corpus that is meant to be downloadable in full, and
 one nobody notices until the link is dead.
@@ -747,14 +747,14 @@ and the last one is the one that settles it:
 - The free tier pauses a project after about a week of inactivity. A site whose pages are
   files keeps serving; a site that fetches its content does not.
 - A reader waits for a round trip before seeing anything, on every page.
-- **Astro needs the ids at build time to generate `/practices/<id>/` at all**, and GitHub
+- **Astro needs the ids at build time to generate `/reports/<id>/` at all**, and GitHub
   Pages has no SPA fallback. Fetching would mean one page with a query parameter, and a
   corpus meant to be cited needs real URLs.
 
 `readCorpus()` is the single swap point. It already prefers a committed
-`data/practices.json` and falls back to querying; when the nightly export exists the
+`data/reports.json` and falls back to querying; when the nightly export exists the
 fallback goes and no page changes. A failed query returns an empty corpus rather than
-throwing, so a paused project produces a site with no practices rather than a red build.
+throwing, so a paused project produces a site with no reports rather than a red build.
 
 ## 2026-08-15 — `[hidden]` needs `!important`, and this cost three shipped bugs
 
@@ -765,7 +765,7 @@ author rule outranks. So the moment a component sets `display: flex` on a class,
 It had already shipped three times, each presenting as an unrelated logic bug: listing
 filters that updated the count, the chips and the tallies while hiding no cards; the account
 deletion form left visible underneath the request it had just filed; and the disclosure
-question on the submission form shown for practices that were never published. All three
+question on the submission form shown for reports that were never published. All three
 were one line of CSS.
 
 `base.css` now carries `[hidden] { display: none !important }` — not wrapped in `:where()`,
@@ -785,15 +785,15 @@ prevent.
 
 ## 2026-08-15 — The staleness rule is read, never recomputed
 
-Every tombstone on the site comes from `public.practice_staleness`. Nothing in TypeScript
+Every tombstone on the site comes from `public.report_staleness`. Nothing in TypeScript
 derives one, and `StalenessNote.astro` only decides how to *say* what the view already
-computed. The same answer has to appear in a listing, on a practice page, in the nightly
+computed. The same answer has to appear in a listing, on a report page, in the nightly
 export, and in whatever a researcher runs against the dumped corpus; a second
 implementation would be a second definition of "verified".
 
 The one thing the interface adds is the plainly worded note for an account over a year old.
 Its wording is deliberate: it says the tool has moved, which is a fact, rather than that the
-practice is wrong, which nobody has checked.
+report is wrong, which nobody has checked.
 
 ## 2026-08-15 — The aggregate is a SECURITY DEFINER function under a security_invoker view
 
@@ -808,19 +808,19 @@ The histogram would be a histogram of one.
 
 So the counting is in `public.rating_aggregate()`, SECURITY DEFINER, which returns a
 histogram, a median and three counts and has no argument by which it can be made to return a
-row, a user id, or a score attributable to anybody. It refuses hidden propositions. The view
-over it stays `security_invoker`, which still does real work: it joins `public.propositions`,
-so a hidden proposition's aggregate does not appear in a listing to somebody who cannot see
-the proposition.
+row, a user id, or a score attributable to anybody. It refuses hidden debates. The view
+over it stays `security_invoker`, which still does real work: it joins `public.debates`,
+so a hidden debate's aggregate does not appear in a listing to somebody who cannot see
+the debate.
 
 **The Security Advisor flags this**, twice — `anon_security_definer_function_executable` and
 the `authenticated` equivalent. Both are expected and accepted. It is flagging the pattern,
 not a mistake, and the pattern is the only way to satisfy both requirements. Four warnings
 is now the baseline; a fifth means something new.
 
-The honest caveat: on a proposition with one rating the aggregate *is* that person's score,
+The honest caveat: on a debate with one rating the aggregate *is* that person's score,
 and anyone who knows they rated it learns what they said. That is true of every aggregate
-ever computed. It is why the function refuses hidden propositions and why promotion needs
+ever computed. It is why the function refuses hidden debates and why promotion needs
 several answers.
 
 ## 2026-08-15 — The median is percentile_disc, and there is no mean
@@ -835,7 +835,7 @@ against a list of objects, so it covers whatever gets added next: no function an
 the exposed schema may contain `avg(`.
 
 The reason is worth restating because it is not squeamishness about statistics. On a
-bimodal distribution — which is what to expect on precisely the contested propositions — a
+bimodal distribution — which is what to expect on precisely the contested debates — a
 mean reports mild agreement for a community that has split cleanly into two camps. It would
 smooth over the exact thing this corpus exists to make visible.
 
@@ -843,7 +843,7 @@ smooth over the exact thing this corpus exists to make visible.
 
 CLAUDE.md says not to reveal the aggregate to a reader until they have rated. If the
 histogram were built into the page and hidden with CSS, that would be a decoration
-view-source defeats. So the proposition page ships without it and fetches it once a rating
+view-source defeats. So the debate page ships without it and fetches it once a rating
 exists.
 
 Be straight about what this is: it limits bandwagoning, it does not prevent access. The
@@ -867,18 +867,18 @@ eleven columns. Each column laid itself out according to which markers it happen
 and the result was eleven baselines at eleven different heights. Every child now has an
 explicit `grid-row`. Any grid whose children can be `hidden` needs the same.
 
-## 2026-08-15 — Comments post immediately; practices wait
+## 2026-08-15 — Comments post immediately; reports wait
 
 Every other user-content table on this site starts `pending`. `public.comments` defaults to
 `published` and is moderated reactively, with the same `status` column and the same
 moderator hide policy as everything else.
 
-A practice is a contribution to a corpus and can wait for a volunteer to read it. A reply
+A report is a contribution to a corpus and can wait for a volunteer to read it. A reply
 that appears a day after the thing it replies to is not a reply. Pre-moderating discussion
 on a site with volunteer moderators means no discussion.
 
 The trade is that something can be visible for a while before anyone acts on it. That is
-what the hide path, the report queue and the per-account daily limit are for, and all three
+what the hide path, the flag queue and the per-account daily limit are for, and all three
 exist before the first comment does.
 
 ## 2026-08-15 — The comment edit window is in a trigger because permissive policies are OR'd
@@ -909,13 +909,13 @@ CLAUDE.md says soft deletion "strips author attribution and hides the body". Pro
 deletion the trigger sets `body` to the empty string and `author_id` to null, and a CHECK
 requires exactly that shape, so a half-finished deletion is not representable.
 
-The cost is real and worth naming: a comment that was reported and then deleted cannot be
-read by the moderator handling the report. The alternative is a table that retains text
+The cost is real and worth naming: a comment that was flagged and then deleted cannot be
+read by the moderator handling the flag. The alternative is a table that retains text
 people asked to have removed, on a site whose privacy notice promises erasure works.
 Moderators who need the text intact should **hide** — hiding preserves everything and is the
 whole of the moderator power on this table.
 
-There is deliberately no `deleted_by` column, unlike `public.practices`. Only the author can
+There is deliberately no `deleted_by` column, unlike `public.reports`. Only the author can
 delete a comment, so the column would record exactly the name the deletion just removed.
 
 The marker a reader sees is rendered from `deleted_at`, not stored. Storing "Removed by its
@@ -924,7 +924,7 @@ though somebody had written it.
 
 ## 2026-08-15 — A citation's endpoints are pages; its provenance is comments
 
-`public.citations` links a practice or proposition to another. Comments are not endpoints —
+`public.citations` links a report or debate to another. Comments are not endpoints —
 a graph in which every remark is a node is a graph nobody can read, and the useful question
 is "which accounts bear on this claim", not "which sentence did somebody quote".
 
@@ -961,19 +961,19 @@ This is what sets the 24 hour edit window rather than a shorter one: a comment c
 is first seen *set* at the next build, so a window shorter than one build cycle would mean
 nobody could ever fix a formula that came out wrong.
 
-## 2026-08-15 — `public.reports` added early, because a report control that files nothing is worse than none
+## 2026-08-15 — `public.flags` added early, because a flag control that files nothing is worse than none
 
-Prompt 10 asks for a report control on every comment. CLAUDE.md has always required the
+Prompt 10 asks for a flag control on every comment. CLAUDE.md has always required the
 table; this is the minimum shape of it, built now so the control does something.
 
 It lives in `public` because a browser moderation UI will read it, which makes two policies
-the ones worth reviewing closely. A reporter reads their own reports and nobody else's —
+the ones worth reviewing closely. A flagger reads their own flags and nobody else's —
 without that, the table is a list of who has complained about whom, readable by everyone it
-names. And nothing about a report is ever shown on the page: a visible report count turns
-reporting into a downvote.
+names. And nothing about a flag is ever shown on the page: a visible flag count turns
+flagging into a downvote.
 
-Reports cannot be withdrawn or edited by their author. The queue is a record of what was
-raised, and a report retractable after a moderator has read it makes the log incomplete in
+Flags cannot be withdrawn or edited by their author. The queue is a record of what was
+raised, and a flag retractable after a moderator has read it makes the log incomplete in
 exactly the cases that matter.
 
 ## 2026-08-15 — `:scope >` in the thread, and why it is not a style preference
@@ -1010,8 +1010,8 @@ reads its own network tab and was promised there are none.
 
 `public.moderate()` is SECURITY DEFINER, is the only thing that changes a row on a
 moderator's behalf, and writes to `public.moderation_actions` in the same transaction. The
-four moderator UPDATE policies on practices, propositions, comments and reports were dropped
-in the same push, and the resolution columns on `reports` lost their UPDATE grant as well.
+four moderator UPDATE policies on reports, debates, comments and flags were dropped
+in the same push, and the resolution columns on `flags` lost their UPDATE grant as well.
 
 The alternative — keep the policies, write the audit row from the browser — would have made
 "every action writes an audit row" a property of our interface rather than of the database.
@@ -1021,7 +1021,7 @@ it has not earned.
 
 Consequences worth knowing before changing anything here:
 
-- A moderator's direct `update public.practices set status = 'hidden'` now succeeds and
+- A moderator's direct `update public.reports set status = 'hidden'` now succeeds and
   changes nothing. That silence is correct — an error would be indistinguishable from a bug
   — and it is asserted in three test files precisely because it is surprising.
 - The moderator branches came out of all three column guards. They were unreachable (no
@@ -1034,7 +1034,7 @@ Consequences worth knowing before changing anything here:
 
 ## 2026-08-16 — A moderator cannot act on their own contributions
 
-Enforced in `public.moderate()` by name, for practices, propositions and comments, and backed
+Enforced in `public.moderate()` by name, for reports, debates and comments, and backed
 by the absent moderator policies rather than only by the function.
 
 This is the rule that makes the queue mean something, and it has a cost worth stating: with
@@ -1072,18 +1072,18 @@ cascades away with the account. The parameter passed to `public.moderate()` is t
 *request* rather than of the person, which is also what makes an admin unable to erase
 somebody who has not asked: the only way in is a row the account holder wrote themselves.
 
-## 2026-08-16 — "Request changes" writes to the practice, because there is nowhere else
+## 2026-08-16 — "Request changes" writes to the report, because there is nowhere else
 
 A note to an author has to reach them, and this site has no route to a person: no address any
-of our code may read, no server to send mail from, no inbox. So `practices.moderation_note`
+of our code may read, no server to send mail from, no inbox. So `reports.moderation_note`
 holds the current change request and the author reads it under "Your submissions" on their
 account page.
 
-The two alternatives were worse. A comment on the pending practice is visible to author and
+The two alternatives were worse. A comment on the pending report is visible to author and
 moderators today and to everybody the moment it is published — a private note that becomes
 public on acceptance is a trap. A message table is a second inbox nobody checks.
 
-One note at a time, cleared when the practice is published, because it then describes a
+One note at a time, cleared when the report is published, because it then describes a
 version that was accepted. The history of who asked for what is in the log.
 
 This is only half a feature until there is an edit screen for a pending submission: an author
@@ -1128,7 +1128,7 @@ first is used, and the second is deliberately not passed to the job.
 
 They authorise the same thing — a read that bypasses row level security — through different
 doors. Over PostgREST the service role key would need paginating past a default 1000-row
-limit, cannot express the lateral aggregates the practices query uses, and would cost one
+limit, cannot express the lateral aggregates the reports query uses, and would cost one
 request per dataset per page. A direct connection is one round trip per dataset, is the same
 path `supabase db push` already uses from CI, and is the `pg_dump`-shaped exit this project
 chose Supabase for in the first place. Handing a job a credential it does not need is how
@@ -1141,7 +1141,7 @@ them. Not there.
 
 ## 2026-08-16 — The build reads data/ or reads nothing
 
-The PostgREST fallback in practices.ts, propositions.ts, comments.ts and citations.ts is
+The PostgREST fallback in reports.ts, debates.ts, comments.ts and citations.ts is
 gone. It was correct while the export did not exist and wrong the moment it did: a build with
 credentials silently produced a different site from a build without them, and a paused
 database would have gone unnoticed until somebody wondered why the corpus had stopped
@@ -1150,25 +1150,25 @@ designed state rather than a failure.
 
 This is also what makes the check in prompt 12 meaningful. With every request to
 `*supabase.co*` blocked in devtools, all four reading pages render their main content: the
-listing, a practice with its comment thread, the propositions index, and a proposition with
+listing, a report with its comment thread, the debates index, and a debate with
 its references. The only requests any of them make are the overlay and, on pages that carry a
 comment form, the thread's own live top-up — all of which fail silently.
 
 ## 2026-08-16 — A freshness card has no link, and that is the honest version
 
-`/practices/<id>/` is generated at build time from the export, so a practice newer than the
+`/reports/<id>/` is generated at build time from the export, so a report newer than the
 export has no page. The overlay could link to one anyway and let GitHub Pages serve the 404;
 it does not. The card's title is plain text and the marker says "new since the last build —
 its own page follows at the next one".
 
 The alternative designs were worse. Linking is a 404 dressed as a result. Hiding fresh rows
-entirely means the first practice ever posted sits under "nothing has been published yet" for
+entirely means the first report ever posted sits under "nothing has been published yet" for
 up to a day, which is exactly when a contributor is most likely to conclude the submission
 was lost — so both listings also carry a landing place for the overlay in their empty state.
 
 The overlay uses plain `fetch` rather than the Supabase client, deliberately: importing
 `supabase.ts` would pull the auth client and its storage adapter into a page whose job is to
-be read. Checked in the built output — `/practices/` and `/propositions/` load no supabase
+be read. Checked in the built output — `/reports/` and `/debates/` load no supabase
 chunk, while the detail pages do, because they carry a comment form.
 
 ## 2026-08-16 — The export commits only when content changed, and asks for the deploy by name
@@ -1220,13 +1220,13 @@ of four per float, about 75% size reduction. The linear map over [-1, 1] introdu
 most ±0.004 error per dimension; negligible for cosine similarity at the 0.70–0.85
 thresholds used here.
 
-## 2026-08-16 — The "related practices" reason is rule-based, not generated
+## 2026-08-16 — The "related reports" reason is rule-based, not generated
 
-The one-line reason on each related practice is derived from shared metadata (task type,
+The one-line reason on each related report is derived from shared metadata (task type,
 tags, area) in a fixed priority order, not from model output or any generated text. The
-words are always taken from the practice's own fields. This is the constraint the prompt
+words are always taken from the report's own fields. This is the constraint the prompt
 named: "the words shown are always the author's own". A generated summary of why two
-practices are similar would risk mischaracterising the author's stated position, which
+reports are similar would risk mischaracterising the author's stated position, which
 for a named mathematician in a citable corpus would be a serious problem.
 
 ## 2026-08-16 — Near-duplicate detection uses transformers.js from jsDelivr CDN
@@ -1247,27 +1247,27 @@ warning simply does not appear. Submission is never blocked.
 
 Computing embeddings for every export would add ~90 MB of model download and ~30 seconds
 of CPU to a job that already runs nightly. Weekly on Monday morning (after the nightly
-export has committed fresh practices.json) is a reasonable tradeoff: the related practices
+export has committed fresh reports.json) is a reasonable tradeoff: the related reports
 and near-duplicate suggestions are allowed to be a week stale. The moderation queue catches
 true duplicates before they are published anyway.
 
-## 2026-08-16 — Resources are a separate content type, not a tag on practices
+## 2026-08-16 — Network are a separate content type, not a tag on reports
 
-A resource is a pointer to something useful, not an account of using it. The two are
-complements, not duplicates: a practice says "I used Lean 4 like this and it worked like
-that"; a resource says "here is the Lean 4 documentation". Conflating them into one form
+An entry is a pointer to something useful, not an account of using it. The two are
+complements, not duplicates: a report says "I used Lean 4 like this and it worked like
+that"; an entry says "here is the Lean 4 documentation". Conflating them into one form
 with a type field would produce a form that asks for a verification section from people
 adding a link and a URL field from people describing a session, which is two bad experiences
 in exchange for one table fewer.
 
-Resources have a rate limit (5/day vs 10 for practices) because a link-sharing form is
+Network have a rate limit (5/day vs 10 for reports) because a link-sharing form is
 lower friction and therefore more likely to be abused. The moderation queue treats them
 the same way.
 
 ## 2026-08-16 — The link-checker uses SUPABASE_DB_URL, not the service role key
 
 The link-check workflow checks URLs and updates `link_status` and `link_checked_at` on
-each published resource. It uses a direct Postgres connection (SUPABASE_DB_URL) rather
+each published entry. It uses a direct Postgres connection (SUPABASE_DB_URL) rather
 than the service role key + PostgREST.
 
 The practical reason: both authorise the same thing, but the direct connection is already
@@ -1287,28 +1287,28 @@ if it is rejecting the checker specifically because it is a bot.
 
 404 and 410 are explicit "this is gone" signals and are classified as 'unreachable'.
 5xx and connection errors are 'unreachable' because they indicate the server cannot serve
-the resource.
+the entry.
 
 The alternative — treating 403 as unreachable — would mark large numbers of academic and
 commercial sites as broken because they use Cloudflare or similar services that block
 automated HEAD requests from cloud IPs. A false 'unreachable' label is worse than no check:
 it tells moderators and readers that working links are broken.
 
-## 2026-08-17 — /propositions/view/ is the client-rendered viewer for pre-export propositions
+## 2026-08-17 — /debates/view/ is the client-rendered viewer for pre-export debates
 
-The static proposition pages at `/propositions/<id>/` are generated from the nightly
-export. A proposition posted between exports has no static page, so the freshness overlay
+The static debate pages at `/debates/<id>/` are generated from the nightly
+export. A debate posted between exports has no static page, so the freshness overlay
 on the listing previously showed it as unclickable text — visible but unreachable for up to
 24 hours.
 
-`/propositions/view/?id=<uuid>` is the fix. It follows the same pattern as `/moderate/`: a
+`/debates/view/?id=<uuid>` is the fix. It follows the same pattern as `/moderate/`: a
 single static HTML shell that fetches its content from Supabase at runtime. One anon fetch
 against PostgREST gets the statement, rationale, area, author, and dates. The rating
 widget and comment thread initialise the same way as on the static pages.
 
-The freshness overlay now links fresh propositions to this URL instead of rendering
+The freshness overlay now links fresh debates to this URL instead of rendering
 unclickable text. Once the nightly export runs and the next build generates the static
-page, any further links from outside this site will use `/propositions/<id>/`; the view
+page, any further links from outside this site will use `/debates/<id>/`; the view
 page remains reachable for as long as anyone has a link to it and continues to work
 correctly.
 
@@ -1319,26 +1319,26 @@ Rejected alternatives:
   leaves a gap during the build. The view page gives immediate access with no new
   infrastructure and degrades gracefully (falls back to empty when Supabase is paused,
   exactly like the freshness overlay itself).
-- **Modifying the 404.html** to detect proposition paths. The 404 page is already the
+- **Modifying the 404.html** to detect debate paths. The 404 page is already the
   moderation UI; routing two unrelated things through it would couple them with no benefit.
 
-## 2026-08-17 — Same view-page pattern applied to practices; freshness overlay added to resources
+## 2026-08-17 — Same view-page pattern applied to reports; freshness overlay added to entries
 
-`/practices/view/?id=<uuid>` follows the same pattern as `/propositions/view/`. One anon
-PostgREST fetch gets the full practice record including tool rows, tags, and author. The
-staleness-confirmation section and related-practices sidebar are omitted from the view page
-(the confirmation section reads `data-practice-id` at initialisation rather than at submit
+`/reports/view/?id=<uuid>` follows the same pattern as `/debates/view/`. One anon
+PostgREST fetch gets the full report record including tool rows, tags, and author. The
+staleness-confirmation section and related-reports sidebar are omitted from the view page
+(the confirmation section reads `data-report-id` at initialisation rather than at submit
 time, so setting it via JS after the fetch is not safe without restructuring it; related
-practices require the corpus to be in memory). Both appear in full on the static page once
+reports require the corpus to be in memory). Both appear in full on the static page once
 the build runs.
 
-`.card__fresh` moved from a scoped style in `practices/index.astro` to `corpus.css`,
-because resources now use the same class on their fresh overlay cards.
+`.card__fresh` moved from a scoped style in `reports/index.astro` to `corpus.css`,
+because entries now use the same class on their fresh overlay cards.
 
-Resources do not have internal pages — every card links to an external URL — so the fix for
-resources is different: a freshness overlay on `resources/index.astro` that prepends newly
-published resources to the list, each linking directly to its external URL. `resourcesSince`
-was added to `src/lib/fresh.ts` alongside `practicesSince` and `propositionsSince`.
+Network do not have internal pages — every card links to an external URL — so the fix for
+entries is different: a freshness overlay on `network/index.astro` that prepends newly
+published entries to the list, each linking directly to its external URL. `networkSince`
+was added to `src/lib/fresh.ts` alongside `reportsSince` and `debatesSince`.
 
 Both changes follow the same "silent on failure" rule: if Supabase is paused or the query
 times out, the page stays correct from the export and nothing is shown or broken.
@@ -1349,19 +1349,19 @@ The moderation flow had a half-loop: a moderator could request changes and write
 the author would see under "Your submissions", but the author had no screen to act on it.
 The submission sat as pending indefinitely.
 
-`/account/edit-submission/?id=<uuid>` is the other half. It loads the full practice via
-`loadPendingPractice` (a Supabase query that enforces `status = 'pending'` and
+`/account/edit-submission/?id=<uuid>` is the other half. It loads the full report via
+`loadPendingReport` (a Supabase query that enforces `status = 'pending'` and
 `author_id = auth.uid()`), shows the moderator's note at the top, pre-fills every form
-field, and on submit calls the `resubmit_practice` RPC. The account page now shows an
+field, and on submit calls the `resubmit_report` RPC. The account page now shows an
 "Edit and resubmit" button on any submission that has a moderation note.
 
 **Why an RPC rather than direct table updates** — the at-least-one-tool constraint on
-`practice_tools` is `DEFERRABLE INITIALLY DEFERRED`. That means it fires at COMMIT, not
+`report_tools` is `DEFERRABLE INITIALLY DEFERRED`. That means it fires at COMMIT, not
 after each statement. A browser that deleted all tool rows and then inserted the new set in
 two separate PostgREST requests would see the first request fail at commit (no tools).
 Inside one RPC call both operations are in the same transaction, so the constraint checks
 the final state (the new tools) and is satisfied. This is exactly the reasoning behind
-`submit_practice`, and `resubmit_practice` is structured identically — `SECURITY INVOKER`,
+`submit_report`, and `resubmit_report` is structured identically — `SECURITY INVOKER`,
 tag codes accepted rather than UUIDs, unknown or retired codes silently dropped.
 
 **No draft system on the edit form** — the submission already exists in the database.
@@ -1374,43 +1374,43 @@ so 'send back' reaches the author but they cannot yet act on it" in the "What ex
 section can now be removed. `docs/moderation.md` carries the authoritative list.
 
 
-## 2026-08-17 — /authors/view/, because an author's first practice has no author page
+## 2026-08-17 — /authors/view/, because an author's first report has no author page
 
 Author pages come from `getStaticPaths` over `listAuthors()`, which reads the committed
-corpus. So `/authors/<id>/` exists only for somebody who already had a published practice
-at the last export — and a person's *first* practice therefore goes live with their name on
+corpus. So `/authors/<id>/` exists only for somebody who already had a published report
+at the last export — and a person's *first* report therefore goes live with their name on
 it and a 404 under it, until the nightly build catches up. That window is the worst possible
 one: a new contributor has just posted and is showing the link to a colleague. With the
 corpus still empty, it was every author.
 
-`/authors/view/?id=<uuid>` is the same answer `/practices/view/` and `/propositions/view/`
+`/authors/view/?id=<uuid>` is the same answer `/reports/view/` and `/debates/view/`
 already give: a client-rendered shell that fetches what the static page bakes in — the
-profile, the author's published practices, and `practice_staleness` for the tombstones.
+profile, the author's published reports, and `report_staleness` for the tombstones.
 `/authors/<id>/` stays the canonical URL, and nothing links to the view page except pages
 that are themselves runtime-rendered.
 
-**The tombstone is fetched rather than assumed.** The practice view page omits the staleness
-block because a fresh practice has no confirmations, so it would be empty either way. An
+**The tombstone is fetched rather than assumed.** The report view page omits the staleness
+block because a fresh report has no confirmations, so it would be empty either way. An
 author page is different: it is where a reader judges a body of work, and rendering every
 square as `unverified` would misreport the ones that are confirmed. One extra request against
-`public.practice_staleness`, keyed by practice id, and a missing key means `unverified` — a
-practice nobody has confirmed has no row there for the same reason it has an open square.
+`public.report_staleness`, keyed by report id, and a missing key means `unverified` — a
+report nobody has confirmed has no row there for the same reason it has an open square.
 
 **Everything this page links to is a view page too.** A card title pointing at
-`/practices/<id>/` would reintroduce the same 404 one level down, and for the same reason:
+`/reports/<id>/` would reintroduce the same 404 one level down, and for the same reason:
 this page exists precisely when the export cannot be trusted to contain the rows.
 
-**What still points at the static page.** `PracticeCard` and `/practices/<id>/` are built
+**What still points at the static page.** `ReportCard` and `/reports/<id>/` are built
 from the corpus, so their author links are always to a page the same build generated. The
-one link that was broken was in `/practices/view/`, and it is the one that changed.
+one link that was broken was in `/reports/view/`, and it is the one that changed.
 
-**CLAUDE.md note** — the "Fresh cards link to /practices/view/?id=<id>" trap bullet now has
+**CLAUDE.md note** — the "Fresh cards link to /reports/view/?id=<id>" trap bullet now has
 a third view page to name, and the repo layout entry for `src/pages/authors/` covers two
 files rather than one.
 
-## 2026-08-17 — Resource submitter badges: the compact variant, and a sibling
+## 2026-08-17 — Entry submitter badges: the compact variant, and a sibling
 
-`/resources/` passed `profile={resource.submitter}` to `Badges`, which takes `institution`.
+`/network/` passed `profile={entry.submitter}` to `Badges`, which takes `institution`.
 Astro does not fail on an unknown prop, so the component rendered its no-institution branch
 on every row and the badge was silently blank for everyone. `astro check` had it as a type
 error the whole time, which is the argument for keeping that at zero.
@@ -1419,74 +1419,74 @@ Two things about the fix. It uses `compact`, the one-line variant written for co
 headers: the full badge block is a bordered card that also states Registered, and one per
 row down a list would be the loudest thing on the page — the same reasoning, and the reason
 that variant exists rather than a line written somewhere else. And it sits *outside*
-`.resource-card__submitter` rather than inside it, because `.badge-line` is a `<p>` and a
-`<p>` is not phrasing content — inside a `<span>` it is invalid markup. `.resource-card__meta`
+`.entry-card__submitter` rather than inside it, because `.badge-line` is a `<p>` and a
+`<p>` is not phrasing content — inside a `<span>` it is invalid markup. `.entry-card__meta`
 is a wrapping flex row, so a sibling lands where the child would have.
 
-## 2026-08-17 — Author pages cover resource submitters, and list what they submitted
+## 2026-08-17 — Author pages cover entry submitters, and list what they submitted
 
-Two consequences of one fact: `getStaticPaths` built author pages from the practice corpus,
-so a person whose only contribution was a resource had no page — and `/resources/` linked
+Two consequences of one fact: `getStaticPaths` built author pages from the report corpus,
+so a person whose only contribution was an entry had no page — and `/network/` linked
 their name to it anyway. Not a stale-export window like `/authors/view/` answers: a permanent
 404 that survived every rebuild.
 
-**`listContributors()` in src/lib/authors.ts** is the union of practice authors and resource
+**`listContributors()` in src/lib/authors.ts** is the union of report authors and entry
 submitters, and it is now the definition of which author pages exist. `listAuthors()` is gone
 rather than left as an unused export, because the next person looking for "the list of author
 pages" would have found it first and it is the wrong answer to that question.
 
 **Not everyone in data/profiles.json.** That file also holds people whose only contribution is
-a comment or a proposition, and nothing links a name from either — a page for them would be
+a comment or a debate, and nothing links a name from either — a page for them would be
 unreachable and Pagefind would index it as an almost-empty result. The rule is that a page
 exists exactly where a link to it exists. If comment authors ever become links, this is the
 function to change, not the page.
 
-**Its own file, not another function in practices.ts.** `resources.ts` statically imports
-data/resources.json, and practices.ts is imported by browser scripts including the submission
+**Its own file, not another function in reports.ts.** `network.ts` statically imports
+data/network.json, and reports.ts is imported by browser scripts including the submission
 form. Rollup does drop the JSON when only `categoryLabel` is reachable — checked, by grepping
 the built chunks for a string only the corpus contains — but "probably tree-shaken" is not a
 reason to put a build-time-only join into a module the browser loads.
 
-**Resources are listed, not carded.** Title, then the normalised URL and the category on one
+**Network are listed, not carded.** Title, then the normalised URL and the category on one
 mono line under it. On this page the question is what someone thought worth passing on, not
-the full case for each link, which is what `/resources/` is for. A failed monthly link check
+the full case for each link, which is what `/network/` is for. A failed monthly link check
 is still stated — a broken link is a fact in the corpus — but in words, with no outcome colour
-and no tombstone: the glyph encodes verification of a *practice*, and spending it on link
+and no tombstone: the glyph encodes verification of a *report*, and spending it on link
 liveness would make all four states mean less.
 
 **Both kinds are labelled now.** With two sorts of contribution on one page, an unlabelled
-first list and a labelled second one would read as though the practices were the page and the
-resources an afterthought. The labels are set as every other label on this site is — mono,
+first list and a labelled second one would read as though the reports were the page and the
+entries an afterthought. The labels are set as every other label on this site is — mono,
 tracked out, quiet — and the two counts share one line, separated by the rule this site uses
 between facts rather than a middot, which at that size reads as part of the word after it.
 
 **The fresh listing cards link their author** to `/authors/view/?id=`, for the reason the card
-title already did: a practice new enough to arrive via the overlay is frequently somebody's
-first, so the static page may not exist yet. `FreshPractice` gained an `authorId`; the erased
+title already did: a report new enough to arrive via the overlay is frequently somebody's
+first, so the static page may not exist yet. `FreshReport` gained an `authorId`; the erased
 branch keeps the same italic "Author since erased" the static card shows.
 
-Verified against a local PostgREST stub — the resources branch of `/authors/view/` cannot be
-exercised against production, because no resource is published yet.
+Verified against a local PostgREST stub — the entries branch of `/authors/view/` cannot be
+exercised against production, because no entry is published yet.
 
-## 2026-08-17 — Proposition authors are contributors too, and their names link
+## 2026-08-17 — Debate authors are contributors too, and their names link
 
 Completing the rule from the entry above: a page exists exactly where a link to it exists.
-Proposition authors were the remaining case where the *name* was shown and not linked — so
-there was no 404, just an inconsistency a reader cannot explain, since a practice author's
-name is a link and a proposer's was not. Both proposition templates now link it, and
-`listContributors()` includes proposition authors, and author pages list propositions between
-the practices and the resources: authored accounts, then claims put to the community, then
+Debate authors were the remaining case where the *name* was shown and not linked — so
+there was no 404, just an inconsistency a reader cannot explain, since a report author's
+name is a link and a proposer's was not. Both debate templates now link it, and
+`listContributors()` includes debate authors, and author pages list debates between
+the reports and the entries: authored accounts, then claims put to the community, then
 things pointed at.
 
 **Identity moved to data/profiles.json.** This is the substantive change. The three corpora
-disagree about how much they carry: a practice and a resource each embed the institution
-triple a badge is built from, and a proposition embeds only a name and the pseudonym flag.
+disagree about how much they carry: a report and an entry each embed the institution
+triple a badge is built from, and a debate embeds only a name and the pseudonym flag.
 Taking identity from whichever corpus mentioned somebody first would therefore have dropped
-the institutional badge from the page of anyone who has only ever posted a proposition —
+the institutional badge from the page of anyone who has only ever posted a debate —
 silently, and in the direction that matters, because a badge that fails to appear looks like
 an account nobody verified. `profiles.json` has the institution for every contributor, so it
 is now the identity source and the corpora only decide membership. Checked with a fixture
-whose proposition-only author has a badge: it renders.
+whose debate-only author has a badge: it renders.
 
 **Comment-only contributors still have no page**, because nothing links a name from a comment.
 That is the same rule, not an exception to it.
@@ -1494,10 +1494,10 @@ That is the same rule, not an exception to it.
 ## 2026-08-17 — `.card__facts > li + li` skipped the variant that is not a list
 
 Two of the places using `.card__facts` are a `<p>` of `<span>`s rather than a list: the
-proposition items on `/propositions/` and now on author pages. The separator rule named `li`,
+debate items on `/debates/` and now on author pages. The separator rule named `li`,
 so it did not apply to them — and since a flex container ignores the whitespace between its
 items and the column gap on that class is zero, the two facts were rendered flush against
-each other: `WritingActive since 20 July 2026`. It had been live on `/propositions/` and was
+each other: `WritingActive since 20 July 2026`. It had been live on `/debates/` and was
 faithfully reproduced on the author page by reusing the class, which is how it was noticed.
 
 Now `> * + *`, which is identical for every list case and fixes both span cases. The general
@@ -1508,7 +1508,7 @@ copy rather than missing CSS.
 **The author summary does not use that class at all**, for a related reason. Three counts and
 the outcome breakdown do not fit on one line, and a wrapped flex item keeps the border that
 was standing in for a separator — so the second line opened with a rule attached to nothing.
-The counts are stacked, one per kind of contribution. Anybody with only practices, which is
+The counts are stacked, one per kind of contribution. Anybody with only reports, which is
 nearly everybody, still sees exactly one line.
 
 ## 2026-08-17 — The landing page becomes a poster: one red, one diagram
@@ -1520,7 +1520,7 @@ place of the teal / violet / gold trio it carried before. Those three colours ar
 
 **Why a second palette is allowed here and nowhere else.** The reading pages are a corpus
 and the landing page is an argument for reading it. Chalk blue and the three outcome
-colours are load-bearing on a practice page — a colour there is a claim about a submission
+colours are load-bearing on a report page — a colour there is a claim about a submission
 — and none of that machinery exists on the home page, so borrowing it would be decoration.
 What does carry across is the discipline: one accent, hairlines, near-zero radii, and the
 Serif / Sans / Mono split. The outcome colours are not touched.
@@ -1601,7 +1601,7 @@ against `#8a3a34`: same family, distinguishable side by side, but no longer orth
 way blue and brick were. It is written up at length in `tokens.css` rather than papered
 over. The mitigation is the one already in the design — an outcome is a glyph plus the
 words, a link is underlined text — and the fix, if it turns out to mislead once there are
-practices to look at, is to move the outcome colour rather than the accent.
+reports to look at, is to move the outcome colour rather than the accent.
 
 **Not changed:** the reading shell stays 72rem while the landing page is 80rem, so the
 masthead shifts about 128px between them on a wide screen. Each page is internally aligned,
@@ -1611,8 +1611,8 @@ a density change to judge against a corpus that does not exist yet.
 ## 2026-08-17 — The home page asks for a submission instead of an email address
 
 Posting is open, so the closing section is no longer a holding message. "Posting is not open
-yet … Stay updated", with a `mailto:`, becomes "Create an account" and "Post a practice",
-pointing at `/account/sign-up/` and `/practices/new/`.
+yet … Stay updated", with a `mailto:`, becomes "Create an account" and "Post a report",
+pointing at `/account/sign-up/` and `/reports/new/`.
 
 The copy names the three fields the form will ask for and the ten minutes it takes, because
 the single most important flow on this site is a researcher submitting a well-structured
@@ -1622,3 +1622,51 @@ belongs in the invitation itself, not only in the form, since the decision about
 failure is worth writing up is made before anybody opens it.
 
 That sentence was the only place in the repo claiming posting was closed.
+
+## 2026-08-17 — Renamed the three content types, and moved the moderation control aside
+
+Practices are **reports**, propositions are **debates**, resources are the **network**. The
+change is everywhere: routes, copy, TypeScript, the corpus filenames, the CSV headers, the
+docs, and the schema. Nothing about behaviour moves.
+
+**Why the schema too, rather than an alias at the library boundary.** `src/lib/` could have
+translated between a database that still said `practices` and a site that said `reports`, and
+that would have been a smaller diff. It would also have been permanent: the schema is the
+corpus's public surface, named in `data/csv/*.csv` headers and in every query anyone writes
+against a dump of it. Two names for one table is a tax on every future reader, paid so that
+one migration could be avoided.
+
+**"Report" was already taken, and that decided the order of everything.** The moderation
+control — the button on every report and comment, `public.reports`, `report_reason`,
+`report_status` — is now **flag**. Without that move the site would say "report this report",
+and the table `public.reports` would mean the opposite of what the word means on the page.
+So the incumbent moves out of the way first and only then does `practices` move in, and the
+same ordering runs through the enum labels, the object names, and the `private.settings`
+keys. Where the ordering is wrong it fails on a duplicate name, which is the good failure.
+
+**"Resources" had no singular.** A report is a report and a debate is a debate, but "network"
+is a collection: there is no such thing as "a network" in the sense meant here. So the
+section is the **Network** and one row is an **entry** — `public.network_entries`,
+`NetworkEntry`, `listNetwork()`, `/network/`. Naming the table `public.entries` was the
+alternative and was rejected as too vague to read in a dump.
+
+**What the rename deliberately did not touch.** "Mathematical practice" is the discipline,
+not the content type, and it still says practice — on the home page, the about page, and the
+footer tagline. So does "in practice", "a referee report" (which is a thing mathematicians
+write, not a thing this site holds), "computational resource disclosure" (verbatim from the
+Leiden Declaration), and "resource" where it means an HTTP one. A mechanical rename gets all
+five of those wrong, which is why the protected list in the rename pass is longer than the
+substitution list.
+
+**The staleness control was collateral.** Its button said "Report" and its tally said "3
+reports so far", which on a page whose subject is a report reads as a moderation count. It
+now uses the word the schema already used: "Add my confirmation", "3 confirmations so far".
+
+**The migration is `20260817130000_rename_vocabulary.sql`, and it checks its own work.**
+Views, RLS policies and CHECK constraints store parsed expressions, so their references to a
+renamed table, column or enum label follow by themselves — no policy is reissued. Function
+bodies are text and do not, so all fourteen that name something renamed are reissued in full.
+A rename that is 95% done is worse than one not started: the missing 5% is a function body
+that still says `public.practices` and fails months later on somebody's submission. So the
+last statement in the file is an assertion over the catalogues, the settings keys and every
+function body, and it raises rather than committing if any of the old vocabulary survived.

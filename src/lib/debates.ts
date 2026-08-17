@@ -1,7 +1,7 @@
 /**
- * Propositions and the agreement scale.
+ * Debates and the agreement scale.
  *
- * Same shape as src/lib/practices.ts: `readPropositions()` is the single swap point, reads
+ * Same shape as src/lib/reports.ts: `readDebates()` is the single swap point, reads
  * happen at build time, and writes happen in a browser. Two things are different, and both
  * come from the rules in CLAUDE.md rather than from anything technical.
  *
@@ -17,10 +17,10 @@
  *
  * **Nothing here computes a mean.** Not from the histogram, not from the counts, not
  * anywhere. The mean of an 11-point bipolar scale is misleading exactly when the
- * distribution is bimodal, and bimodal is what to expect on the contested propositions.
+ * distribution is bimodal, and bimodal is what to expect on the contested debates.
  */
 import { getSupabase } from './supabase';
-import type { Area } from './practice-schema';
+import type { Area } from './report-schema';
 
 // ── The scale ─────────────────────────────────────────────────────────────────────────
 
@@ -51,13 +51,13 @@ export const NO_OPINION_LABEL = 'No opinion, or outside my expertise';
 
 // ── What a page gets ──────────────────────────────────────────────────────────────────
 
-export interface PropositionAuthor {
+export interface DebateAuthor {
   readonly id: string;
   readonly displayName: string;
   readonly isPseudonym: boolean;
 }
 
-export interface Proposition {
+export interface Debate {
   readonly id: string;
   readonly statement: string;
   readonly rationale: string | null;
@@ -65,11 +65,11 @@ export interface Proposition {
   readonly area: Area;
   readonly createdAt: string;
   readonly activatedAt: string | null;
-  readonly author: PropositionAuthor | null;
+  readonly author: DebateAuthor | null;
 }
 
 /**
- * The aggregate, exactly as public.proposition_ratings reports it.
+ * The aggregate, exactly as public.debate_ratings reports it.
  *
  * There is no `mean` field and there must never be one. If a future consumer wants central
  * tendency, it has the median; if it wants spread, it has the whole histogram.
@@ -96,29 +96,29 @@ const UNAVAILABLE =
 
 // ── The swap point ────────────────────────────────────────────────────────────────────
 
-const EXPORTED = import.meta.glob<{ default: Proposition[] }>('/data/propositions.json', {
+const EXPORTED = import.meta.glob<{ default: Debate[] }>('/data/debates.json', {
   eager: true,
 });
 
-let cached: Proposition[] | null = null;
+let cached: Debate[] | null = null;
 
 /**
  * The committed export, and nothing else. The PostgREST fallback that stood here until the
- * nightly job existed has gone; see the same note in src/lib/practices.ts for why its
+ * nightly job existed has gone; see the same note in src/lib/reports.ts for why its
  * absence is the feature rather than a regression.
  *
  * Both statuses are in the file. A proposed claim is public, rateable, and being rated is
  * how it gets promoted — it is neither pending nor hidden, and the page that lists them
  * splits the two itself.
  */
-async function readPropositions(): Promise<Proposition[]> {
+async function readDebates(): Promise<Debate[]> {
   if (cached) return cached;
 
   const exported = Object.values(EXPORTED)[0]?.default;
 
   if (!exported) {
     console.warn(
-      '[propositions] data/propositions.json is missing, so there are none. ' +
+      '[debates] data/debates.json is missing, so there are none. ' +
         'Run scripts/export.mjs, or let .github/workflows/export.yml commit one.',
     );
     cached = [];
@@ -129,19 +129,19 @@ async function readPropositions(): Promise<Proposition[]> {
   return cached;
 }
 
-export async function listPropositions(): Promise<Proposition[]> {
-  return readPropositions();
+export async function listDebates(): Promise<Debate[]> {
+  return readDebates();
 }
 
-export async function getProposition(id: string): Promise<Proposition | undefined> {
-  return (await readPropositions()).find((proposition) => proposition.id === id);
+export async function getDebate(id: string): Promise<Debate | undefined> {
+  return (await readDebates()).find((debate) => debate.id === id);
 }
 
-/** One person's propositions, for their author page. Both statuses, for the reason above: a
+/** One person's debates, for their author page. Both statuses, for the reason above: a
  *  proposed claim is public and being rated is how it gets promoted. */
-export async function propositionsByAuthor(authorId: string): Promise<Proposition[]> {
-  return (await readPropositions()).filter(
-    (proposition) => proposition.author?.id === authorId,
+export async function debatesByAuthor(authorId: string): Promise<Debate[]> {
+  return (await readDebates()).filter(
+    (debate) => debate.author?.id === authorId,
   );
 }
 
@@ -155,7 +155,7 @@ export async function propositionsByAuthor(authorId: string): Promise<Propositio
  * differently: one hides the aggregate, the other shows it.
  */
 export async function loadMyRating(
-  propositionId: string,
+  debateId: string,
   userId: string,
 ): Promise<Result<{ rated: boolean; score: number | null }>> {
   const supabase = getSupabase();
@@ -165,7 +165,7 @@ export async function loadMyRating(
     const { data, error } = await supabase
       .from('ratings')
       .select('score')
-      .eq('proposition_id', propositionId)
+      .eq('debate_id', debateId)
       .eq('user_id', userId)
       .maybeSingle<{ score: number | null }>();
 
@@ -182,14 +182,14 @@ export async function loadMyRating(
 
 /** `score` of null is the "no opinion / outside my expertise" answer, and is stored. */
 export async function saveRating(
-  propositionId: string,
+  debateId: string,
   userId: string,
   score: number | null,
 ): Promise<Result<null>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
-  // upsert() generates ON CONFLICT DO UPDATE SET proposition_id, user_id, score — but the
+  // upsert() generates ON CONFLICT DO UPDATE SET debate_id, user_id, score — but the
   // authenticated role only has UPDATE (score). PostgreSQL checks column-level UPDATE
   // privileges at parse time for all SET columns, even when no conflict occurs, so every
   // upsert fails with 42501. INSERT then UPDATE avoids the problem: the UPDATE SET clause
@@ -197,7 +197,7 @@ export async function saveRating(
   try {
     const { error: insertError } = await supabase
       .from('ratings')
-      .insert({ proposition_id: propositionId, user_id: userId, score });
+      .insert({ debate_id: debateId, user_id: userId, score });
 
     if (!insertError) return { ok: true, value: null };
 
@@ -208,7 +208,7 @@ export async function saveRating(
     const { error: updateError } = await supabase
       .from('ratings')
       .update({ score })
-      .eq('proposition_id', propositionId)
+      .eq('debate_id', debateId)
       .eq('user_id', userId);
 
     if (updateError) return { ok: false, message: describe(updateError) };
@@ -222,20 +222,20 @@ export async function saveRating(
  * The distribution. Fetched rather than built into the page, so that it is not in the
  * source for somebody who has not answered yet — see the header of this file.
  */
-export async function loadAggregate(propositionId: string): Promise<Result<Aggregate>> {
+export async function loadAggregate(debateId: string): Promise<Result<Aggregate>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
     const { data, error } = await supabase
-      .from('proposition_ratings')
+      .from('debate_ratings')
       .select('histogram, median, total_raters, opinion_count, no_opinion_count, coverage')
-      .eq('proposition_id', propositionId)
+      .eq('debate_id', debateId)
       .maybeSingle();
 
     if (error) return { ok: false, message: describe(error) };
     if (!data) {
-      return { ok: false, message: 'That proposition has no readable aggregate.' };
+      return { ok: false, message: 'That debate has no readable aggregate.' };
     }
 
     return {
@@ -254,7 +254,7 @@ export async function loadAggregate(propositionId: string): Promise<Result<Aggre
   }
 }
 
-export async function proposeProposition(
+export async function proposeDebate(
   userId: string,
   statement: string,
   rationale: string,
@@ -265,7 +265,7 @@ export async function proposeProposition(
 
   try {
     const { data, error } = await supabase
-      .from('propositions')
+      .from('debates')
       .insert({
         author_id: userId,
         statement: statement.trim(),

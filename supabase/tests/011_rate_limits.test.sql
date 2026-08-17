@@ -1,7 +1,7 @@
 -- The floor under the moderation queue.
 --
 -- Not spam defence -- Turnstile and mandatory email confirmation do that at the door. This
--- is what stops one account putting two hundred practices in front of a volunteer
+-- is what stops one account putting two hundred reports in front of a volunteer
 -- overnight, whether through malice, a misfiring script, or somebody finding the API and
 -- testing it thoroughly.
 --
@@ -27,7 +27,7 @@ update auth.users set email_confirmed_at = now();
 
 -- Lowered so the test is three inserts rather than eleven. The threshold being a row is
 -- exactly why this is one statement.
-update private.settings set value = '2' where key = 'rate_limit_practices_per_day';
+update private.settings set value = '2' where key = 'rate_limit_reports_per_day';
 update private.settings set value = '2' where key = 'rate_limit_confirmations_per_day';
 
 -- ── The limit itself is not reachable ───────────────────────────────────────────────
@@ -41,20 +41,20 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"77777777-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ select value from private.settings where key = 'rate_limit_practices_per_day' $$,
+  $$ select value from private.settings where key = 'rate_limit_reports_per_day' $$,
   '42501'::text, null::text,
   'and cannot reach private.settings at all'
 );
 
 reset role;
 
--- ── Practices ───────────────────────────────────────────────────────────────────────
+-- ── Reports ─────────────────────────────────────────────────────────────────────────
 -- The two rows that fill the quota are inserted as the table owner, which lets them carry
 -- explicit ids for the confirmations below to point at -- `id` has no INSERT grant, so a
 -- browser role cannot name it. The limiter is a plain BEFORE INSERT trigger with no notion
 -- of who the caller is, so it counts these exactly as it counts anyone's.
 
-insert into public.practices
+insert into public.reports
   (id, author_id, title, area, task_type, aim, method, outcome, outcome_notes,
    verification, third_party_material_confirmed)
 values
@@ -64,7 +64,7 @@ values
    'Second', 'research', 'other', 'a', 'b', 'worked', 'c', 'd', true);
 
 select is(
-  (select count(*)::int from public.practices
+  (select count(*)::int from public.reports
     where author_id = '77777777-0000-0000-0000-000000000001'),
   2,
   'an author may post up to the configured limit'
@@ -74,7 +74,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"77777777-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('77777777-0000-0000-0000-000000000001', 'Third', 'research', 'other',
@@ -88,43 +88,43 @@ reset role;
 -- The count is of everything the author has written, not of what they can still see. As
 -- SECURITY INVOKER the function would miss a hidden row, which would make the quickest
 -- route past the limit be to get moderated.
-update public.practices set status = 'hidden'
+update public.reports set status = 'hidden'
  where id = '88888888-0000-0000-0000-000000000001';
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"77777777-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('77777777-0000-0000-0000-000000000001', 'Third again', 'research', 'other',
              'a', 'b', 'worked', 'c', 'd', true) $$,
   '53400'::text, null::text,
-  'having a practice hidden does not free up a slot'
+  'having a report hidden does not free up a slot'
 );
 
 reset role;
 
 -- The limit is per author, not global. One enthusiastic account must not stop everyone
 -- else from posting.
-insert into public.practices
+insert into public.reports
   (id, author_id, title, area, task_type, aim, method, outcome, outcome_notes,
    verification, third_party_material_confirmed)
 values ('88888888-0000-0000-0000-000000000003', '77777777-0000-0000-0000-000000000002',
         'Somebody else entirely', 'research', 'other', 'a', 'b', 'worked', 'c', 'd', true);
 
 select is(
-  (select count(*)::int from public.practices where author_id = '77777777-0000-0000-0000-000000000002'),
+  (select count(*)::int from public.reports where author_id = '77777777-0000-0000-0000-000000000002'),
   1,
   'the limit is per author: another member is unaffected'
 );
 
 -- ── Confirmations ───────────────────────────────────────────────────────────────────
 
-update public.practices set status = 'published';
+update public.reports set status = 'published';
 
-insert into public.practice_confirmations (practice_id, user_id, verdict) values
+insert into public.report_confirmations (report_id, user_id, verdict) values
   ('88888888-0000-0000-0000-000000000001', '77777777-0000-0000-0000-000000000002', 'still_works'),
   ('88888888-0000-0000-0000-000000000002', '77777777-0000-0000-0000-000000000002', 'still_works');
 
@@ -132,7 +132,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"77777777-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practice_confirmations (practice_id, user_id, verdict)
+  $$ insert into public.report_confirmations (report_id, user_id, verdict)
      values ('88888888-0000-0000-0000-000000000003',
              '77777777-0000-0000-0000-000000000002', 'still_works') $$,
   '53400'::text, null::text,
@@ -145,13 +145,13 @@ reset role;
 -- Everything in the function is written so that the failure mode is a refused insert. A
 -- missing row here would otherwise read as "no limit configured, therefore no limit".
 
-delete from private.settings where key = 'rate_limit_practices_per_day';
+delete from private.settings where key = 'rate_limit_reports_per_day';
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"77777777-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('77777777-0000-0000-0000-000000000002', 'With no limit configured', 'research',

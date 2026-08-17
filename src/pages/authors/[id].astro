@@ -7,13 +7,13 @@
  * reader asks after an account they found useful. Anything more would turn a corpus into a
  * network, and the corpus is the point.
  *
- * Practices, then propositions, then resources: authored accounts, then claims they have put
- * to the community, then things they have pointed at. Only practices get cards. A proposition
- * is one sentence and a resource is a link, so both are listed — on this page the question is
+ * Reports, then debates, then entries: authored accounts, then claims they have put
+ * to the community, then things they have pointed at. Only reports get cards. A debate
+ * is one sentence and an entry is a link, so both are listed — on this page the question is
  * what someone has contributed, not the full case for each item, which is what
- * /propositions/ and /resources/ are for. The lists are thin for the same reason the page is.
+ * /debates/ and /network/ are for. The lists are thin for the same reason the page is.
  *
- * A person can appear here with no practices at all: a proposition author and a resource
+ * A person can appear here with no reports at all: a debate author and an entry
  * submitter are both contributors. `listContributors()` is the union, and it is the
  * definition of which pages exist.
  *
@@ -24,16 +24,16 @@
  */
 import Base from '../../layouts/Base.astro';
 import Badges from '../../components/Badges.astro';
-import PracticeCard from '../../components/PracticeCard.astro';
+import ReportCard from '../../components/ReportCard.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { listContributors } from '../../lib/authors';
 import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
-import { practicesByAuthor } from '../../lib/practices';
-import { areaLabel } from '../../lib/practice-schema';
-import { propositionsByAuthor } from '../../lib/propositions';
-import { categoryLabel, resourcesBySubmitter } from '../../lib/resources';
+import { reportsByAuthor } from '../../lib/reports';
+import { areaLabel } from '../../lib/report-schema';
+import { debatesByAuthor } from '../../lib/debates';
+import { categoryLabel, entriesBySubmitter } from '../../lib/network';
 
 export async function getStaticPaths() {
   const contributors = await listContributors();
@@ -43,30 +43,30 @@ export async function getStaticPaths() {
       params: { id: author.id },
       props: {
         author,
-        practices: await practicesByAuthor(author.id),
-        propositions: await propositionsByAuthor(author.id),
-        resources: resourcesBySubmitter(author.id),
+        reports: await reportsByAuthor(author.id),
+        debates: await debatesByAuthor(author.id),
+        entries: entriesBySubmitter(author.id),
       },
     })),
   );
 }
 
-const { author, practices, propositions, resources } = Astro.props;
+const { author, reports, debates, entries } = Astro.props;
 
 const outcomes = {
-  worked: practices.filter((practice) => practice.outcome === 'worked').length,
-  partial: practices.filter((practice) => practice.outcome === 'partial').length,
-  failed: practices.filter((practice) => practice.outcome === 'failed').length,
+  worked: reports.filter((report) => report.outcome === 'worked').length,
+  partial: reports.filter((report) => report.outcome === 'partial').length,
+  failed: reports.filter((report) => report.outcome === 'failed').length,
 };
 ---
 
 <Base
   title={author.displayName}
-  description={`Practices and resources contributed to MathemAct by ${author.displayName}.`}
+  description={`Reports and entries contributed to MathemAct by ${author.displayName}.`}
 >
   <div class="shell corpus">
     <p class="breadcrumb">
-      <a href={path('/practices/')}>← All practices</a>
+      <a href={path('/reports/')}>← All reports</a>
     </p>
 
     <header class="corpus__header">
@@ -88,15 +88,15 @@ const outcomes = {
       {/* One line per kind of contribution, stacked, rather than one line with rules between
           them. Three counts and the outcome breakdown do not fit on a line at this size, and
           a wrapped flex item keeps the border that was standing in for a separator — so the
-          second line began with a rule attached to nothing. Somebody with only practices,
+          second line began with a rule attached to nothing. Somebody with only reports,
           which is nearly everybody, sees exactly one line either way. */}
       <ul class="author__summary" role="list">
         <li>
           <span class="meta">
-            {practices.length} published {practices.length === 1 ? 'practice' : 'practices'}
+            {reports.length} published {reports.length === 1 ? 'report' : 'reports'}
           </span>
           {
-            practices.length > 0 && (
+            reports.length > 0 && (
               <span class="author__breakdown">
                 {' '}— {outcomes.worked} worked, {outcomes.partial} partly worked,{' '}
                 {outcomes.failed} did not
@@ -105,20 +105,20 @@ const outcomes = {
           }
         </li>
         {
-          propositions.length > 0 && (
+          debates.length > 0 && (
             <li>
               <span class="meta">
-                {propositions.length}{' '}
-                {propositions.length === 1 ? 'proposition' : 'propositions'}
+                {debates.length}{' '}
+                {debates.length === 1 ? 'debate' : 'debates'}
               </span>
             </li>
           )
         }
         {
-          resources.length > 0 && (
+          entries.length > 0 && (
             <li>
               <span class="meta">
-                {resources.length} {resources.length === 1 ? 'resource' : 'resources'}{' '}
+                {entries.length} {entries.length === 1 ? 'entry' : 'entries'}{' '}
                 submitted
               </span>
             </li>
@@ -128,7 +128,7 @@ const outcomes = {
     </header>
 
     {
-      practices.length === 0 && propositions.length === 0 && resources.length === 0 && (
+      reports.length === 0 && debates.length === 0 && entries.length === 0 && (
         <div class="empty">
           <p class="empty__heading">Nothing published yet.</p>
           <p>
@@ -140,39 +140,39 @@ const outcomes = {
     }
 
     {
-      practices.length > 0 && (
+      reports.length > 0 && (
         <section>
-          <h2 class="author__section">Practices</h2>
-          {practices.map((practice) => (
-            <PracticeCard practice={practice} showAuthor={false} />
+          <h2 class="author__section">Reports</h2>
+          {reports.map((report) => (
+            <ReportCard report={report} showAuthor={false} />
           ))}
         </section>
       )
     }
 
     {
-      propositions.length > 0 && (
+      debates.length > 0 && (
         <section>
-          <h2 class="author__section">Propositions</h2>
+          <h2 class="author__section">Debates</h2>
 
-          {/* The same list the propositions index uses, classes and all — those live in
+          {/* The same list the debates index uses, classes and all — those live in
               corpus.css rather than in that page's scoped block, which is what makes one
               claim look the same wherever it is read. */}
-          <ul class="proposition-list" role="list">
-            {propositions.map((proposition) => (
-              <li class="proposition-item">
+          <ul class="debate-list" role="list">
+            {debates.map((debate) => (
+              <li class="debate-item">
                 <a
-                  class="proposition-item__link"
-                  href={path(`/propositions/${proposition.id}/`)}
+                  class="debate-item__link"
+                  href={path(`/debates/${debate.id}/`)}
                 >
-                  {proposition.statement}
+                  {debate.statement}
                 </a>
-                <p class="card__facts proposition-item__facts">
-                  <span>{areaLabel(proposition.area)}</span>
+                <p class="card__facts debate-item__facts">
+                  <span>{areaLabel(debate.area)}</span>
                   <span class="meta">
-                    {proposition.status === 'active'
-                      ? `Active since ${longDate(proposition.activatedAt)}`
-                      : `Proposed ${longDate(proposition.createdAt)}`}
+                    {debate.status === 'active'
+                      ? `Active since ${longDate(debate.activatedAt)}`
+                      : `Proposed ${longDate(debate.createdAt)}`}
                   </span>
                 </p>
               </li>
@@ -180,25 +180,25 @@ const outcomes = {
           </ul>
 
           <p class="author__more">
-            <a href={path('/propositions/')}>All propositions</a>
+            <a href={path('/debates/')}>All debates</a>
           </p>
         </section>
       )
     }
 
     {
-      resources.length > 0 && (
+      entries.length > 0 && (
         <section>
-          <h2 class="author__section">Resources submitted</h2>
+          <h2 class="author__section">Network submitted</h2>
 
-          <ul class="author__resources" role="list">
-            {resources.map((resource) => (
-              <li class="author__resource">
-                <p class="author__resource-title">
-                  <a href={resource.url} rel="noopener noreferrer" target="_blank">
-                    {resource.title}
+          <ul class="author__entries" role="list">
+            {entries.map((entry) => (
+              <li class="author__entry">
+                <p class="author__entry-title">
+                  <a href={entry.url} rel="noopener noreferrer" target="_blank">
+                    {entry.title}
                   </a>
-                  {resource.linkStatus === 'unreachable' && (
+                  {entry.linkStatus === 'unreachable' && (
                     <span
                       class="author__broken"
                       title="This link was unreachable at the last monthly check"
@@ -210,16 +210,16 @@ const outcomes = {
 
                 <ul class="card__facts" role="list">
                   <li>
-                    <span class="meta">{resource.urlNormalised}</span>
+                    <span class="meta">{entry.urlNormalised}</span>
                   </li>
-                  <li>{categoryLabel(resource.category)}</li>
+                  <li>{categoryLabel(entry.category)}</li>
                 </ul>
               </li>
             ))}
           </ul>
 
           <p class="author__more">
-            <a href={path('/resources/')}>All resources</a>
+            <a href={path('/network/')}>All entries</a>
           </p>
         </section>
       )
@@ -256,7 +256,7 @@ const outcomes = {
 
   /* A section label rather than a title. There are two kinds of contribution on this page
      now, so both are named — an unlabelled first list and a labelled second one would read
-     as though the practices were the page and the resources an afterthought. Set as the
+     as though the reports were the page and the entries an afterthought. Set as the
      labels elsewhere on this site are: mono, tracked out, quiet. */
   .author__section {
     margin-block: var(--space-xl) 0;
@@ -268,13 +268,13 @@ const outcomes = {
     text-transform: uppercase;
   }
 
-  .author__resources {
+  .author__entries {
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .author__resource {
+  .author__entry {
     display: flex;
     flex-direction: column;
     gap: var(--space-3xs);
@@ -282,7 +282,7 @@ const outcomes = {
     border-block-start: var(--border);
   }
 
-  .author__resource-title {
+  .author__entry-title {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2xs);
@@ -290,7 +290,7 @@ const outcomes = {
     margin: 0;
   }
 
-  /* Stated in words, not in colour. A resource whose link failed the monthly check is still
+  /* Stated in words, not in colour. An entry whose link failed the monthly check is still
      part of the corpus and still worth seeing — it is a fact about the link, not a verdict
      on the contribution, so it gets no outcome colour and no tombstone. */
   .author__broken {

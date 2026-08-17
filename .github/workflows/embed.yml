@@ -1,13 +1,13 @@
-# Compute sentence embeddings for published practices and commit data/embeddings.json.
+# Compute sentence embeddings for published reports and commit data/embeddings.json.
 #
 # Model: sentence-transformers/all-MiniLM-L6-v2 (Apache 2.0, ~90 MB download, cached).
 # The model runs on CPU inside the GitHub-hosted runner — no API keys, no paid service.
 #
-# Schedule: Monday 04:17 UTC, well after the nightly export (03:17 UTC) so practices.json
+# Schedule: Monday 04:17 UTC, well after the nightly export (03:17 UTC) so reports.json
 # is already fresh. Also dispatchable manually and on push to any embed.py change.
 #
 # Commit detection: stage data/embeddings.json, diff --cached excluding the generatedAt
-# timestamp (which changes every run) — commit only when practice vectors actually changed.
+# timestamp (which changes every run) — commit only when report vectors actually changed.
 # Then ask deploy.yml to rebuild, same pattern as export.yml.
 name: Embed
 
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       allow_shrink:
-        description: 'Allow embeddings to shrink (practices removed)'
+        description: 'Allow embeddings to shrink (reports removed)'
         type: boolean
         default: false
   push:
@@ -80,7 +80,7 @@ jobs:
           git add data/embeddings.json
 
           # diff --cached but ignore lines containing "generatedAt" — the timestamp
-          # changes on every run even when the practice vectors are identical.
+          # changes on every run even when the report vectors are identical.
           if git diff --cached --unified=0 -- data/embeddings.json \
                | grep -v '"generatedAt"' \
                | grep -q '^[+-]'; then
@@ -94,7 +94,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update practice embeddings
+          git commit -m "Update report embeddings
 
           all-MiniLM-L6-v2 (Apache 2.0), int8 quantised, $(date -u +%Y-%m-%d)"
 

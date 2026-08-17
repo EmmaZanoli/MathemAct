@@ -1,5 +1,5 @@
 /**
- * Everything the site knows about practices: reading the corpus at build time, and the two
+ * Everything the site knows about reports: reading the corpus at build time, and the two
  * things a browser does to it.
  *
  * The swap point
@@ -14,16 +14,16 @@
  * Reads happen at build time, not in the browser. That is the read/write split in CLAUDE.md
  * doing its job: a traffic spike never touches the egress quota, and the site keeps serving
  * if the database is paused — which on the free tier it will be, after about a week of
- * quiet. It also means every practice is a real page with a real URL, which matters for a
+ * quiet. It also means every report is a real page with a real URL, which matters for a
  * corpus meant to be cited.
  *
  * Writes stay in the browser, because they are the only thing that genuinely cannot be
- * static: submitting a practice, and reporting whether one still works. The one read a
+ * static: submitting a report, and reporting whether one still works. The one read a
  * browser makes is the freshness overlay in src/lib/fresh.ts, which never renders a page,
  * only adds to one.
  */
 import { getSupabase } from './supabase';
-import type { Area, TaskType } from './practice-schema';
+import type { Area, TaskType } from './report-schema';
 import type { Outcome, TombstoneStatus } from './status';
 
 // ── What a page gets ──────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ export interface CorpusTag {
   readonly label: string;
 }
 
-/** The derived tombstone, computed in SQL by public.practice_staleness. Never recomputed
+/** The derived tombstone, computed in SQL by public.report_staleness. Never recomputed
  *  here: the same answer has to appear in a listing, on a page, and in the export. */
 export interface Staleness {
   readonly latestToolUse: string | null;
@@ -61,7 +61,7 @@ export interface Staleness {
   readonly isVerified: boolean;
 }
 
-export interface Practice {
+export interface Report {
   readonly id: string;
   readonly title: string;
   readonly area: Area;
@@ -96,13 +96,13 @@ export interface Practice {
  * builtins — so this module stays importable from a browser script, which is what lets the
  * write functions at the bottom live in the same file as the read functions.
  */
-const EXPORTED = import.meta.glob<{ default: Practice[] }>('/data/practices.json', {
+const EXPORTED = import.meta.glob<{ default: Report[] }>('/data/reports.json', {
   eager: true,
 });
 
-let cached: Practice[] | null = null;
+let cached: Report[] | null = null;
 
-async function readCorpus(): Promise<Practice[]> {
+async function readCorpus(): Promise<Report[]> {
   if (cached) return cached;
 
   const exported = Object.values(EXPORTED)[0]?.default;
@@ -112,7 +112,7 @@ async function readCorpus(): Promise<Practice[]> {
     // its empty state, and nothing pretends otherwise. Said out loud because the symptom —
     // a complete site with no corpus in it — otherwise reads as a bug in the listing.
     console.warn(
-      '[practices] data/practices.json is missing, so the corpus is empty. ' +
+      '[reports] data/reports.json is missing, so the corpus is empty. ' +
         'Run scripts/export.mjs, or let .github/workflows/export.yml commit one.',
     );
     cached = [];
@@ -125,22 +125,22 @@ async function readCorpus(): Promise<Practice[]> {
 
 // ── What pages call ───────────────────────────────────────────────────────────────────
 
-/** Every published practice, newest first. */
-export async function listPractices(): Promise<Practice[]> {
+/** Every published report, newest first. */
+export async function listReports(): Promise<Report[]> {
   return readCorpus();
 }
 
-export async function getPractice(id: string): Promise<Practice | undefined> {
-  return (await readCorpus()).find((practice) => practice.id === id);
+export async function getReport(id: string): Promise<Report | undefined> {
+  return (await readCorpus()).find((report) => report.id === id);
 }
 
-export async function practicesByAuthor(authorId: string): Promise<Practice[]> {
-  return (await readCorpus()).filter((practice) => practice.author?.id === authorId);
+export async function reportsByAuthor(authorId: string): Promise<Report[]> {
+  return (await readCorpus()).filter((report) => report.author?.id === authorId);
 }
 
-/* `listAuthors()` used to live here and returned everyone with a published practice. It was
+/* `listAuthors()` used to live here and returned everyone with a published report. It was
  * what getStaticPaths built author pages from, which meant a person whose only contribution
- * was a resource had no page and every link to them was a permanent 404. `listContributors()`
+ * was an entry had no page and every link to them was a permanent 404. `listContributors()`
  * in src/lib/authors.ts is the union that replaced it. Deliberately not left behind as an
  * unused export: the next person to need "the list of author pages" would find this one
  * first, and it is the wrong answer to that question. */
@@ -150,8 +150,8 @@ export async function practicesByAuthor(authorId: string): Promise<Practice[]> {
 export async function listToolNames(): Promise<string[]> {
   const names = new Map<string, string>();
 
-  for (const practice of await readCorpus()) {
-    for (const tool of practice.tools) {
+  for (const report of await readCorpus()) {
+    for (const tool of report.tools) {
       const key = tool.name.trim().toLowerCase();
       if (key && !names.has(key)) names.set(key, tool.name.trim());
     }
@@ -163,15 +163,15 @@ export async function listToolNames(): Promise<string[]> {
 export async function listUsedTags(): Promise<CorpusTag[]> {
   const tags = new Map<string, CorpusTag>();
 
-  for (const practice of await readCorpus()) {
-    for (const tag of practice.tags) tags.set(tag.code, tag);
+  for (const report of await readCorpus()) {
+    for (const tag of report.tags) tags.set(tag.code, tag);
   }
 
   return [...tags.values()].sort((a, b) => a.code.localeCompare(b.code, 'en'));
 }
 
 // ══ Writes ════════════════════════════════════════════════════════════════════════════
-// Everything below runs in a browser and always will. Submitting a practice and reporting
+// Everything below runs in a browser and always will. Submitting a report and reporting
 // whether one still works are the two things that genuinely cannot be static, and they are
 // the only reasons a reader's browser ever opens a connection to the database.
 
@@ -240,18 +240,18 @@ export async function loadTags(): Promise<Result<Tag[]>> {
 }
 
 /**
- * Returns the new practice's id.
+ * Returns the new report's id.
  *
  * One RPC rather than three inserts, because the at-least-one-tool constraint is deferred
  * and PostgREST gives every request its own transaction. See the migration that creates
- * public.submit_practice.
+ * public.submit_report.
  */
-export async function submitPractice(submission: Submission): Promise<Result<string>> {
+export async function submitReport(submission: Submission): Promise<Result<string>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const { data, error } = await supabase.rpc('submit_practice', {
+    const { data, error } = await supabase.rpc('submit_report', {
       p_title: submission.title.trim(),
       p_area: submission.area,
       p_task_type: submission.taskType,
@@ -301,10 +301,10 @@ export interface OwnSubmission {
  *
  * This exists because "request changes" has to reach a person. There is no address any of
  * our code may read and no server to send mail from, so a moderator's note is written onto
- * the practice it is about and the author reads it here — which is also the only place they
+ * the report it is about and the author reads it here — which is also the only place they
  * can see that something was hidden, rather than discovering it by its absence.
  *
- * No policy is being worked around: practices_select_own already returns exactly these rows
+ * No policy is being worked around: reports_select_own already returns exactly these rows
  * to their author and nothing else. The query is written with an explicit author filter
  * anyway, because a filter that agrees with the policy documents it.
  */
@@ -314,7 +314,7 @@ export async function loadOwnSubmissions(userId: string): Promise<Result<OwnSubm
 
   try {
     const { data, error } = await supabase
-      .from('practices')
+      .from('reports')
       .select('id, title, status, created_at, moderation_note, moderation_note_at, deleted_at')
       .eq('author_id', userId)
       .order('created_at', { ascending: false });
@@ -340,8 +340,8 @@ export async function loadOwnSubmissions(userId: string): Promise<Result<OwnSubm
 
 // ── Editing a pending submission ──────────────────────────────────────────────────────
 
-/** Full practice data needed to pre-fill the edit form. */
-export interface PendingPracticeForEdit {
+/** Full report data needed to pre-fill the edit form. */
+export interface PendingReportForEdit {
   readonly id: string;
   readonly title: string;
   readonly area: Area;
@@ -366,30 +366,30 @@ export interface PendingPracticeForEdit {
 }
 
 /**
- * The full content of one pending practice, owned by the caller.
+ * The full content of one pending report, owned by the caller.
  *
  * Used to pre-fill the edit form. The explicit author_id and status filters agree with the
- * practices_select_own and practices_update_own_pending policies, which are the true guards.
+ * reports_select_own and reports_update_own_pending policies, which are the true guards.
  */
-export async function loadPendingPractice(
-  practiceId: string,
+export async function loadPendingReport(
+  reportId: string,
   userId: string,
-): Promise<Result<PendingPracticeForEdit>> {
+): Promise<Result<PendingReportForEdit>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
     const { data, error } = await supabase
-      .from('practices')
+      .from('reports')
       .select(
         'id, title, area, task_type, aim, method, outcome, outcome_notes, verification,' +
         'transcript_excerpt, transcript_url, caveats, third_party_material_confirmed,' +
         'time_spent_minutes, was_published, was_disclosed, author_confidence,' +
         'moderation_note, moderation_note_at,' +
-        'practice_tools(id, tool_name, tool_version, used_on),' +
-        'practice_tags(tags(code))',
+        'report_tools(id, tool_name, tool_version, used_on),' +
+        'report_tags(tags(code))',
       )
-      .eq('id', practiceId)
+      .eq('id', reportId)
       .eq('author_id', userId)
       .eq('status', 'pending')
       .single();
@@ -403,11 +403,11 @@ export async function loadPendingPractice(
     if (!data) return { ok: false, message: 'Not found.' };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = ((data as any).practice_tools ?? []) as {
+    const tools = ((data as any).report_tools ?? []) as {
       id: string; tool_name: string; tool_version: string; used_on: string;
     }[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tagLinks = ((data as any).practice_tags ?? []) as { tags: { code: string } | null }[];
+    const tagLinks = ((data as any).report_tags ?? []) as { tags: { code: string } | null }[];
 
     return {
       ok: true,
@@ -446,21 +446,21 @@ export async function loadPendingPractice(
 }
 
 /**
- * Replace a pending practice's content in one transaction.
+ * Replace a pending report's content in one transaction.
  *
- * Calls the resubmit_practice RPC, which is the only way to replace the tool set atomically
- * while satisfying the deferred at-least-one-tool constraint. Same reasoning as submitPractice.
+ * Calls the resubmit_report RPC, which is the only way to replace the tool set atomically
+ * while satisfying the deferred at-least-one-tool constraint. Same reasoning as submitReport.
  */
-export async function resubmitPractice(
-  practiceId: string,
+export async function resubmitReport(
+  reportId: string,
   submission: Submission,
 ): Promise<Result<void>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const { error } = await supabase.rpc('resubmit_practice', {
-      p_practice_id: practiceId,
+    const { error } = await supabase.rpc('resubmit_report', {
+      p_report_id: reportId,
       p_title: submission.title.trim(),
       p_area: submission.area,
       p_task_type: submission.taskType,
@@ -521,7 +521,7 @@ export interface ConfirmationState {
  * an afternoon on it — so a day-stale one is worth one small query to correct.
  */
 export async function loadConfirmations(
-  practiceId: string,
+  reportId: string,
   viewerId: string | null,
 ): Promise<Result<ConfirmationState>> {
   const supabase = getSupabase();
@@ -529,11 +529,11 @@ export async function loadConfirmations(
 
   try {
     const { data, error } = await supabase
-      .from('practice_confirmations')
+      .from('report_confirmations')
       .select(
-        'id, user_id, verdict, note, created_at, profiles!practice_confirmations_user_id_fkey(display_name, is_pseudonym)',
+        'id, user_id, verdict, note, created_at, profiles!report_confirmations_user_id_fkey(display_name, is_pseudonym)',
       )
-      .eq('practice_id', practiceId)
+      .eq('report_id', reportId)
       .order('created_at', { ascending: false });
 
     if (error) return { ok: false, message: describe(error) };
@@ -565,10 +565,10 @@ export async function loadConfirmations(
   }
 }
 
-/** One row per person per practice, so this is an upsert on that pair. Changing your mind
+/** One row per person per report, so this is an upsert on that pair. Changing your mind
  *  edits the row rather than adding a second one. */
 export async function saveConfirmation(
-  practiceId: string,
+  reportId: string,
   userId: string,
   verdict: Verdict,
   note: string,
@@ -578,15 +578,15 @@ export async function saveConfirmation(
 
   try {
     const { error } = await supabase
-      .from('practice_confirmations')
+      .from('report_confirmations')
       .upsert(
         {
-          practice_id: practiceId,
+          report_id: reportId,
           user_id: userId,
           verdict,
           note: note.trim() || null,
         },
-        { onConflict: 'practice_id,user_id' },
+        { onConflict: 'report_id,user_id' },
       );
 
     if (error) return { ok: false, message: describe(error) };
@@ -599,7 +599,7 @@ export async function saveConfirmation(
 /** Withdrawing is a delete, so that "I no longer have a view" is representable. Without it
  *  the only way out of a verdict would be to hold a different one. */
 export async function withdrawConfirmation(
-  practiceId: string,
+  reportId: string,
   userId: string,
 ): Promise<Result<null>> {
   const supabase = getSupabase();
@@ -607,9 +607,9 @@ export async function withdrawConfirmation(
 
   try {
     const { error } = await supabase
-      .from('practice_confirmations')
+      .from('report_confirmations')
       .delete()
-      .eq('practice_id', practiceId)
+      .eq('report_id', reportId)
       .eq('user_id', userId);
 
     if (error) return { ok: false, message: describe(error) };

@@ -12,7 +12,7 @@ import { defineConfig } from 'astro/config';
 //
 // The prefix is the single most common way to break a GitHub Pages deploy, because
 // `astro dev` also serves under `base`, so a wrong link fails identically in both
-// places — but a *hardcoded* link like `/practices/` silently works in neither and is
+// places — but a *hardcoded* link like `/reports/` silently works in neither and is
 // easy to miss locally. Never write internal paths by hand; route them through
 // `path()` in src/lib/paths.ts.
 //

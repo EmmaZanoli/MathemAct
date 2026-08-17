@@ -1,21 +1,21 @@
 ---
 /**
- * Client-rendered practice viewer for practices that do not yet have a static page.
+ * Client-rendered report viewer for reports that do not yet have a static page.
  *
- * Practices are exported nightly and built into static pages at /practices/<id>/. Between
- * the export and the next build, a practice that was published that day has no static page.
- * The freshness overlay on the listing shows those new practices but links them here rather
+ * Reports are exported nightly and built into static pages at /reports/<id>/. Between
+ * the export and the next build, a report that was published that day has no static page.
+ * The freshness overlay on the listing shows those new reports but links them here rather
  * than to a 404.
  *
- * Pattern and rationale: same as /propositions/view/ and /moderate/. One anon fetch
+ * Pattern and rationale: same as /debates/view/ and /moderate/. One anon fetch
  * against PostgREST gets the fields the static page would have baked in. The interactive
  * sections — the staleness-confirmation form and the comment thread — are wired up by
  * JavaScript after the fetch completes.
  *
  * What is omitted relative to the static page:
  *   - StalenessNote / tombstone glyph: requires the confirmation aggregate from the DB;
- *     a fresh practice has none, so the section would be empty regardless.
- *   - Related practices: requires the full corpus to be in memory at build time.
+ *     a fresh report has none, so the section would be empty regardless.
+ *   - Related reports: requires the full corpus to be in memory at build time.
  *   - Institution badges: the author join here omits institution data to keep the query
  *     small; badges carry a verification date that is not in this query.
  *   - Citation string / CopyButton: minor; omitted for now.
@@ -29,27 +29,27 @@ import '../../styles/forms.css';
 import { path } from '../../lib/paths';
 ---
 
-<Base title="Practice" description="A practice submitted to MathemAct.">
+<Base title="Report" description="A report submitted to MathemAct.">
   <div class="shell corpus">
-    <p class="breadcrumb"><a href={path('/practices/')}>← All practices</a></p>
+    <p class="breadcrumb"><a href={path('/reports/')}>← All reports</a></p>
 
     <div data-loading>
       <p class="field__hint">Loading…</p>
     </div>
 
     <div data-error hidden>
-      <p>This practice could not be found, or has been removed.</p>
-      <p><a href={path('/practices/')}>Back to all practices</a></p>
+      <p>This report could not be found, or has been removed.</p>
+      <p><a href={path('/reports/')}>Back to all reports</a></p>
     </div>
 
-    <div class="practice" data-content hidden>
-      <div class="practice__body" data-quotable>
-        <span data-pagefind-filter="type:practice" hidden></span>
+    <div class="report" data-content hidden>
+      <div class="report__body" data-quotable>
+        <span data-pagefind-filter="type:report" hidden></span>
 
         <header>
           <h1 data-title></h1>
 
-          <ul class="card__facts practice__facts" role="list">
+          <ul class="card__facts report__facts" role="list">
             <li data-pagefind-filter="area" data-area></li>
             <li data-pagefind-filter="task_type" data-task></li>
             <li><span class="meta" data-date></span></li>
@@ -135,8 +135,8 @@ import { path } from '../../lib/paths';
 
         <div class="aside__block">
           <p class="field__hint">
-            Fresh submission — the full static page, with citation, related practices, and
-            confirmation reports, appears at the next nightly build.
+            Fresh submission — the full static page, with citation, related reports, and
+            confirmations, appears at the next nightly build.
           </p>
         </div>
       </aside>
@@ -145,7 +145,7 @@ import { path } from '../../lib/paths';
 
       <div data-pagefind-ignore>
         <CommentThread
-          parentType="practice"
+          parentType="report"
           parentId=""
           nodes={[]}
           title=""
@@ -158,7 +158,7 @@ import { path } from '../../lib/paths';
 
 <script>
   import { longDate } from '../../lib/format';
-  import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/practice-schema';
+  import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/report-schema';
   import { path } from '../../lib/paths';
 
   const params = new URLSearchParams(window.location.search);
@@ -175,30 +175,30 @@ import { path } from '../../lib/paths';
     await init(id);
   }
 
-  async function init(practiceId: string): Promise<void> {
-    const practice = await fetchPractice(practiceId);
+  async function init(reportId: string): Promise<void> {
+    const report = await fetchReport(reportId);
 
-    if (!practice) {
+    if (!report) {
       loadingEl.hidden = true;
       errorEl.hidden = false;
       return;
     }
 
-    document.title = `${practice.title} | MathemAct`;
+    document.title = `${report.title} | MathemAct`;
 
-    setText('[data-title]', practice.title);
-    setText('[data-area]', areaLabel(practice.area));
-    setText('[data-task]', taskTypeLabel(practice.taskType));
-    setText('[data-date]', `Posted ${longDate(practice.createdAt)}`);
+    setText('[data-title]', report.title);
+    setText('[data-area]', areaLabel(report.area));
+    setText('[data-task]', taskTypeLabel(report.taskType));
+    setText('[data-date]', `Posted ${longDate(report.createdAt)}`);
 
-    setText('[data-outcome-label]', `${outcomeLabel(practice.outcome)}.`);
-    setText('[data-outcome-notes]', practice.outcomeNotes ?? '');
-    setText('[data-verification]', practice.verification);
-    setText('[data-aim]', practice.aim);
-    setText('[data-method]', practice.method);
+    setText('[data-outcome-label]', `${outcomeLabel(report.outcome)}.`);
+    setText('[data-outcome-notes]', report.outcomeNotes ?? '');
+    setText('[data-verification]', report.verification);
+    setText('[data-aim]', report.aim);
+    setText('[data-method]', report.method);
 
     const tbody = document.querySelector<HTMLElement>('[data-tools-body]')!;
-    for (const tool of practice.tools) {
+    for (const tool of report.tools) {
       const tr = document.createElement('tr');
       tr.innerHTML = `<td></td><td></td><td></td>`;
       (tr.cells[0] as HTMLTableCellElement).textContent = tool.name;
@@ -207,38 +207,38 @@ import { path } from '../../lib/paths';
       tbody.appendChild(tr);
     }
 
-    if (practice.transcriptExcerpt) {
+    if (report.transcriptExcerpt) {
       const section = document.querySelector<HTMLElement>('[data-transcript-section]')!;
       const summary = document.querySelector<HTMLElement>('[data-transcript-summary]')!;
       const body = document.querySelector<HTMLElement>('[data-transcript-body]')!;
-      summary.textContent = `Show the excerpt (${practice.transcriptExcerpt.length.toLocaleString('en-GB')} characters)`;
-      body.textContent = practice.transcriptExcerpt;
-      if (practice.transcriptUrl) {
+      summary.textContent = `Show the excerpt (${report.transcriptExcerpt.length.toLocaleString('en-GB')} characters)`;
+      body.textContent = report.transcriptExcerpt;
+      if (report.transcriptUrl) {
         const note = document.querySelector<HTMLElement>('[data-transcript-link-note]')!;
         const link = document.querySelector<HTMLAnchorElement>('[data-transcript-link-href]')!;
-        link.href = practice.transcriptUrl;
+        link.href = report.transcriptUrl;
         note.hidden = false;
       }
       section.hidden = false;
     }
 
-    if (practice.caveats) {
-      setText('[data-caveats]', practice.caveats);
+    if (report.caveats) {
+      setText('[data-caveats]', report.caveats);
       const section = document.querySelector<HTMLElement>('[data-caveats-section]')!;
       section.hidden = false;
     }
 
     // Author block.
     const authorBlock = document.querySelector<HTMLElement>('[data-author-block]')!;
-    if (practice.author) {
+    if (report.author) {
       const link = document.createElement('a');
       // /authors/view/, not /authors/<id>/. Author pages are generated from the corpus, so
-      // the author of a practice this new may have no static page yet — this is somebody's
+      // the author of a report this new may have no static page yet — this is somebody's
       // first submission more often than not. The view page reads live and always resolves.
-      link.href = path(`/authors/view/?id=${practice.author.id}`);
-      link.textContent = practice.author.displayName;
+      link.href = path(`/authors/view/?id=${report.author.id}`);
+      link.textContent = report.author.displayName;
       authorBlock.appendChild(link);
-      if (practice.author.isPseudonym) {
+      if (report.author.isPseudonym) {
         const hint = document.createElement('span');
         hint.className = 'field__hint';
         hint.textContent = ' — a pseudonym';
@@ -251,14 +251,14 @@ import { path } from '../../lib/paths';
     }
 
     // Tags.
-    if (practice.tags.length > 0) {
+    if (report.tags.length > 0) {
       const block = document.querySelector<HTMLElement>('[data-tags-block]')!;
       const list = document.querySelector<HTMLElement>('[data-tags-list]')!;
-      for (const tag of practice.tags) {
+      for (const tag of report.tags) {
         const li = document.createElement('li');
         li.className = 'tool-chip tool-chip--tag';
         const a = document.createElement('a');
-        a.href = path(`/practices/?tag=${tag}`);
+        a.href = path(`/reports/?tag=${tag}`);
         const span = document.createElement('span');
         span.className = 'tool-chip__name';
         span.textContent = tag;
@@ -271,16 +271,16 @@ import { path } from '../../lib/paths';
 
     // Metadata (time, confidence, published, disclosed).
     const entries: { term: string; value: string }[] = [];
-    if (practice.timeSpentMinutes !== null)
-      entries.push({ term: 'Time spent', value: `${practice.timeSpentMinutes} min` });
-    if (practice.authorConfidence !== null)
-      entries.push({ term: 'Author confidence', value: `${practice.authorConfidence} / 10` });
-    if (practice.wasPublished !== null)
-      entries.push({ term: 'Published', value: practice.wasPublished ? 'yes' : 'no' });
-    if (practice.wasDisclosed !== null)
+    if (report.timeSpentMinutes !== null)
+      entries.push({ term: 'Time spent', value: `${report.timeSpentMinutes} min` });
+    if (report.authorConfidence !== null)
+      entries.push({ term: 'Author confidence', value: `${report.authorConfidence} / 10` });
+    if (report.wasPublished !== null)
+      entries.push({ term: 'Published', value: report.wasPublished ? 'yes' : 'no' });
+    if (report.wasDisclosed !== null)
       entries.push({
         term: 'Disclosed in the paper',
-        value: practice.wasDisclosed ? 'yes' : 'no',
+        value: report.wasDisclosed ? 'yes' : 'no',
       });
     if (entries.length > 0) {
       const block = document.querySelector<HTMLElement>('[data-metadata-block]')!;
@@ -297,9 +297,9 @@ import { path } from '../../lib/paths';
 
     // Wire up the comment thread.
     const thread = document.querySelector<HTMLElement>('[data-thread]')!;
-    thread.dataset.parentId = practiceId;
-    thread.dataset.nodeTitle = practice.title;
-    thread.dataset.nodeHref = path(`/practices/${practiceId}/`);
+    thread.dataset.parentId = reportId;
+    thread.dataset.nodeTitle = report.title;
+    thread.dataset.nodeHref = path(`/reports/${reportId}/`);
 
     loadingEl.hidden = true;
     contentEl.hidden = false;
@@ -312,7 +312,7 @@ import { path } from '../../lib/paths';
 
   // ── Data fetch ────────────────────────────────────────────────────────────────────────
 
-  interface FetchedPractice {
+  interface FetchedReport {
     readonly id: string;
     readonly title: string;
     readonly aim: string;
@@ -339,7 +339,7 @@ import { path } from '../../lib/paths';
     } | null;
   }
 
-  async function fetchPractice(id: string): Promise<FetchedPractice | null> {
+  async function fetchReport(id: string): Promise<FetchedReport | null> {
     const base = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
     const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
     if (!base || !key) return null;
@@ -348,14 +348,14 @@ import { path } from '../../lib/paths';
       'id,title,aim,method,outcome,outcome_notes,verification',
       'transcript_excerpt,transcript_url,caveats,area,task_type,created_at',
       'time_spent_minutes,author_confidence,was_published,was_disclosed',
-      'practice_tools(tool_name,tool_version,used_on)',
-      'practice_tags(tags(code))',
-      'author:profiles!practices_author_id_fkey(id,display_name,is_pseudonym)',
+      'report_tools(tool_name,tool_version,used_on)',
+      'report_tags(tags(code))',
+      'author:profiles!reports_author_id_fkey(id,display_name,is_pseudonym)',
     ].join(',');
 
     try {
       const response = await fetch(
-        `${base}/rest/v1/practices` +
+        `${base}/rest/v1/reports` +
           `?select=${encodeURIComponent(select)}` +
           `&id=eq.${encodeURIComponent(id)}` +
           `&status=eq.published&deleted_at=is.null`,
@@ -386,14 +386,14 @@ import { path } from '../../lib/paths';
         authorConfidence: row.author_confidence ?? null,
         wasPublished: row.was_published ?? null,
         wasDisclosed: row.was_disclosed ?? null,
-        tools: (row.practice_tools ?? []).map(
+        tools: (row.report_tools ?? []).map(
           (t: { tool_name: string; tool_version: string; used_on: string | null }) => ({
             name: t.tool_name,
             version: t.tool_version,
             usedOn: t.used_on ?? null,
           }),
         ),
-        tags: (row.practice_tags ?? []).flatMap(
+        tags: (row.report_tags ?? []).flatMap(
           (link: { tags: { code: string } | null }) => (link.tags ? [link.tags.code] : []),
         ),
         author: row.author

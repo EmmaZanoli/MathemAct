@@ -1,11 +1,11 @@
 ---
 /**
- * Resource listing, filterable by category.
+ * Entry listing, filterable by category.
  *
- * Unreachable resources (link_status = 'unreachable') are always shown — never silently
+ * Unreachable entries (link_status = 'unreachable') are always shown — never silently
  * hidden — but sorted last and visibly marked. A broken link is a fact in the corpus.
  *
- * Static build from data/resources.json (written nightly by scripts/export.mjs).
+ * Static build from data/network.json (written nightly by scripts/export.mjs).
  */
 import Base from '../../layouts/Base.astro';
 import Badges from '../../components/Badges.astro';
@@ -13,22 +13,22 @@ import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
-import { CATEGORIES, categoryLabel, listResources } from '../../lib/resources';
-import type { ResourceCategory } from '../../lib/resources';
+import { CATEGORIES, categoryLabel, listNetwork } from '../../lib/network';
+import type { NetworkCategory } from '../../lib/network';
 
-const all = listResources();
+const all = listNetwork();
 
 const usedCategories = new Set(all.map((r) => r.category));
 const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 ---
 
 <Base
-  title="Resources"
+  title="Network"
   description="Community-curated links to AI tools, educational materials, and guidelines for mathematicians."
 >
-  <div class="shell corpus resource-corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
+  <div class="shell corpus network-corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
     <header class="corpus__header">
-      <h1>Resources</h1>
+      <h1>Network</h1>
       <p class="corpus__lead">
         Community-curated links to tools, courses, libraries, and guidelines. Moderated
         before publication and checked monthly.
@@ -37,13 +37,13 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 
     {all.length === 0 ? (
       <p class="corpus__empty">
-        No resources have been published yet.{' '}
-        <a href={path('/resources/new/')}>Be the first to submit one.</a>
+        No entries have been published yet.{' '}
+        <a href={path('/network/new/')}>Be the first to submit one.</a>
       </p>
     ) : (
       <div class="listing">
-        <aside class="listing__filters" aria-label="Filter resources">
-          <form method="get" action={path('/resources/')}>
+        <aside class="listing__filters" aria-label="Filter entries">
+          <form method="get" action={path('/network/')}>
             <fieldset class="filter-set">
               <legend class="filter-set__legend">Category</legend>
               <label class="filter-chip">
@@ -61,58 +61,58 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
           </form>
         </aside>
 
-        <section class="listing__results" aria-label="Resources" aria-live="polite">
+        <section class="listing__results" aria-label="Network" aria-live="polite">
           <p class="listing__count" data-count aria-live="polite">
-            {all.length} resource{all.length === 1 ? '' : 's'}
+            {all.length} {all.length === 1 ? 'entry' : 'entries'}
           </p>
 
-          <ul class="resource-list" data-resource-list role="list">
-            {/* Reachable resources first, then unreachable — sorted by created_at desc within each group. */}
+          <ul class="entry-list" data-entry-list role="list">
+            {/* Reachable entries first, then unreachable — sorted by created_at desc within each group. */}
             {[
               ...all.filter((r) => r.linkStatus !== 'unreachable').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
               ...all.filter((r) => r.linkStatus === 'unreachable').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-            ].map((resource) => (
+            ].map((entry) => (
               <li
-                class="resource-card"
-                data-category={resource.category}
-                data-unreachable={resource.linkStatus === 'unreachable' ? 'true' : undefined}
+                class="entry-card"
+                data-category={entry.category}
+                data-unreachable={entry.linkStatus === 'unreachable' ? 'true' : undefined}
               >
-                <div class="resource-card__head">
+                <div class="entry-card__head">
                   <a
-                    class="resource-card__title"
-                    href={resource.url}
+                    class="entry-card__title"
+                    href={entry.url}
                     rel="noopener noreferrer"
                     target="_blank"
                   >
-                    {resource.title}
+                    {entry.title}
                   </a>
-                  {resource.linkStatus === 'unreachable' && (
-                    <span class="resource-card__unreachable" title="This link was unreachable at the last monthly check">
+                  {entry.linkStatus === 'unreachable' && (
+                    <span class="entry-card__unreachable" title="This link was unreachable at the last monthly check">
                       Link may be broken
                     </span>
                   )}
-                  {resource.linkStatus === 'redirected' && (
-                    <span class="resource-card__redirected">Redirects</span>
+                  {entry.linkStatus === 'redirected' && (
+                    <span class="entry-card__redirected">Redirects</span>
                   )}
                 </div>
 
-                <p class="resource-card__url mono">{resource.urlNormalised}</p>
+                <p class="entry-card__url mono">{entry.urlNormalised}</p>
 
-                <p class="resource-card__description">{resource.description}</p>
+                <p class="entry-card__description">{entry.description}</p>
 
-                <p class="resource-card__relevance">{resource.relevance}</p>
+                <p class="entry-card__relevance">{entry.relevance}</p>
 
-                <div class="resource-card__meta">
-                  <span class="resource-card__category mono">
-                    {categoryLabel(resource.category as ResourceCategory)}
+                <div class="entry-card__meta">
+                  <span class="entry-card__category mono">
+                    {categoryLabel(entry.category as NetworkCategory)}
                   </span>
-                  {resource.submitter && (
+                  {entry.submitter && (
                     <Fragment>
-                      <span class="resource-card__submitter">
+                      <span class="entry-card__submitter">
                         Submitted by{' '}
-                        <a href={path(`/authors/${resource.submitter.id}/`)}>
-                          {resource.submitter.displayName}
-                          {resource.submitter.isPseudonym && ' (a pseudonym)'}
+                        <a href={path(`/authors/${entry.submitter.id}/`)}>
+                          {entry.submitter.displayName}
+                          {entry.submitter.isPseudonym && ' (a pseudonym)'}
                         </a>
                       </span>
                       {/* Compact, and a sibling rather than a child of the line above. The
@@ -121,11 +121,11 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
                           page — the same reasoning that gave comment headers this variant.
                           Outside the span because `.badge-line` is a <p>, which is not
                           phrasing content and may not sit inside one. */}
-                      <Badges institution={resource.submitter.institution} compact />
+                      <Badges institution={entry.submitter.institution} compact />
                     </Fragment>
                   )}
-                  {!resource.submitter && (
-                    <span class="resource-card__submitter resource-card__erased">
+                  {!entry.submitter && (
+                    <span class="entry-card__submitter entry-card__erased">
                       Submitter since erased
                     </span>
                   )}
@@ -138,24 +138,24 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     )}
 
     <p class="corpus__submit">
-      <a class="button button--primary" href={path('/resources/new/')}>Submit a resource</a>
+      <a class="button button--primary" href={path('/network/new/')}>Submit an entry</a>
     </p>
 
-    {/* Fresh resources link directly to the external URL — no view page needed, because
-        a resource is a pointer to an external thing, not a page on this site. */}
-    <template data-fresh-resource>
-      <li class="resource-card" data-fresh>
+    {/* Fresh entries link directly to the external URL — no view page needed, because
+        an entry is a pointer to an external thing, not a page on this site. */}
+    <template data-fresh-entry>
+      <li class="entry-card" data-fresh>
         <p class="card__fresh">
           <span class="mono">new since the last build</span>
         </p>
-        <div class="resource-card__head">
-          <a class="resource-card__title" data-title rel="noopener noreferrer" target="_blank"></a>
+        <div class="entry-card__head">
+          <a class="entry-card__title" data-title rel="noopener noreferrer" target="_blank"></a>
         </div>
-        <p class="resource-card__url mono" data-url></p>
-        <p class="resource-card__description" data-description></p>
-        <p class="resource-card__relevance" data-relevance></p>
-        <div class="resource-card__meta">
-          <span class="resource-card__category mono" data-category-label></span>
+        <p class="entry-card__url mono" data-url></p>
+        <p class="entry-card__description" data-description></p>
+        <p class="entry-card__relevance" data-relevance></p>
+        <div class="entry-card__meta">
+          <span class="entry-card__category mono" data-category-label></span>
         </div>
       </li>
     </template>
@@ -181,9 +181,9 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
   }
 
   // Filter cards in place and update the count.
-  const list = document.querySelector<HTMLElement>('[data-resource-list]');
+  const list = document.querySelector<HTMLElement>('[data-entry-list]');
   const countEl = document.querySelector<HTMLElement>('[data-count]');
-  const cards = document.querySelectorAll<HTMLElement>('.resource-card');
+  const cards = document.querySelectorAll<HTMLElement>('.entry-card');
 
   function applyFilter(cat: string) {
     let visible = 0;
@@ -193,11 +193,11 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
       if (match) visible++;
     }
     if (countEl) {
-      countEl.textContent = `${visible} resource${visible === 1 ? '' : 's'}`;
+      countEl.textContent = `${visible} ${visible === 1 ? 'entry' : 'entries'}`;
     }
     // Sort: reachable first, then unreachable.
     if (list) {
-      const items = [...list.querySelectorAll<HTMLElement>('.resource-card')];
+      const items = [...list.querySelectorAll<HTMLElement>('.entry-card')];
       const reachable = items.filter((c) => !c.hidden && c.dataset.unreachable !== 'true');
       const unreachable = items.filter((c) => !c.hidden && c.dataset.unreachable === 'true');
       for (const item of [...reachable, ...unreachable]) list.appendChild(item);
@@ -223,61 +223,61 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 
   // ── Freshness overlay ─────────────────────────────────────────────────────────────────
   //
-  // Resources link to external URLs, so fresh cards carry the real link directly — no
+  // Network link to external URLs, so fresh cards carry the real link directly — no
   // view page needed. Everything here fails silently; see src/lib/fresh.ts.
 
   void (async () => {
     const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
-    const resourceList = document.querySelector<HTMLElement>('[data-resource-list]');
-    const template = document.querySelector<HTMLTemplateElement>('[data-fresh-resource]');
+    const entryList = document.querySelector<HTMLElement>('[data-entry-list]');
+    const template = document.querySelector<HTMLTemplateElement>('[data-fresh-entry]');
     const emptyEl = document.querySelector<HTMLElement>('.corpus__empty');
 
     if (!since || !template) return;
 
-    const { resourcesSince } = await import('../../lib/fresh');
-    const { categoryLabel } = await import('../../lib/resources');
+    const { networkSince } = await import('../../lib/fresh');
+    const { categoryLabel } = await import('../../lib/network');
 
-    const fresh = await resourcesSince(since);
+    const fresh = await networkSince(since);
     if (fresh.length === 0) return;
 
-    // If the page was empty (no exported resources), hide the empty message and
+    // If the page was empty (no exported entries), hide the empty message and
     // create a list to receive the fresh cards.
-    let targetList = resourceList;
+    let targetList = entryList;
     if (!targetList) {
       if (emptyEl) emptyEl.hidden = true;
       targetList = document.createElement('ul');
-      targetList.className = 'resource-list';
+      targetList.className = 'entry-list';
       targetList.setAttribute('role', 'list');
-      targetList.dataset.resourceList = '';
+      targetList.dataset.entryList = '';
       document.querySelector('[data-corpus]')?.insertBefore(
         targetList,
         document.querySelector('.corpus__submit'),
       );
     }
 
-    for (const resource of fresh) {
+    for (const entry of fresh) {
       const node = (template.content.cloneNode(true) as DocumentFragment)
         .firstElementChild as HTMLElement;
 
-      node.dataset.category = resource.category;
+      node.dataset.category = entry.category;
 
       const titleEl = node.querySelector<HTMLAnchorElement>('[data-title]');
       if (titleEl) {
-        titleEl.textContent = resource.title;
-        titleEl.href = resource.url;
+        titleEl.textContent = entry.title;
+        titleEl.href = entry.url;
       }
 
       const urlEl = node.querySelector<HTMLElement>('[data-url]');
-      if (urlEl) urlEl.textContent = resource.urlNormalised;
+      if (urlEl) urlEl.textContent = entry.urlNormalised;
 
       const descEl = node.querySelector<HTMLElement>('[data-description]');
-      if (descEl) descEl.textContent = resource.description;
+      if (descEl) descEl.textContent = entry.description;
 
       const relEl = node.querySelector<HTMLElement>('[data-relevance]');
-      if (relEl) relEl.textContent = resource.relevance;
+      if (relEl) relEl.textContent = entry.relevance;
 
       const catEl = node.querySelector<HTMLElement>('[data-category-label]');
-      if (catEl) catEl.textContent = categoryLabel(resource.category as Parameters<typeof categoryLabel>[0]);
+      if (catEl) catEl.textContent = categoryLabel(entry.category as Parameters<typeof categoryLabel>[0]);
 
       targetList.prepend(node);
     }
@@ -285,14 +285,14 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     // Update the visible count.
     const countEl = document.querySelector<HTMLElement>('[data-count]');
     if (countEl) {
-      const total = targetList.querySelectorAll('.resource-card:not([hidden])').length;
-      countEl.textContent = `${total} resource${total === 1 ? '' : 's'}`;
+      const total = targetList.querySelectorAll('.entry-card:not([hidden])').length;
+      countEl.textContent = `${total} ${total === 1 ? 'entry' : 'entries'}`;
     }
   })();
 </script>
 
 <style>
-  .resource-corpus {
+  .network-corpus {
     padding-block: var(--space-2xl);
   }
 
@@ -305,7 +305,7 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     margin-block-start: var(--space-2xl);
   }
 
-  .resource-list {
+  .entry-list {
     display: flex;
     flex-direction: column;
     gap: var(--space-lg);
@@ -314,19 +314,19 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     list-style: none;
   }
 
-  .resource-card {
+  .entry-card {
     padding: var(--space-md);
     border: var(--border);
     border-radius: var(--radius-sm);
     background-color: var(--surface);
   }
 
-  .resource-card[data-unreachable='true'] {
+  .entry-card[data-unreachable='true'] {
     border-color: var(--outcome-failed);
     opacity: 0.8;
   }
 
-  .resource-card__head {
+  .entry-card__head {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
@@ -334,14 +334,14 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     margin-block-end: var(--space-3xs);
   }
 
-  .resource-card__title {
+  .entry-card__title {
     font-family: var(--font-serif);
     font-size: var(--size-4);
     font-weight: var(--weight-semibold);
     color: var(--accent-strong);
   }
 
-  .resource-card__unreachable {
+  .entry-card__unreachable {
     font-family: var(--font-mono);
     font-size: var(--size-1);
     letter-spacing: var(--tracking-wide);
@@ -351,7 +351,7 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     border-radius: var(--radius-sm);
   }
 
-  .resource-card__redirected {
+  .entry-card__redirected {
     font-family: var(--font-mono);
     font-size: var(--size-1);
     letter-spacing: var(--tracking-wide);
@@ -361,27 +361,27 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     border-radius: var(--radius-sm);
   }
 
-  .resource-card__url {
+  .entry-card__url {
     font-size: var(--size-1);
     color: var(--ink-muted);
     margin-block-end: var(--space-xs);
     word-break: break-all;
   }
 
-  .resource-card__description {
+  .entry-card__description {
     font-size: var(--size-2);
     line-height: var(--leading-relaxed);
     margin-block-end: var(--space-xs);
   }
 
-  .resource-card__relevance {
+  .entry-card__relevance {
     font-size: var(--size-2);
     line-height: var(--leading-relaxed);
     color: var(--ink-muted);
     margin-block-end: var(--space-sm);
   }
 
-  .resource-card__meta {
+  .entry-card__meta {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -390,14 +390,14 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     color: var(--ink-muted);
   }
 
-  .resource-card__category {
+  .entry-card__category {
     padding: var(--space-3xs) var(--space-2xs);
     border: var(--border);
     border-radius: var(--radius-sm);
     background-color: var(--ground);
   }
 
-  .resource-card__erased {
+  .entry-card__erased {
     font-style: italic;
   }
 

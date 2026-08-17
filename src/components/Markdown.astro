@@ -14,7 +14,7 @@ import { renderMarkdown } from '../lib/markdown';
 interface Props {
   /** Markdown source. `$inline$` and `$$display$$` are rendered as TeX. */
   content: string;
-  /** Element to render as. A practice narrative is an article, a comment is a div. */
+  /** Element to render as. A report narrative is an article, a comment is a div. */
   as?: 'div' | 'article' | 'section';
   class?: string;
 }

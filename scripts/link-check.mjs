@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Monthly link checker for public.resources.
+ * Monthly link checker for public.network_entries.
  *
  *   node scripts/link-check.mjs [--dry-run] [--concurrency N]
  *
- * Reads all published, non-deleted resources from Supabase via a direct connection,
+ * Reads all published, non-deleted entries from Supabase via a direct connection,
  * sends a HEAD request to each URL, and writes back link_status and link_checked_at.
  *
- * Exits 0 when no resources are unreachable, 1 when at least one is.
+ * Exits 0 when no entries are unreachable, 1 when at least one is.
  * Writes a JSON summary to stdout on exit so .github/workflows/link-check.yml can
  * create a GitHub issue from it when the exit code is 1.
  *
@@ -29,7 +29,7 @@
 import process from 'node:process';
 
 const USAGE = `
-Monthly link checker for MathemAct resources.
+Monthly link checker for MathemAct entries.
 
   node scripts/link-check.mjs [options]
 
@@ -170,12 +170,12 @@ async function main() {
     fail(`Could not connect: ${error.message}`);
   }
 
-  // Fetch all published, non-deleted resources.
+  // Fetch all published, non-deleted entries.
   let rows;
   try {
     const result = await client.query(`
       select id, url, link_status
-      from public.resources
+      from public.network_entries
       where status = 'published' and deleted_at is null
       order by created_at
     `);
@@ -185,7 +185,7 @@ async function main() {
     fail(`Query failed: ${error.message}`);
   }
 
-  console.error(`Checking ${rows.length} resource${rows.length === 1 ? '' : 's'}…\n`);
+  console.error(`Checking ${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}…\n`);
 
   const results = [];
   const queue = [...rows];
@@ -229,8 +229,8 @@ async function main() {
 
       for (const row of results) {
         await client.query(
-          `update public.resources
-              set link_status    = $1::resource_link_status,
+          `update public.network_entries
+              set link_status    = $1::network_link_status,
                   link_checked_at = $2
             where id = $3`,
           [row.current, checkedAt, row.id],

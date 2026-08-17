@@ -1,10 +1,10 @@
 /**
- * The shape of a practice: its vocabularies, its limits, and the words used to ask for
+ * The shape of a report: its vocabularies, its limits, and the words used to ask for
  * each field.
  *
  * This file is the form's script. It exists as data rather than as markup because the same
  * words have to appear in three places that must not drift — the submission form, the
- * display of a submitted practice, and eventually the disclosure template a journal could
+ * display of a submitted report, and eventually the disclosure template a journal could
  * adopt. A label written into a template is a label that gets reworded in one of the three.
  *
  * Every cap below mirrors a CHECK constraint in supabase/migrations/20260815100200_practices.sql.
@@ -25,7 +25,7 @@ import type { Outcome } from './status';
 // Mirrors the CHECK constraints. A counter is shown against every one of these, because a
 // cap you discover by being rejected is a cap that cost you the paragraph you just wrote.
 
-export const PRACTICE_LIMITS = {
+export const REPORT_LIMITS = {
   title: 120,
   aim: 600,
   method: 6000,
@@ -45,7 +45,7 @@ export const PRACTICE_LIMITS = {
 export const CONFIDENCE = { min: 0, max: 10 } as const;
 
 /** Nothing before this is plausible as AI-assisted mathematical work, and a mistyped year
- *  is the thing this catches. Mirrors practice_tools_used_on_lower_bound. */
+ *  is the thing this catches. Mirrors report_tools_used_on_lower_bound. */
 export const EARLIEST_TOOL_USE = '2015-01-01';
 
 // ── Vocabularies ──────────────────────────────────────────────────────────────────────

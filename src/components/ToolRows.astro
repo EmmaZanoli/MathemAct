@@ -3,7 +3,7 @@
  * Repeatable rows of tool, version, and date of use. At least one is required.
  *
  * All three parts of a row are required, and the date is the reason this is structured at
- * all: a practice written against a 2025 model is misleading by 2026, and the tombstone on
+ * all: a report written against a 2025 model is misleading by 2026, and the tombstone on
  * every listing is derived from the most recent date here. "GPT, sometime last year" is not
  * a reproducible claim about anything.
  *
@@ -14,7 +14,7 @@
  * The first row is server-rendered rather than created by script, so the section is usable
  * the moment the page paints and does not depend on JavaScript having run to show a field.
  */
-import { COMMON_TOOLS, EARLIEST_TOOL_USE, PRACTICE_LIMITS } from '../lib/practice-schema';
+import { COMMON_TOOLS, EARLIEST_TOOL_USE, REPORT_LIMITS } from '../lib/report-schema';
 
 const today = new Date().toISOString().slice(0, 10);
 ---
@@ -34,7 +34,7 @@ const today = new Date().toISOString().slice(0, 10);
             type="text"
             data-tool-name
             list="common-tools"
-            maxlength={PRACTICE_LIMITS.toolName}
+            maxlength={REPORT_LIMITS.toolName}
             placeholder="Lean"
             autocomplete="off"
           />
@@ -46,7 +46,7 @@ const today = new Date().toISOString().slice(0, 10);
             class="field__control"
             type="text"
             data-tool-version
-            maxlength={PRACTICE_LIMITS.toolVersion}
+            maxlength={REPORT_LIMITS.toolVersion}
             placeholder="4.9.0"
             autocomplete="off"
           />

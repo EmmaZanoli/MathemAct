@@ -46,7 +46,7 @@ export interface Profile {
 }
 
 /** Whether this account may post. The same three conditions as the insert policy on
- *  public.practices, in the same order, so the interface and the database agree about who
+ *  public.reports, in the same order, so the interface and the database agree about who
  *  is turned away and why. */
 export function mayPost(profile: Profile): boolean {
   return profile.confirmedAt !== null && !profile.isBanned;

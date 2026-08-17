@@ -1,13 +1,13 @@
 /**
- * Resource data access — build-time reads from data/resources.json.
+ * Entry data access — build-time reads from data/network.json.
  *
  * All reads happen at build time from the nightly export. Nothing here talks to Supabase
  * at build time; that is what readCorpus() is for. The PostgREST client is only loaded
  * on pages that need live writes (the submission form).
  */
-import rawJson from '../../data/resources.json';
+import rawJson from '../../data/network.json';
 
-export type ResourceCategory =
+export type NetworkCategory =
   | 'research_tool'
   | 'educational'
   | 'formalisation'
@@ -15,9 +15,9 @@ export type ResourceCategory =
   | 'community'
   | 'reading';
 
-export type ResourceLinkStatus = 'ok' | 'unreachable' | 'redirected' | null;
+export type NetworkLinkStatus = 'ok' | 'unreachable' | 'redirected' | null;
 
-export interface ResourceSubmitter {
+export interface NetworkSubmitter {
   readonly id: string;
   readonly displayName: string;
   readonly isPseudonym: boolean;
@@ -28,21 +28,21 @@ export interface ResourceSubmitter {
   } | null;
 }
 
-export interface Resource {
+export interface Entry {
   readonly id: string;
   readonly title: string;
   readonly url: string;
   readonly urlNormalised: string;
-  readonly category: ResourceCategory;
+  readonly category: NetworkCategory;
   readonly description: string;
   readonly relevance: string;
   readonly createdAt: string;
-  readonly linkStatus: ResourceLinkStatus;
+  readonly linkStatus: NetworkLinkStatus;
   readonly linkCheckedAt: string | null;
-  readonly submitter: ResourceSubmitter | null;
+  readonly submitter: NetworkSubmitter | null;
 }
 
-export const CATEGORIES: readonly { value: ResourceCategory; label: string }[] = [
+export const CATEGORIES: readonly { value: NetworkCategory; label: string }[] = [
   { value: 'research_tool',        label: 'Research tool' },
   { value: 'educational',          label: 'Educational' },
   { value: 'formalisation',        label: 'Formalisation' },
@@ -51,26 +51,26 @@ export const CATEGORIES: readonly { value: ResourceCategory; label: string }[] =
   { value: 'reading',              label: 'Reading' },
 ];
 
-export function categoryLabel(value: ResourceCategory): string {
+export function categoryLabel(value: NetworkCategory): string {
   return CATEGORIES.find((c) => c.value === value)?.label ?? value;
 }
 
-let _resources: Resource[] | null = null;
+let _entries: Entry[] | null = null;
 
-export function listResources(): Resource[] {
-  if (_resources !== null) return _resources;
-  _resources = (rawJson as Resource[]);
-  return _resources;
+export function listNetwork(): Entry[] {
+  if (_entries !== null) return _entries;
+  _entries = (rawJson as Entry[]);
+  return _entries;
 }
 
-export function getResource(id: string): Resource | undefined {
-  return listResources().find((r) => r.id === id);
+export function getEntry(id: string): Entry | undefined {
+  return listNetwork().find((r) => r.id === id);
 }
 
-/** One person's published resources, for their author page. Erased submitters are absent by
- *  construction: their rows keep the resource and lose the name. */
-export function resourcesBySubmitter(submitterId: string): Resource[] {
-  return listResources().filter((r) => r.submitter?.id === submitterId);
+/** One person's published entries, for their author page. Erased submitters are absent by
+ *  construction: their rows keep the entry and lose the name. */
+export function entriesBySubmitter(submitterId: string): Entry[] {
+  return listNetwork().filter((r) => r.submitter?.id === submitterId);
 }
 
 /**

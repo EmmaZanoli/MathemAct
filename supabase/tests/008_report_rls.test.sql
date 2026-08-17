@@ -1,4 +1,4 @@
--- Who may read and write a practice.
+-- Who may read and write a report.
 --
 -- Every rule is asserted from both directions. A policy test that only checks the allowed
 -- case proves the feature works and says nothing about whether it is a door: the negative
@@ -8,12 +8,12 @@
 -- Two behaviours here look like bugs and are not, so they are asserted explicitly rather
 -- than left for someone to rediscover:
 --
---   An author publishing their own practice succeeds and changes nothing. The guard trigger
+--   An author publishing their own report succeeds and changes nothing. The guard trigger
 --   reverts `status` before row level security evaluates the new row, so the WITH CHECK
 --   then passes on a row that is still pending. A silent revert, matching how
 --   public.profiles already behaves.
 --
---   An author editing their own *published* practice raises 42501. Here the guard reverts
+--   An author editing their own *published* report raises 42501. Here the guard reverts
 --   the text but leaves `deleted_at` null, and no policy's WITH CHECK accepts that row.
 --
 -- Fixtures are created as the table owner, which the guards trust. Every assertion runs
@@ -59,9 +59,9 @@ select is(
   'four of the five fixtures have a confirmed account'
 );
 
--- ── Practices ───────────────────────────────────────────────────────────────────────
+-- ── Reports ─────────────────────────────────────────────────────────────────────────
 
-insert into public.practices (
+insert into public.reports (
   id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
   verification, third_party_material_confirmed, deleted_at, deleted_by
 ) values
@@ -77,12 +77,12 @@ insert into public.practices (
    true, null, null),
 
   ('22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001',
-   'hidden', 'A practice a moderator has hidden', 'research', 'other',
+   'hidden', 'A report a moderator has hidden', 'research', 'other',
    'Something.', 'Something else.', 'failed', 'It did not work.',
    'Checked against a textbook.', true, null, null),
 
   ('22222222-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001',
-   'published', 'A practice its author has deleted', 'research', 'other',
+   'published', 'A report its author has deleted', 'research', 'other',
    'Something.', 'Something else.', 'worked', 'It worked.',
    'Checked by hand.', true, now(), '11111111-0000-0000-0000-000000000001'),
 
@@ -97,18 +97,18 @@ insert into public.practices (
 set local role anon;
 
 select is(
-  (select count(*)::int from public.practices),
+  (select count(*)::int from public.reports),
   2,
-  'anon sees only published, undeleted practices'
+  'anon sees only published, undeleted reports'
 );
 
 select is_empty(
-  $$ select id from public.practices where status <> 'published' $$,
+  $$ select id from public.reports where status <> 'published' $$,
   'anon sees nothing pending or hidden'
 );
 
 select is_empty(
-  $$ select id from public.practices where deleted_at is not null $$,
+  $$ select id from public.reports where deleted_at is not null $$,
   'anon sees nothing soft-deleted, even though it is published'
 );
 
@@ -118,7 +118,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.practices),
+  (select count(*)::int from public.reports),
   2,
   'another member sees the published corpus and no more'
 );
@@ -129,7 +129,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.practices),
+  (select count(*)::int from public.reports),
   5,
   'an author sees their own work in every state, plus the published corpus'
 );
@@ -140,9 +140,9 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.practices),
+  (select count(*)::int from public.reports),
   5,
-  'a moderator sees everything, including deleted rows a report might be about'
+  'a moderator sees everything, including deleted rows a flag might be about'
 );
 
 reset role;
@@ -152,13 +152,13 @@ reset role;
 set local role anon;
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('11111111-0000-0000-0000-000000000001', 'From nowhere', 'research', 'other',
              'a', 'b', 'worked', 'c', 'd', true) $$,
   '42501'::text, null::text,
-  'anon cannot post a practice'
+  'anon cannot post a report'
 );
 
 reset role;
@@ -169,7 +169,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('11111111-0000-0000-0000-000000000003', 'Unconfirmed', 'research', 'other',
@@ -184,7 +184,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000004","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('11111111-0000-0000-0000-000000000004', 'Banned', 'research', 'other',
@@ -199,7 +199,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('11111111-0000-0000-0000-000000000001', 'Under a false name', 'research', 'other',
@@ -210,7 +210,7 @@ select throws_ok(
 
 -- Refused by the column grant, before any policy is consulted.
 select throws_ok(
-  $$ insert into public.practices
+  $$ insert into public.reports
        (author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
      values ('11111111-0000-0000-0000-000000000002', 'published', 'Self-published',
@@ -221,7 +221,7 @@ select throws_ok(
 
 -- The allowed case. No `id` in the column list, because it has no INSERT grant either:
 -- the row identifies itself. A client that needs the new id asks for it back.
-insert into public.practices
+insert into public.reports
   (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
    verification, third_party_material_confirmed)
 values ('11111111-0000-0000-0000-000000000002',
@@ -232,7 +232,7 @@ values ('11111111-0000-0000-0000-000000000002',
 reset role;
 
 select is(
-  (select status::text from public.practices
+  (select status::text from public.reports
     where title = 'A perfectly ordinary submission'),
   'pending'::text,
   'a confirmed member may post, and what they post starts pending'
@@ -243,16 +243,16 @@ select is(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.practices
+update public.reports
    set title = 'Draft an exposition of a spectral sequence, revised'
  where id = '22222222-0000-0000-0000-000000000002';
 
 reset role;
 
 select is(
-  (select title from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  (select title from public.reports where id = '22222222-0000-0000-0000-000000000002'),
   'Draft an exposition of a spectral sequence, revised'::text,
-  'an author may edit their own practice while it is pending'
+  'an author may edit their own report while it is pending'
 );
 
 -- Publishing your own. Succeeds, and changes nothing: the guard reverts status before row
@@ -260,15 +260,15 @@ select is(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.practices set status = 'published'
+update public.reports set status = 'published'
  where id = '22222222-0000-0000-0000-000000000002';
 
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000002'),
   'pending'::text,
-  'an author cannot publish their own practice; the guard reverts it silently'
+  'an author cannot publish their own report; the guard reverts it silently'
 );
 
 -- Editing a published one. No policy accepts the resulting row, so this is an error rather
@@ -277,10 +277,10 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ update public.practices set title = 'Rewriting history'
+  $$ update public.reports set title = 'Rewriting history'
       where id = '22222222-0000-0000-0000-000000000001' $$,
   '42501'::text, null::text,
-  'an author cannot edit their own practice once it is published'
+  'an author cannot edit their own report once it is published'
 );
 
 reset role;
@@ -288,15 +288,15 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
 
-update public.practices set title = 'Hijacked'
+update public.reports set title = 'Hijacked'
  where id = '22222222-0000-0000-0000-000000000001';
 
 reset role;
 
 select isnt(
-  (select title from public.practices where id = '22222222-0000-0000-0000-000000000001'),
+  (select title from public.reports where id = '22222222-0000-0000-0000-000000000001'),
   'Hijacked'::text,
-  'a member cannot edit somebody else''s practice'
+  'a member cannot edit somebody else''s report'
 );
 
 -- ── Soft deletion ───────────────────────────────────────────────────────────────────
@@ -304,16 +304,16 @@ select isnt(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.practices
+update public.reports
    set deleted_at = now(), deleted_by = '11111111-0000-0000-0000-000000000001'
  where id = '22222222-0000-0000-0000-000000000001';
 
 reset role;
 
 select isnt(
-  (select deleted_at from public.practices where id = '22222222-0000-0000-0000-000000000001'),
+  (select deleted_at from public.reports where id = '22222222-0000-0000-0000-000000000001'),
   null::timestamptz,
-  'an author may soft-delete their own practice after it is published'
+  'an author may soft-delete their own report after it is published'
 );
 
 -- Restoring is a moderation action. No policy's USING clause matches a deleted row for its
@@ -321,15 +321,15 @@ select isnt(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.practices set deleted_at = null, deleted_by = null
+update public.reports set deleted_at = null, deleted_by = null
  where id = '22222222-0000-0000-0000-000000000001';
 
 reset role;
 
 select isnt(
-  (select deleted_at from public.practices where id = '22222222-0000-0000-0000-000000000001'),
+  (select deleted_at from public.reports where id = '22222222-0000-0000-0000-000000000001'),
   null::timestamptz,
-  'an author cannot restore a practice they deleted'
+  'an author cannot restore a report they deleted'
 );
 
 -- ── Moderation ──────────────────────────────────────────────────────────────────────
@@ -344,16 +344,16 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","
 
 select lives_ok(
   $$ select public.moderate(
-       'practice',
-       (select id from public.practices where title = 'A perfectly ordinary submission'),
+       'report',
+       (select id from public.reports where title = 'A perfectly ordinary submission'),
        'publish') $$,
-  'a moderator may publish a pending practice, through the audited path'
+  'a moderator may publish a pending report, through the audited path'
 );
 
 reset role;
 
 select is(
-  (select status::text from public.practices
+  (select status::text from public.reports
     where title = 'A perfectly ordinary submission'),
   'published'::text,
   'and it is published'
@@ -363,15 +363,15 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000005', 'hide',
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000005', 'hide',
                             'Reproduces an unpublished referee report.') $$,
-  'a moderator may hide a published practice: the hide path works'
+  'a moderator may hide a published report: the hide path works'
 );
 
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   'hidden'::text,
   'and it is hidden'
 );
@@ -382,13 +382,13 @@ select is(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
-update public.practices set status = 'published'
+update public.reports set status = 'published'
  where id = '22222222-0000-0000-0000-000000000005';
 
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   'hidden'::text,
   'a direct update by a moderator changes nothing: the audit log cannot be stepped around'
 );
@@ -402,30 +402,30 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
 select throws_ok(
-  $$ update public.practices set author_id = '11111111-0000-0000-0000-000000000005'
+  $$ update public.reports set author_id = '11111111-0000-0000-0000-000000000005'
       where id = '22222222-0000-0000-0000-000000000005' $$,
   '42501'::text, null::text,
-  'not even a moderator can reassign a practice: author_id has no column grant'
+  'not even a moderator can reassign a report: author_id has no column grant'
 );
 
 reset role;
 
 -- The realistic accident: somebody adding a feature writes `grant update on
--- public.practices to authenticated` because the column list was in the way. The author's
--- own pending practice is the row to try it on, because that is the one case where a
+-- public.reports to authenticated` because the column list was in the way. The author's
+-- own pending report is the row to try it on, because that is the one case where a
 -- policy does accept the update and only the guard stands between the grant and the harm.
-grant update on public.practices to authenticated;
+grant update on public.reports to authenticated;
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.practices set author_id = '11111111-0000-0000-0000-000000000002'
+update public.reports set author_id = '11111111-0000-0000-0000-000000000002'
  where id = '22222222-0000-0000-0000-000000000002';
 
 reset role;
 
 select is(
-  (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  (select author_id from public.reports where id = '22222222-0000-0000-0000-000000000002'),
   '11111111-0000-0000-0000-000000000001'::uuid,
   'and the guard reverts it even with the column grant wide open'
 );
@@ -436,9 +436,9 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ delete from public.practices where id = '22222222-0000-0000-0000-000000000002' $$,
+  $$ delete from public.reports where id = '22222222-0000-0000-0000-000000000002' $$,
   '42501'::text, null::text,
-  'an author cannot hard-delete their own practice'
+  'an author cannot hard-delete their own report'
 );
 
 reset role;
@@ -447,7 +447,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
 select throws_ok(
-  $$ delete from public.practices where id = '22222222-0000-0000-0000-000000000001' $$,
+  $$ delete from public.reports where id = '22222222-0000-0000-0000-000000000001' $$,
   '42501'::text, null::text,
   'nor can a moderator: there is no DELETE grant on this table at all'
 );
@@ -455,7 +455,7 @@ select throws_ok(
 reset role;
 
 select ok(
-  not has_table_privilege('authenticated', 'public.practices', 'DELETE'),
+  not has_table_privilege('authenticated', 'public.reports', 'DELETE'),
   'the absent DELETE grant is the reason, not an absent policy'
 );
 
@@ -467,13 +467,13 @@ select ok(
 delete from auth.users where id = '11111111-0000-0000-0000-000000000002';
 
 select is(
-  (select count(*)::int from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select count(*)::int from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   1,
-  'erasing an account leaves the practices it contributed in place'
+  'erasing an account leaves the reports it contributed in place'
 );
 
 select is(
-  (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select author_id from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   null::uuid,
   'and strips the attribution from them'
 );

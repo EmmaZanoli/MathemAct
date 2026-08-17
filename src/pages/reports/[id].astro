@@ -1,6 +1,6 @@
 ---
 /**
- * One practice, laid out to be skimmed the way a researcher skims a paper.
+ * One report, laid out to be skimmed the way a researcher skims a paper.
  *
  * A reader arriving here usually wants one specific thing: how did they check it, which
  * model was it, did it work. So every field is a titled block with a mono label above it,
@@ -8,9 +8,9 @@
  * verification — are set larger and on a raised surface near the top. Everything else is in
  * the content model's order, because that order is the reporting standard.
  *
- * A real page at a real URL, generated at build time. That is what makes a practice
+ * A real page at a real URL, generated at build time. That is what makes a report
  * citable, and it is why reads go through the corpus module rather than a browser query:
- * see the header of src/lib/practices.ts.
+ * see the header of src/lib/reports.ts.
  */
 import Base from '../../layouts/Base.astro';
 import Badges from '../../components/Badges.astro';
@@ -24,34 +24,34 @@ import { referencesFrom, referencesTo } from '../../lib/citations';
 import { threadFor } from '../../lib/comments';
 import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
-import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/practice-schema';
-import { getPractice, listPractices } from '../../lib/practices';
+import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/report-schema';
+import { getReport, listReports } from '../../lib/reports';
 import { findRelated } from '../../lib/related';
 import { LICENCE, SITE } from '../../lib/site';
 
 export async function getStaticPaths() {
-  const practices = await listPractices();
-  return practices.map((practice) => ({ params: { id: practice.id } }));
+  const reports = await listReports();
+  return reports.map((report) => ({ params: { id: report.id } }));
 }
 
 const { id } = Astro.params;
-const practice = await getPractice(id!);
+const report = await getReport(id!);
 
 // getStaticPaths only ever produces ids that exist, so this is unreachable — it is here
-// because `practice` is optional to the type system and an unchecked `!` would turn a
+// because `report` is optional to the type system and an unchecked `!` would turn a
 // future refactor into a stack trace during the build.
-if (!practice) return Astro.redirect(path('/practices/'));
+if (!report) return Astro.redirect(path('/reports/'));
 
 const canonical = new URL(Astro.url.pathname, Astro.site).href;
-const authorName = practice.author?.displayName ?? 'Anonymous';
+const authorName = report.author?.displayName ?? 'Anonymous';
 
 const [thread, incoming, outgoing] = await Promise.all([
-  threadFor('practice', practice.id),
-  referencesTo('practice', practice.id),
-  referencesFrom('practice', practice.id),
+  threadFor('report', report.id),
+  referencesTo('report', report.id),
+  referencesFrom('report', report.id),
 ]);
 
-const related = findRelated(practice);
+const related = findRelated(report);
 
 /**
  * A citation somebody can paste into a paper. Author, title, the corpus, the date it was
@@ -60,50 +60,50 @@ const related = findRelated(practice);
  * are allowed to.
  */
 const citation =
-  `${authorName}. "${practice.title}". ${SITE.name}, ` +
-  `${longDate(practice.createdAt)}. ${canonical}. ${LICENCE.name}.`;
+  `${authorName}. "${report.title}". ${SITE.name}, ` +
+  `${longDate(report.createdAt)}. ${canonical}. ${LICENCE.name}.`;
 
 const metadata = [
-  practice.timeSpentMinutes !== null
-    ? { term: 'Time spent', value: `${practice.timeSpentMinutes} min` }
+  report.timeSpentMinutes !== null
+    ? { term: 'Time spent', value: `${report.timeSpentMinutes} min` }
     : null,
-  practice.authorConfidence !== null
-    ? { term: 'Author confidence', value: `${practice.authorConfidence} / 10` }
+  report.authorConfidence !== null
+    ? { term: 'Author confidence', value: `${report.authorConfidence} / 10` }
     : null,
-  practice.wasPublished !== null
-    ? { term: 'Published', value: practice.wasPublished ? 'yes' : 'no' }
+  report.wasPublished !== null
+    ? { term: 'Published', value: report.wasPublished ? 'yes' : 'no' }
     : null,
-  practice.wasDisclosed !== null
-    ? { term: 'Disclosed in the paper', value: practice.wasDisclosed ? 'yes' : 'no' }
+  report.wasDisclosed !== null
+    ? { term: 'Disclosed in the paper', value: report.wasDisclosed ? 'yes' : 'no' }
     : null,
 ].filter((entry) => entry !== null);
 ---
 
-<Base title={practice.title} description={practice.aim}>
+<Base title={report.title} description={report.aim}>
   <div class="shell corpus">
     <p class="breadcrumb">
-      <a href={path('/practices/')}>← All practices</a>
+      <a href={path('/reports/')}>← All reports</a>
     </p>
 
-    <div class="practice">
+    <div class="report">
       {/* Everything a reader might want to quote is inside this element, and the quote
           affordance looks for exactly that marker. The aside is outside it on purpose: a
           citation string and a tag list are not passages. */}
-      <div class="practice__body" data-quotable data-pagefind-body>
+      <div class="report__body" data-quotable data-pagefind-body>
         {/* Pagefind filter metadata. The type filter uses an explicit value; area and
             task_type read from the element's text content. */}
-        <span data-pagefind-filter="type:practice" hidden></span>
+        <span data-pagefind-filter="type:report" hidden></span>
         <header>
-          <h1>{practice.title}</h1>
+          <h1>{report.title}</h1>
 
-          <div class="practice__status">
-            <StalenessNote staleness={practice.staleness} outcome={practice.outcome} verbose />
+          <div class="report__status">
+            <StalenessNote staleness={report.staleness} outcome={report.outcome} verbose />
           </div>
 
-          <ul class="card__facts practice__facts" role="list">
-            <li data-pagefind-filter="area">{areaLabel(practice.area)}</li>
-            <li data-pagefind-filter="task_type">{taskTypeLabel(practice.taskType)}</li>
-            <li><span class="meta">Posted {longDate(practice.createdAt)}</span></li>
+          <ul class="card__facts report__facts" role="list">
+            <li data-pagefind-filter="area">{areaLabel(report.area)}</li>
+            <li data-pagefind-filter="task_type">{taskTypeLabel(report.taskType)}</li>
+            <li><span class="meta">Posted {longDate(report.createdAt)}</span></li>
           </ul>
         </header>
 
@@ -112,22 +112,22 @@ const metadata = [
             the author rather than for the person reading it. */}
         <section class="field-block field-block--key">
           <span class="field-block__label">Outcome</span>
-          <p class="field-block__body"><strong>{outcomeLabel(practice.outcome)}.</strong> {practice.outcomeNotes}</p>
+          <p class="field-block__body"><strong>{outcomeLabel(report.outcome)}.</strong> {report.outcomeNotes}</p>
         </section>
 
         <section class="field-block field-block--key">
           <span class="field-block__label">How this was verified</span>
-          <p class="field-block__body">{practice.verification}</p>
+          <p class="field-block__body">{report.verification}</p>
         </section>
 
         <section class="field-block">
           <span class="field-block__label">What they were trying to do</span>
-          <p class="field-block__body">{practice.aim}</p>
+          <p class="field-block__body">{report.aim}</p>
         </section>
 
         <section class="field-block">
           <span class="field-block__label">What they actually did</span>
-          <p class="field-block__body">{practice.method}</p>
+          <p class="field-block__body">{report.method}</p>
         </section>
 
         <section class="field-block">
@@ -142,7 +142,7 @@ const metadata = [
             </thead>
             <tbody>
               {
-                practice.tools.map((tool) => (
+                report.tools.map((tool) => (
                   <tr>
                     <td>{tool.name}</td>
                     <td>{tool.version}</td>
@@ -155,13 +155,13 @@ const metadata = [
         </section>
 
         {
-          practice.transcriptExcerpt && (
+          report.transcriptExcerpt && (
             <section class="field-block">
               <span class="field-block__label">Transcript</span>
 
               <details class="transcript">
                 <summary class="transcript__summary">
-                  Show the excerpt ({practice.transcriptExcerpt.length.toLocaleString('en-GB')}{' '}
+                  Show the excerpt ({report.transcriptExcerpt.length.toLocaleString('en-GB')}{' '}
                   characters)
                 </summary>
 
@@ -170,14 +170,14 @@ const metadata = [
                     Pasted by the author, who confirmed that other people's unpublished
                     material had been removed.
                   </p>
-                  <CopyButton text={practice.transcriptExcerpt} label="Copy transcript" />
+                  <CopyButton text={report.transcriptExcerpt} label="Copy transcript" />
                 </div>
 
-                <div class="transcript__body">{practice.transcriptExcerpt}</div>
+                <div class="transcript__body">{report.transcriptExcerpt}</div>
 
-                {practice.transcriptUrl && (
+                {report.transcriptUrl && (
                   <p class="field__hint">
-                    The author also linked to <a href={practice.transcriptUrl} rel="nofollow noopener">the original conversation</a>.
+                    The author also linked to <a href={report.transcriptUrl} rel="nofollow noopener">the original conversation</a>.
                     Share links expire and get revoked, so the excerpt above is the record.
                   </p>
                 )}
@@ -187,10 +187,10 @@ const metadata = [
         }
 
         {
-          practice.caveats && (
+          report.caveats && (
             <section class="field-block">
               <span class="field-block__label">Caveats, and what they would do differently</span>
-              <p class="field-block__body">{practice.caveats}</p>
+              <p class="field-block__body">{report.caveats}</p>
             </section>
           )
         }
@@ -201,18 +201,18 @@ const metadata = [
         <section class="field-block" id="confirmations" data-pagefind-ignore>
           <span class="field-block__label">Does this still work?</span>
 
-          <div class="confirm" data-confirm data-practice-id={practice.id}>
+          <div class="confirm" data-confirm data-report-id={report.id}>
             <p class="confirm__tally" data-confirm-tally>
               {
-                practice.staleness.confirmationCount === 0
-                  ? 'Nobody has reported either way.'
-                  : `${practice.staleness.confirmationCount} report${practice.staleness.confirmationCount === 1 ? '' : 's'} so far.`
+                report.staleness.confirmationCount === 0
+                  ? 'Nobody has confirmed either way.'
+                  : `${report.staleness.confirmationCount} confirmation${report.staleness.confirmationCount === 1 ? '' : 's'} so far.`
               }
             </p>
 
             <div data-confirm-signedout hidden>
               <p class="field__hint">
-                <a href={path('/account/sign-in/')}>Sign in</a> to report whether this still
+                <a href={path('/account/sign-in/')}>Sign in</a> to say whether this still
                 works. It is the lightest contribution there is, and it is what stops the
                 corpus quietly going out of date.
               </p>
@@ -239,9 +239,9 @@ const metadata = [
               </div>
 
               <div class="actions">
-                <button class="button button--primary" type="submit">Report</button>
+                <button class="button button--primary" type="submit">Add my confirmation</button>
                 <button class="button button--quiet" type="button" data-confirm-withdraw hidden>
-                  Withdraw my report
+                  Withdraw my confirmation
                 </button>
               </div>
 
@@ -257,13 +257,13 @@ const metadata = [
         <div class="aside__block">
           <span class="aside__label">Posted by</span>
           {
-            practice.author ? (
+            report.author ? (
               <>
                 <p>
-                  <a href={path(`/authors/${practice.author.id}/`)}>{practice.author.displayName}</a>
-                  {practice.author.isPseudonym && <span class="field__hint"> — a pseudonym</span>}
+                  <a href={path(`/authors/${report.author.id}/`)}>{report.author.displayName}</a>
+                  {report.author.isPseudonym && <span class="field__hint"> — a pseudonym</span>}
                 </p>
-                <Badges institution={practice.author.institution} />
+                <Badges institution={report.author.institution} />
               </>
             ) : (
               <p class="field__hint">
@@ -275,13 +275,13 @@ const metadata = [
         </div>
 
         {
-          practice.tags.length > 0 && (
+          report.tags.length > 0 && (
             <div class="aside__block">
               <span class="aside__label">Subject areas</span>
               <ul class="card__tools" role="list">
-                {practice.tags.map((tag) => (
+                {report.tags.map((tag) => (
                   <li class="tool-chip tool-chip--tag">
-                    <a href={path(`/practices/?tag=${tag.code}`)}>
+                    <a href={path(`/reports/?tag=${tag.code}`)}>
                       <span class="tool-chip__name">{tag.code}</span>
                     </a>
                   </li>
@@ -310,11 +310,11 @@ const metadata = [
         {
           related.length > 0 && (
             <div class="aside__block">
-              <span class="aside__label">Related practices</span>
+              <span class="aside__label">Related reports</span>
               <ul class="related-list" role="list">
                 {related.map((r) => (
                   <li class="related-item">
-                    <a href={path(`/practices/${r.id}/`)}>{r.title}</a>
+                    <a href={path(`/reports/${r.id}/`)}>{r.title}</a>
                     <span class="related-item__reason">{r.reason}</span>
                   </li>
                 ))}
@@ -339,11 +339,11 @@ const metadata = [
 
     <div data-pagefind-ignore>
       <CommentThread
-        parentType="practice"
-        parentId={practice.id}
+        parentType="report"
+        parentId={report.id}
         nodes={thread}
-        title={practice.title}
-        href={path(`/practices/${practice.id}/`)}
+        title={report.title}
+        href={path(`/reports/${report.id}/`)}
       />
     </div>
   </div>
@@ -356,14 +356,14 @@ const metadata = [
     saveConfirmation,
     withdrawConfirmation,
     type Confirmation,
-  } from '../../lib/practices';
+  } from '../../lib/reports';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, setBusy, showStatus } from '../../lib/forms';
 
   const root = document.querySelector<HTMLElement>('[data-confirm]');
 
   if (root) {
-    const practiceId = root.dataset.practiceId!;
+    const reportId = root.dataset.reportId!;
     const tally = root.querySelector<HTMLElement>('[data-confirm-tally]')!;
     const signedOut = root.querySelector<HTMLElement>('[data-confirm-signedout]')!;
     const form = root.querySelector<HTMLFormElement>('[data-confirm-form]')!;
@@ -388,7 +388,7 @@ const metadata = [
     void startSession();
 
     async function refresh(): Promise<void> {
-      const result = await loadConfirmations(practiceId, viewerId);
+      const result = await loadConfirmations(reportId, viewerId);
 
       // The static tally stands if the database cannot be reached. It is a day old at
       // worst, which is a great deal better than an error where a number should be.
@@ -400,17 +400,17 @@ const metadata = [
 
       tally.textContent = all.length
         ? `${works} say it still works · ${broken} say it no longer does`
-        : 'Nobody has reported either way.';
+        : 'Nobody has confirmed either way.';
 
       if (mine) {
         form
           .querySelector<HTMLInputElement>(`input[value="${mine.verdict}"]`)!
           .checked = true;
         note.value = mine.note;
-        submit.textContent = 'Update my report';
+        submit.textContent = 'Update my confirmation';
         withdraw.hidden = false;
       } else {
-        submit.textContent = 'Report';
+        submit.textContent = 'Add my confirmation';
         withdraw.hidden = true;
       }
 
@@ -446,13 +446,13 @@ const metadata = [
 
       const verdict = form.querySelector<HTMLInputElement>('input[name="verdict"]:checked')?.value;
       if (!verdict || !viewerId) {
-        showStatus(status, 'error', 'Choose whether it still works before reporting.');
+        showStatus(status, 'error', 'Choose whether it still works before sending.');
         return;
       }
 
-      setBusy(submit, true, 'Reporting…');
+      setBusy(submit, true, 'Sending…');
       const result = await saveConfirmation(
-        practiceId,
+        reportId,
         viewerId,
         verdict as 'still_works' | 'no_longer_works',
         note.value,
@@ -473,7 +473,7 @@ const metadata = [
 
       hideStatus(status);
       setBusy(withdraw, true, 'Withdrawing…');
-      const result = await withdrawConfirmation(practiceId, viewerId);
+      const result = await withdrawConfirmation(reportId, viewerId);
       setBusy(withdraw, false);
 
       if (!result.ok) {
@@ -483,7 +483,7 @@ const metadata = [
 
       form.reset();
       await refresh();
-      showStatus(status, 'notice', 'Withdrawn. Nothing of yours remains on this practice.');
+      showStatus(status, 'notice', 'Withdrawn. Nothing of yours remains on this report.');
     });
   }
 </script>
@@ -494,11 +494,11 @@ const metadata = [
     font-size: var(--size-2);
   }
 
-  .practice__status {
+  .report__status {
     margin-block-start: var(--space-md);
   }
 
-  .practice__facts {
+  .report__facts {
     margin-block-start: var(--space-sm);
   }
 

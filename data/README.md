@@ -19,16 +19,16 @@ Suggested citation:
 | File | What it is |
 |---|---|
 | `manifest.json` | When this export ran, and the row count and byte size of every file |
-| `practices.json` | The corpus: published first-hand accounts, with their tools, tags and derived staleness |
-| `propositions.json` | Claims the community rates, both active and still proposed |
-| `proposition-ratings.json` | The distribution of answers per proposition. Aggregates only |
+| `reports.json` | The corpus: published first-hand accounts, with their tools, tags and derived staleness |
+| `debates.json` | Claims the community rates, both active and still proposed |
+| `debate-ratings.json` | The distribution of answers per debate. Aggregates only |
 | `tags.json` | The tag vocabulary: the arXiv mathematics categories in use |
 | `profiles.json` | Public profile fields for contributors who have something public |
-| `comments.json` | Discussion on practices and propositions |
+| `comments.json` | Discussion on reports and debates |
 | `citations.json` | The citation graph: which page points at which |
-| `csv/practices.csv` | The same corpus, flattened, for people who would rather not parse JSON |
-| `csv/practice-tools.csv` | One row per tool per practice |
-| `csv/practice-tags.csv` | One row per tag per practice |
+| `csv/reports.csv` | The same corpus, flattened, for people who would rather not parse JSON |
+| `csv/report-tools.csv` | One row per tool per report |
+| `csv/report-tags.csv` | One row per tag per report |
 
 Two naming conventions, on purpose. **The JSON is camelCase**, because the site deserialises
 it straight into its own types and one snake_case field would be a trap for whoever added the
@@ -36,7 +36,7 @@ next one. **The CSV is snake_case**, because it mirrors the column names in
 [`supabase/migrations/`](../supabase/migrations/), which is the schema you will have open
 beside it.
 
-## Reading a practice
+## Reading a report
 
 The fields are the reporting standard this project is trying to establish, in the order the
 submission form asks for them. Anything an author may leave out is nullable; everything else
@@ -44,7 +44,7 @@ is present on every row.
 
 | Field | Notes |
 |---|---|
-| `id` | Stable. The page is at `/practices/<id>/` |
+| `id` | Stable. The page is at `/reports/<id>/` |
 | `title` | One line |
 | `area` | `research`, `learning`, `teaching`, `writing`, `other` |
 | `taskType` | `literature_search`, `conjecture_generation`, `proof_drafting`, `proof_checking`, `formalisation`, `computation`, `exposition`, `translation`, `referee_work`, `other` |
@@ -76,10 +76,10 @@ is present on every row.
 }
 ```
 
-A practice written against a 2025 model may be misleading by 2026, so any logged-in member
+A report written against a 2025 model may be misleading by 2026, so any logged-in member
 can add a "still works" or "no longer works" confirmation. `tombstoneStatus` is one of
-`verified`, `unverified`, `stale`, `broken`, decided in SQL by `public.practice_staleness`,
-and it is exported rather than recomputed so that the same practice cannot be verified in a
+`verified`, `unverified`, `stale`, `broken`, decided in SQL by `public.report_staleness`,
+and it is exported rather than recomputed so that the same report cannot be verified in a
 listing, stale on its own page, and something else again in an analysis.
 
 `verified` requires both halves: a verification on record *and* a confirmation that it still
@@ -88,13 +88,13 @@ changed underneath it.
 
 ## Reading the ratings
 
-`proposition-ratings.json` is **aggregates only, and always will be**. There is no file of
+`debate-ratings.json` is **aggregates only, and always will be**. There is no file of
 individual ratings and there will not be one: a rating row is readable only by the person who
 wrote it, and one attributable answer would undo the promise the whole scale rests on.
 
 ```json
 {
-  "propositionId": "…",
+  "debateId": "…",
   "histogram": [0, 0, 1, 0, 2, 5, 3, 4, 9, 2, 1],
   "median": 7,
   "totalRaters": 32,
@@ -109,7 +109,7 @@ many people chose `i`.
 
 **There is no mean here and please do not compute one.** The mean of an 11-point bipolar
 scale is misleading exactly when the distribution is bimodal, and bimodal is what to expect
-on the contested propositions — the ones worth writing about. The median and the full
+on the contested debates — the ones worth writing about. The median and the full
 histogram are in the file for that reason.
 
 `noOpinionCount` is people who answered "no opinion, or outside my expertise". That is a real
@@ -127,7 +127,7 @@ reporting alongside any median you quote.
   anybody, and hidden content is content a moderator removed. Exporting either would publish
   what nobody agreed to publish, and in the second case would republish precisely what was
   taken down.
-- **No reports and no moderation log.** Who complained about whom, and what moderators wrote
+- **No flags and no moderation log.** Who complained about whom, and what moderators wrote
   to each other about it.
 - **No erasure requests.** Who is leaving.
 - **No individual ratings.** See above.
@@ -140,7 +140,7 @@ reporting alongside any median you quote.
 ## Two limits worth being honest about
 
 **Erasure cannot reach a copy you already have.** When somebody erases their account they
-disappear from every future export, and their practices stay in the corpus with `author` set
+disappear from every future export, and their reports stay in the corpus with `author` set
 to `null`. It cannot remove them from a commit already in this repository's history, or from
 a copy anybody has downloaded. That is true of anything published anywhere, and it is why the
 privacy notice says to assume what you post can be copied, archived and analysed by people

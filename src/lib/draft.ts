@@ -20,7 +20,7 @@
  * a form that still works rather than an error nobody can act on.
  */
 
-const PREFIX = 'mathemact:practice-draft:';
+const PREFIX = 'mathemact:report-draft:';
 
 export interface DraftEnvelope<T> {
   readonly savedAt: string;

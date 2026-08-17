@@ -1,11 +1,11 @@
 ---
 /**
- * Edit a pending practice submission that a moderator has sent back for changes.
+ * Edit a pending report submission that a moderator has sent back for changes.
  *
  * The page is reached from the "Your submissions" section of /account/ when a submission's
- * state is "sent back for changes". It pre-fills every form field from the existing practice,
+ * state is "sent back for changes". It pre-fills every form field from the existing report,
  * shows the moderator's note at the top so the author knows what to address, and on submit
- * calls resubmit_practice — an RPC that replaces all content, tools, and tags in one
+ * calls resubmit_report — an RPC that replaces all content, tools, and tags in one
  * transaction (necessary because the deferred at-least-one-tool constraint would fire between
  * a DELETE and a subsequent INSERT if they were separate PostgREST requests).
  *
@@ -23,7 +23,7 @@ import TagPicker from '../../components/TagPicker.astro';
 import ConfidenceScale from '../../components/ConfidenceScale.astro';
 import { path } from '../../lib/paths';
 import { LICENCE } from '../../lib/site';
-import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practice-schema';
+import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-schema';
 ---
 
 <Account
@@ -51,7 +51,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
       <p class="mod-note__body" data-moderation-note></p>
     </div>
 
-    <form class="practice-form" id="practice-edit" novalidate>
+    <form class="report-form" id="report-edit" novalidate>
       <FormStatus id="edit-status" />
 
       <FormSection id="title" number={1} title="Title">
@@ -59,7 +59,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           id="title"
           label="One line saying what you did"
           required
-          maxlength={PRACTICE_LIMITS.title}
+          maxlength={REPORT_LIMITS.title}
           counter
           hint={FIELD_COPY.title.hint}
           example={FIELD_COPY.title.example}
@@ -131,7 +131,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={4}
-          maxlength={PRACTICE_LIMITS.aim}
+          maxlength={REPORT_LIMITS.aim}
           counter
           hint={FIELD_COPY.aim.hint}
           example={FIELD_COPY.aim.example}
@@ -145,7 +145,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={10}
-          maxlength={PRACTICE_LIMITS.method}
+          maxlength={REPORT_LIMITS.method}
           counter
           hint={FIELD_COPY.method.hint}
           example={FIELD_COPY.method.example}
@@ -162,7 +162,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={5}
-          maxlength={PRACTICE_LIMITS.outcomeNotes}
+          maxlength={REPORT_LIMITS.outcomeNotes}
           counter
           hint={FIELD_COPY.outcomeNotes.hint}
           example={FIELD_COPY.outcomeNotes.example}
@@ -176,7 +176,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           type="textarea"
           required
           rows={6}
-          maxlength={PRACTICE_LIMITS.verification}
+          maxlength={REPORT_LIMITS.verification}
           counter
           example={FIELD_COPY.verification.example}
         >
@@ -207,7 +207,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           label="Paste the part that matters"
           type="textarea"
           rows={8}
-          maxlength={PRACTICE_LIMITS.transcriptExcerpt}
+          maxlength={REPORT_LIMITS.transcriptExcerpt}
           counter
           hint={FIELD_COPY.transcriptExcerpt.hint}
         />
@@ -216,7 +216,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           id="transcript_url"
           label="Share link"
           type="text"
-          maxlength={PRACTICE_LIMITS.transcriptUrl}
+          maxlength={REPORT_LIMITS.transcriptUrl}
           hint="Optional, and only alongside an excerpt. Never on its own."
         />
 
@@ -247,7 +247,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
           label="What you would do differently"
           type="textarea"
           rows={4}
-          maxlength={PRACTICE_LIMITS.caveats}
+          maxlength={REPORT_LIMITS.caveats}
           counter
           hint={FIELD_COPY.caveats.hint}
           example={FIELD_COPY.caveats.example}
@@ -333,11 +333,11 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
 
 <script>
   import {
-    loadPendingPractice,
+    loadPendingReport,
     loadTags,
-    resubmitPractice,
+    resubmitReport,
     type SubmissionTool,
-  } from '../../lib/practices';
+  } from '../../lib/reports';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { path } from '../../lib/paths';
   import {
@@ -350,9 +350,9 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
   } from '../../lib/forms';
   import {
     EARLIEST_TOOL_USE,
-    PRACTICE_LIMITS,
-  } from '../../lib/practice-schema';
-  import type { Area, TaskType } from '../../lib/practice-schema';
+    REPORT_LIMITS,
+  } from '../../lib/report-schema';
+  import type { Area, TaskType } from '../../lib/report-schema';
   import type { Outcome } from '../../lib/status';
   import {
     validateOptionalText,
@@ -369,7 +369,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
   const errorBody = query<HTMLElement>('[data-error-body]');
   const wrapper = query<HTMLElement>('[data-form-wrapper]');
 
-  const form = query<HTMLFormElement>('#practice-edit');
+  const form = query<HTMLFormElement>('#report-edit');
   const status = query<HTMLElement>('#edit-status');
   const submit = query<HTMLButtonElement>('button[type="submit"]', form);
   const disclosure = query<HTMLFieldSetElement>('[data-disclosure]');
@@ -385,13 +385,13 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
   const tagChosen = query<HTMLElement>('[data-tag-chosen]');
 
   let userId: string | null = null;
-  let practiceId: string | null = null;
+  let reportId: string | null = null;
   let toolSeq = 0;
   let pendingTagCodes: string[] = [];
 
-  // ── Identify the practice from the URL ─────────────────────────────────────────────
+  // ── Identify the report from the URL ────────────────────────────────────────────────
 
-  practiceId = new URLSearchParams(window.location.search).get('id');
+  reportId = new URLSearchParams(window.location.search).get('id');
 
   subscribeToSession((state) => {
     if (state.status !== 'signed-in') return;
@@ -404,12 +404,12 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
   void startSession();
 
   async function openForm(id: string): Promise<void> {
-    if (!practiceId) {
+    if (!reportId) {
       showError('No submission ID in the URL. Go back to your account and try the link again.');
       return;
     }
 
-    const result = await loadPendingPractice(practiceId, id);
+    const result = await loadPendingReport(reportId, id);
 
     loading.hidden = true;
 
@@ -418,67 +418,67 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
       return;
     }
 
-    const practice = result.value;
+    const report = result.value;
 
     // Show the moderator's note if present.
-    if (practice.moderationNote) {
+    if (report.moderationNote) {
       const notePanel = query<HTMLElement>('[data-note-panel]');
       notePanel.hidden = false;
-      query<HTMLElement>('[data-moderation-note]').textContent = practice.moderationNote;
+      query<HTMLElement>('[data-moderation-note]').textContent = report.moderationNote;
     }
 
     // Pre-fill text fields.
-    setValue('title', practice.title);
-    setValue('aim', practice.aim);
-    setValue('method', practice.method);
-    setValue('outcome_notes', practice.outcomeNotes);
-    setValue('verification', practice.verification);
-    setValue('transcript_excerpt', practice.transcriptExcerpt ?? '');
-    setValue('transcript_url', practice.transcriptUrl ?? '');
-    setValue('caveats', practice.caveats ?? '');
-    if (practice.timeSpentMinutes !== null) {
-      setValue('time_spent_minutes', String(practice.timeSpentMinutes));
+    setValue('title', report.title);
+    setValue('aim', report.aim);
+    setValue('method', report.method);
+    setValue('outcome_notes', report.outcomeNotes);
+    setValue('verification', report.verification);
+    setValue('transcript_excerpt', report.transcriptExcerpt ?? '');
+    setValue('transcript_url', report.transcriptUrl ?? '');
+    setValue('caveats', report.caveats ?? '');
+    if (report.timeSpentMinutes !== null) {
+      setValue('time_spent_minutes', String(report.timeSpentMinutes));
     }
 
     // Pre-check radio groups.
-    checkRadio('area', practice.area);
-    checkRadio('task_type', practice.taskType);
-    checkRadio('outcome', practice.outcome);
+    checkRadio('area', report.area);
+    checkRadio('task_type', report.taskType);
+    checkRadio('outcome', report.outcome);
 
     // was_published: map boolean | null back to the three-way radio value.
-    if (practice.wasPublished === true) {
+    if (report.wasPublished === true) {
       checkRadio('was_published', 'yes');
-    } else if (practice.wasPublished === false) {
+    } else if (report.wasPublished === false) {
       checkRadio('was_published', 'no');
     } else {
       checkRadio('was_published', 'notyet');
     }
 
     // was_disclosed: only meaningful when published.
-    if (practice.wasPublished === true) {
-      if (practice.wasDisclosed === true) checkRadio('was_disclosed', 'yes');
-      else if (practice.wasDisclosed === false) checkRadio('was_disclosed', 'no');
+    if (report.wasPublished === true) {
+      if (report.wasDisclosed === true) checkRadio('was_disclosed', 'yes');
+      else if (report.wasDisclosed === false) checkRadio('was_disclosed', 'no');
       else checkRadio('was_disclosed', '');
     }
 
     // author_confidence.
-    if (practice.authorConfidence !== null) {
-      checkRadio('author_confidence', String(practice.authorConfidence));
+    if (report.authorConfidence !== null) {
+      checkRadio('author_confidence', String(report.authorConfidence));
     }
 
     // Third-party checkbox: re-check it (they confirmed this when submitting; they should
     // re-read the excerpt if they have changed it).
     form.querySelector<HTMLInputElement>('#third_party_confirmed')!.checked =
-      practice.thirdPartyMaterialConfirmed;
+      report.thirdPartyMaterialConfirmed;
 
     // Tool rows.
-    for (const tool of practice.tools) {
+    for (const tool of report.tools) {
       addToolRow({ name: tool.name, version: tool.version, usedOn: tool.usedOn });
     }
-    if (practice.tools.length === 0) addToolRow();
+    if (report.tools.length === 0) addToolRow();
 
     // Tags are loaded asynchronously; hold the codes until fillTags resolves.
-    pendingTagCodes = [...practice.tagCodes];
+    pendingTagCodes = [...report.tagCodes];
     void fillTags();
 
     syncDisclosure();
@@ -574,7 +574,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
     tagStatus.hidden = true;
     tagOptions.hidden = false;
 
-    // Apply the practice's existing tag codes now that the checkboxes exist.
+    // Apply the report's existing tag codes now that the checkboxes exist.
     for (const code of pendingTagCodes) {
       const input = tagOptions.querySelector<HTMLInputElement>(`#${CSS.escape(`tag-${code}`)}`);
       if (input) input.checked = true;
@@ -686,22 +686,22 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
     clearFieldErrors(form);
     hideStatus(status);
 
-    if (!userId || !practiceId) {
+    if (!userId || !reportId) {
       showStatus(status, 'error', 'Your session has ended. Sign in again.');
       return;
     }
 
     const tools = readTools();
     const problems: { id: string; error: string | null }[] = [
-      { id: 'title', error: validateRequiredText(value('title'), PRACTICE_LIMITS.title, 'A title') },
-      { id: 'aim', error: validateRequiredText(value('aim'), PRACTICE_LIMITS.aim, 'The aim') },
-      { id: 'method', error: validateRequiredText(value('method'), PRACTICE_LIMITS.method, 'The method') },
-      { id: 'outcome_notes', error: validateRequiredText(value('outcome_notes'), PRACTICE_LIMITS.outcomeNotes, 'The outcome notes') },
-      { id: 'verification', error: validateVerification(value('verification'), PRACTICE_LIMITS.verification) },
-      { id: 'transcript_excerpt', error: validateOptionalText(value('transcript_excerpt'), PRACTICE_LIMITS.transcriptExcerpt, 'The transcript excerpt') },
-      { id: 'transcript_url', error: validateTranscriptUrl(value('transcript_url'), PRACTICE_LIMITS.transcriptUrl) },
-      { id: 'caveats', error: validateOptionalText(value('caveats'), PRACTICE_LIMITS.caveats, 'The caveats') },
-      { id: 'time_spent_minutes', error: validateTimeSpent(value('time_spent_minutes'), PRACTICE_LIMITS.timeSpentMinutes) },
+      { id: 'title', error: validateRequiredText(value('title'), REPORT_LIMITS.title, 'A title') },
+      { id: 'aim', error: validateRequiredText(value('aim'), REPORT_LIMITS.aim, 'The aim') },
+      { id: 'method', error: validateRequiredText(value('method'), REPORT_LIMITS.method, 'The method') },
+      { id: 'outcome_notes', error: validateRequiredText(value('outcome_notes'), REPORT_LIMITS.outcomeNotes, 'The outcome notes') },
+      { id: 'verification', error: validateVerification(value('verification'), REPORT_LIMITS.verification) },
+      { id: 'transcript_excerpt', error: validateOptionalText(value('transcript_excerpt'), REPORT_LIMITS.transcriptExcerpt, 'The transcript excerpt') },
+      { id: 'transcript_url', error: validateTranscriptUrl(value('transcript_url'), REPORT_LIMITS.transcriptUrl) },
+      { id: 'caveats', error: validateOptionalText(value('caveats'), REPORT_LIMITS.caveats, 'The caveats') },
+      { id: 'time_spent_minutes', error: validateTimeSpent(value('time_spent_minutes'), REPORT_LIMITS.timeSpentMinutes) },
     ];
 
     if (value('transcript_url') && !value('transcript_excerpt')) {
@@ -740,7 +740,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
     if (!confirmedThirdParty && !firstBad) firstBad = 'third_party_confirmed';
 
     const toolErrors = tools.map((tool) =>
-      validateTool(tool, { name: PRACTICE_LIMITS.toolName, version: PRACTICE_LIMITS.toolVersion }, EARLIEST_TOOL_USE),
+      validateTool(tool, { name: REPORT_LIMITS.toolName, version: REPORT_LIMITS.toolVersion }, EARLIEST_TOOL_USE),
     );
 
     [...toolList.children].forEach((row, index) => {
@@ -771,7 +771,7 @@ import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practi
 
     setBusy(submit, true, 'Saving…');
 
-    const result = await resubmitPractice(practiceId, {
+    const result = await resubmitReport(reportId, {
       title: value('title'),
       area: checked('area') as Area,
       taskType: checked('task_type') as TaskType,

@@ -1,15 +1,15 @@
 ---
 /**
- * The propositions, split into what the community has taken up and what has been suggested.
+ * The debates, split into what the community has taken up and what has been suggested.
  *
- * The split is the page's whole argument. An active proposition is one enough people
+ * The split is the page's whole argument. An active debate is one enough people
  * bothered to answer that it became part of the record; a proposed one is somebody's
  * suggestion that has not yet earned that. Listing them together would imply the site
  * endorses every claim on it, and this site takes no position on any of them.
  *
  * No aggregate anywhere on this page, not even a count of raters. A listing that showed
  * "42 raters, median 8" would tell a reader where the community landed before they had
- * opened the question, which is exactly what the proposition page is careful not to do.
+ * opened the question, which is exactly what the debate page is careful not to do.
  */
 import Base from '../../layouts/Base.astro';
 import '../../styles/corpus.css';
@@ -17,21 +17,21 @@ import '../../styles/forms.css';
 import { longDate } from '../../lib/format';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
-import { areaLabel } from '../../lib/practice-schema';
-import { listPropositions } from '../../lib/propositions';
+import { areaLabel } from '../../lib/report-schema';
+import { listDebates } from '../../lib/debates';
 
-const propositions = await listPropositions();
-const active = propositions.filter((proposition) => proposition.status === 'active');
-const proposed = propositions.filter((proposition) => proposition.status === 'proposed');
+const debates = await listDebates();
+const active = debates.filter((debate) => debate.status === 'active');
+const proposed = debates.filter((debate) => debate.status === 'proposed');
 ---
 
 <Base
-  title="Propositions"
+  title="Debates"
   description="Claims about how AI tools should be used in mathematics, and where the community stands on each."
 >
   <div class="shell corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
     <header class="corpus__header">
-      <h1>Propositions</h1>
+      <h1>Debates</h1>
       <p class="corpus__lead">
         Single claims that can be agreed with. Answer one and you are shown how everybody
         else answered — in that order, deliberately.
@@ -47,22 +47,22 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
     </div>
 
     {
-      propositions.length === 0 ? (
+      debates.length === 0 ? (
         <>
           {/* Where the overlay puts anything suggested since the export. The first
-              proposition ever written arrives here, on a page that would otherwise say
+              debate ever written arrives here, on a page that would otherwise say
               there are none until the next nightly build. */}
-          <ul class="proposition-list" role="list" data-fresh-list hidden />
+          <ul class="debate-list" role="list" data-fresh-list hidden />
 
           <div class="empty" data-empty-state>
-            <p class="empty__heading">No propositions yet.</p>
+            <p class="empty__heading">No debates yet.</p>
             <p>
               The first ones will come from members who noticed an argument worth settling —
               or worth showing is not settled.
             </p>
             <p class="actions">
-              <a class="button button--primary" href={path('/propositions/new/')}>
-                Suggest a proposition
+              <a class="button button--primary" href={path('/debates/new/')}>
+                Suggest a debate
               </a>
             </p>
           </div>
@@ -80,15 +80,15 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
                 None yet. A proposed one becomes active once enough members have answered it.
               </p>
             ) : (
-              <ul class="proposition-list" role="list">
-                {active.map((proposition) => (
-                  <li class="proposition-item">
-                    <a class="proposition-item__link" href={path(`/propositions/${proposition.id}/`)}>
-                      {proposition.statement}
+              <ul class="debate-list" role="list">
+                {active.map((debate) => (
+                  <li class="debate-item">
+                    <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
+                      {debate.statement}
                     </a>
-                    <p class="card__facts proposition-item__facts">
-                      <span>{areaLabel(proposition.area)}</span>
-                      <span class="meta">Active since {longDate(proposition.activatedAt)}</span>
+                    <p class="card__facts debate-item__facts">
+                      <span>{areaLabel(debate.area)}</span>
+                      <span class="meta">Active since {longDate(debate.activatedAt)}</span>
                     </p>
                   </li>
                 ))}
@@ -110,19 +110,19 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
             )}
 
             <ul
-              class="proposition-list"
+              class="debate-list"
               role="list"
               data-fresh-list
               hidden={proposed.length === 0}
             >
-              {proposed.map((proposition) => (
-                <li class="proposition-item">
-                  <a class="proposition-item__link" href={path(`/propositions/${proposition.id}/`)}>
-                    {proposition.statement}
+              {proposed.map((debate) => (
+                <li class="debate-item">
+                  <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
+                    {debate.statement}
                   </a>
-                  <p class="card__facts proposition-item__facts">
-                    <span>{areaLabel(proposition.area)}</span>
-                    <span class="meta">Proposed {longDate(proposition.createdAt)}</span>
+                  <p class="card__facts debate-item__facts">
+                    <span>{areaLabel(debate.area)}</span>
+                    <span class="meta">Proposed {longDate(debate.createdAt)}</span>
                   </p>
                 </li>
               ))}
@@ -130,21 +130,21 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
           </section>
 
           <p class="actions">
-            <a class="button button--primary" href={path('/propositions/new/')}>
-              Suggest a proposition
+            <a class="button button--primary" href={path('/debates/new/')}>
+              Suggest a debate
             </a>
           </p>
         </>
       )
     }
 
-    {/* One suggested since the export. Links to /propositions/view/?id=<id>, the
-        client-rendered viewer, because /propositions/<id>/ is generated at build time
+    {/* One suggested since the export. Links to /debates/view/?id=<id>, the
+        client-rendered viewer, because /debates/<id>/ is generated at build time
         from the export and does not exist yet for rows newer than the last build. */}
-    <template data-fresh-proposition>
-      <li class="proposition-item" data-fresh>
-        <a class="proposition-item__link" data-statement></a>
-        <p class="card__facts proposition-item__facts">
+    <template data-fresh-debate>
+      <li class="debate-item" data-fresh>
+        <a class="debate-item__link" data-statement></a>
+        <p class="card__facts debate-item__facts">
           <span data-area></span>
           <span class="meta" data-fresh-mark>New since the last build</span>
         </p>
@@ -162,32 +162,32 @@ const proposed = propositions.filter((proposition) => proposition.status === 'pr
    * marked. Nothing here can fail visibly — see src/lib/fresh.ts.
    *
    * Nothing about ratings is touched. The aggregate is never built into a page, so there is
-   * no stale copy of one to refresh: a proposition page fetches its distribution live, after
+   * no stale copy of one to refresh: a debate page fetches its distribution live, after
    * the reader has answered, and this listing shows no aggregate at all by design.
    */
-  import { propositionsSince } from '../../lib/fresh';
-  import { areaLabel } from '../../lib/practice-schema';
+  import { debatesSince } from '../../lib/fresh';
+  import { areaLabel } from '../../lib/report-schema';
 
   const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
   const list = document.querySelector<HTMLElement>('[data-fresh-list]');
-  const template = document.querySelector<HTMLTemplateElement>('[data-fresh-proposition]');
+  const template = document.querySelector<HTMLTemplateElement>('[data-fresh-debate]');
 
   if (since && list && template) {
     void (async () => {
-      const fresh = await propositionsSince(since);
+      const fresh = await debatesSince(since);
       if (fresh.length === 0) return;
 
-      for (const proposition of fresh.reverse()) {
+      for (const debate of fresh.reverse()) {
         const node = (template.content.cloneNode(true) as DocumentFragment)
           .firstElementChild as HTMLElement;
 
         const statement = node.querySelector<HTMLAnchorElement>('[data-statement]');
         const area = node.querySelector<HTMLElement>('[data-area]');
         if (statement) {
-          statement.textContent = proposition.statement;
-          statement.href = `view/?id=${proposition.id}`;
+          statement.textContent = debate.statement;
+          statement.href = `view/?id=${debate.id}`;
         }
-        if (area) area.textContent = areaLabel(proposition.area);
+        if (area) area.textContent = areaLabel(debate.area);
 
         list.prepend(node);
       }

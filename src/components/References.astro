@@ -3,12 +3,12 @@
  * What points here, and what this points at.
  *
  * "Referenced by" is the block that makes the corpus a corpus rather than a pile of pages:
- * a practice showing that three propositions rest on it is a different object from the same
- * practice standing alone. It is also the only place on the site where a reader finds
+ * a report showing that three debates rest on it is a different object from the same
+ * report standing alone. It is also the only place on the site where a reader finds
  * something they were not looking for, which for a research collection is most of the value.
  *
  * The outgoing list is here too, and that is a small addition to what was asked for. Without
- * it a proposition built out of two accounts says nothing about them on its own page, while
+ * it a debate built out of two accounts says nothing about them on its own page, while
  * both of them advertise it — the graph would be legible in one direction only, which for
  * the page that did the citing is the wrong one.
  *
@@ -26,8 +26,8 @@ interface Props {
 
 const { incoming, outgoing }: Props = Astro.props;
 
-const kind = (type: 'practice' | 'proposition') =>
-  type === 'practice' ? 'Practice' : 'Proposition';
+const kind = (type: 'report' | 'debate') =>
+  type === 'report' ? 'Report' : 'Debate';
 ---
 
 {

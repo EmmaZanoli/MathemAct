@@ -11,8 +11,8 @@ The rest describes what the code does today and is accurate.
 | Role | Held by | May |
 |---|---|---|
 | `admin` | *(to fill in — the person who owns the Supabase project)* | Everything a moderator may, plus process erasure requests |
-| `moderator` | *(to fill in — two people, not one)* | Publish, send back, hide, unhide, promote, close reports, ban |
-| `member` | Everyone else | Post, comment, rate, confirm, report |
+| `moderator` | *(to fill in — two people, not one)* | Publish, send back, hide, unhide, promote, close flags, ban |
+| `member` | Everyone else | Post, comment, rate, confirm, flag |
 
 Roles live in `public.profiles.role` and are set with direct database access. There is no
 interface for granting one, deliberately: a screen that can make somebody a moderator is a
@@ -24,7 +24,7 @@ database refuses it by name — so a single moderator would have no way to get t
 submissions published, and no second reading on anything.
 
 Moderation is volunteer-run. That means careful rather than fast, and it is honest to say so
-up front: a report may take days. This is already written on the code of conduct page and
+up front: a flag may take days. This is already written on the code of conduct page and
 should not be quietly dropped from it when the queue gets long.
 
 ## What is in scope
@@ -37,7 +37,7 @@ In scope:
 - Not a first-hand account of using an AI tool in mathematical work.
 - Third-party unpublished material in a transcript — a referee report, somebody else's
   preprint, private correspondence. This is the specific hazard this site creates by asking
-  people to paste real sessions, and it is the one report reason that should be acted on
+  people to paste real sessions, and it is the one flag reason that should be acted on
   before it is understood.
 - An attempt to identify a pseudonymous contributor, or anything that reads as a step
   toward one.
@@ -48,7 +48,7 @@ In scope:
 
 Out of scope, and this is the important half:
 
-- **Being wrong.** A practice reporting that a tool did something it cannot do is a
+- **Being wrong.** A report reporting that a tool did something it cannot do is a
   contribution to a corpus about what people believe tools do. The answer is a comment
   saying so, not a hide.
 - **Being negative.** "This did not work and I would not use it again" is the kind of
@@ -81,11 +81,11 @@ What you get is a sentence written to you.
 
 ## Editing after publication
 
-**A practice cannot be edited once it is published, by anyone, including its author.** The
-guard trigger on `public.practices` freezes every content column the moment the status
+**A report cannot be edited once it is published, by anyone, including its author.** The
+guard trigger on `public.reports` freezes every content column the moment the status
 leaves `pending`.
 
-This is a real constraint and it is deliberate. A practice carries "still works / no longer
+This is a real constraint and it is deliberate. A report carries "still works / no longer
 works" confirmations from other people, and those attest to a version. An account that could
 be rewritten afterwards would leave the confirmations pointing at text nobody can read any
 more, which is worse than an account with a mistake in it.
@@ -94,9 +94,9 @@ What to do instead:
 
 | Situation | What happens |
 |---|---|
-| The author spots a mistake | They cannot fix it. They post a comment on their own practice saying so; the thread is part of the record. A more serious error is a case for hiding it and letting them resubmit. |
-| A tool version was wrong | Same. The comment is the correction, and the report queue is where somebody else raises it. |
-| The author wants it gone | They can soft-delete their own practice at any time. The body is hidden, the thread structure survives, and it leaves the corpus. |
+| The author spots a mistake | They cannot fix it. They post a comment on their own report saying so; the thread is part of the record. A more serious error is a case for hiding it and letting them resubmit. |
+| A tool version was wrong | Same. The comment is the correction, and the flag queue is where somebody else raises it. |
+| The author wants it gone | They can soft-delete their own report at any time. The body is hidden, the thread structure survives, and it leaves the corpus. |
 | It is wrong in a way that misleads | Hide it, with a reason. Hiding is reversible; publishing a correction is not the same thing. |
 
 A **comment** is editable for 24 hours, and that window closes early once anybody has
@@ -105,7 +105,7 @@ person who hits them. The 24 hours is one build cycle: comments carry TeX, TeX i
 at build time, and a shorter window would mean nobody could fix a formula that came out
 wrong.
 
-A **proposition**'s wording freezes at its first rating, for the same reason a practice's
+A **debate**'s wording freezes at its first rating, for the same reason a report's
 does at publication — people agreed with the sentence in front of them.
 
 ### How edits are surfaced
@@ -113,11 +113,11 @@ does at publication — people agreed with the sentence in front of them.
 They are not, because there are almost none. There is no revision history table, no "edited"
 marker, and no diff:
 
-- A published practice cannot change, so there is nothing to surface.
+- A published report cannot change, so there is nothing to surface.
 - A comment edited within 24 hours has, by construction, no replies and is less than a day
   old. `updated_at` is stored and could carry an "edited" marker later; it does not today.
 - A **change request** is visible to its author under "Your submissions" on their account
-  page, with the date it was asked. It is cleared when the practice is published, because it
+  page, with the date it was asked. It is cleared when the report is published, because it
   then describes a version that was accepted.
 
 If revision history is ever wanted, the honest version is a table of past versions with a
@@ -144,13 +144,13 @@ them by name.
 
 Five queues, in the order they are worked:
 
-1. **Practices waiting** — oldest first. The whole submission is on screen, including the
+1. **Reports waiting** — oldest first. The whole submission is on screen, including the
    verification section and the transcript, because a decision made from a title is not a
    decision.
-2. **Propositions waiting** — a proposition promotes itself once five people have answered
-   it (`private.settings`, key `proposition_activation_ratings`). Promoting one by hand says
+2. **Debates waiting** — a debate promotes itself once five people have answered
+   it (`private.settings`, key `debate_activation_ratings`). Promoting one by hand says
    the question is worth asking, not that you agree with it.
-3. **Open reports** — with the reported row shown inline.
+3. **Open flags** — with the flagged row shown inline.
 4. **Hidden** — everything currently hidden, so unhiding is reachable.
 5. **Erasure requests** — admins only.
 
@@ -169,22 +169,22 @@ write attempted directly from a console silently changes nothing.
 | Action | Effect | Reason required |
 |---|---|---|
 | Publish | `pending` → `published`. Clears any change request. In the corpus at the next build. | No |
-| Send back | Stays `pending`. Writes the note onto the practice, where its author reads it. | **Yes** |
+| Send back | Stays `pending`. Writes the note onto the report, where its author reads it. | **Yes** |
 | Hide | → `hidden`. Text and attribution are preserved; the author can see it was hidden. | **Yes** |
 | Unhide | → `published`. Nothing records the status before hiding, so unhiding publishes. | No |
-| Promote | A proposition: `proposed` → `active`, with the date it joined the record. | No |
-| Close: acted / nothing to do | The report is `actioned` or `dismissed`, with the hand and the time. | No |
-| Ban | `profiles.is_banned`. Blocks posting, commenting, rating, confirming and reporting. Reversible. | **Yes** |
+| Promote | A debate: `proposed` → `active`, with the date it joined the record. | No |
+| Close: acted / nothing to do | The flag is `actioned` or `dismissed`, with the hand and the time. | No |
+| Ban | `profiles.is_banned`. Blocks posting, commenting, rating, confirming and flagging. Reversible. | **Yes** |
 | Erase | Deletes the account. Admins only, and only against a standing request. | No |
 
-Hiding something and closing the report that named it are two decisions and produce two
-rows. Do the hiding first: a report closed against content still on the site is the failure
+Hiding something and closing the flag that named it are two decisions and produce two
+rows. Do the hiding first: a flag closed against content still on the site is the failure
 this ordering exists to prevent.
 
 ### What the log records
 
 Actor, action, target kind, target id, reason, timestamp. It is readable by moderators and
-admins and by nobody else — not by the person moderated, not by the reporter.
+admins and by nobody else — not by the person moderated, not by the flagger.
 
 It is **append-only, including for the table owner**: a trigger refuses every UPDATE and
 DELETE. Correcting an entry means adding another. To genuinely remove one — a reason field
@@ -210,10 +210,10 @@ What erasure does, all of it from foreign keys that have been in the schema sinc
 beginning:
 
 - the account and its profile are deleted;
-- practices and comments have `author_id` set to null — they stay, under CC BY, with no name
+- reports and comments have `author_id` set to null — they stay, under CC BY, with no name
   on them;
 - ratings and confirmations cascade away — they are answers, not contributions;
-- citations and reports keep the row and lose the hand;
+- citations and flags keep the row and lose the hand;
 - the erasure request itself cascades, which is correct: afterwards there must be no row
   saying this person asked to be forgotten.
 
@@ -231,7 +231,7 @@ mid-decision.
 - **No edit screen for a pending submission.** An author who is sent back can read the note
   on their account page but cannot yet act on it — they would have to delete and repost. This
   is the next thing to build; it is what makes "send back" worth more than "hide".
-- **No notification of any kind.** Nothing tells an author their practice was published,
+- **No notification of any kind.** Nothing tells an author their report was published,
   sent back, or hidden. They find out by looking. Mail would go through Supabase's own
   templates and 300 messages a day, and is a real design decision rather than a switch.
 - **Removing a citation is not logged.** A moderator may delete a citation whose stored

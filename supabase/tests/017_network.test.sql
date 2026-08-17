@@ -1,6 +1,6 @@
--- Who may read and write a resource, and what the URL deduplication does.
+-- Who may read and write an entry, and what the URL deduplication does.
 --
--- The same two-direction discipline as 008_practice_rls.test.sql: every allowed case
+-- The same two-direction discipline as 008_report_rls.test.sql: every allowed case
 -- is verified, and every forbidden case is verified too. The negative assertions are the
 -- ones that would fail the day a policy is loosened.
 --
@@ -9,7 +9,7 @@
 --   An author self-publishing succeeds and changes nothing. The guard reverts status
 --   before RLS evaluates the new row, so the WITH CHECK passes on a still-pending row.
 --
---   An author editing their own published resource raises 42501. The guard reverts the
+--   An author editing their own published entry raises 42501. The guard reverts the
 --   text but leaves deleted_at null, and no policy's WITH CHECK accepts that row.
 
 begin;
@@ -49,36 +49,36 @@ select is(
   'four of the five fixtures have a confirmed account'
 );
 
--- ── Resources ───────────────────────────────────────────────────────────────────────────
+-- ── Network ──────────────────────────────────────────────────────────────────────────────
 
-insert into public.resources (
+insert into public.network_entries (
   id, submitter_id, status, title, url, url_normalised, category, description, relevance, deleted_at, deleted_by
 ) values
-  -- Published resource, submitter 1
+  -- Published entry, submitter 1
   ('44440000-0000-0000-0000-000000000001', '33331111-0000-0000-0000-000000000001',
    'published', 'Lean 4 documentation', 'https://leanprover.github.io/lean4/doc/',
    private.normalise_url('https://leanprover.github.io/lean4/doc/'),
    'formalisation', 'Official Lean 4 reference.', 'Lean 4 is the proof assistant most used for formalising mathematics in our community.', null, null),
 
-  -- Pending resource, submitter 1
+  -- Pending entry, submitter 1
   ('44440000-0000-0000-0000-000000000002', '33331111-0000-0000-0000-000000000001',
-   'pending', 'Draft resource', 'https://example.com/draft',
+   'pending', 'Draft entry', 'https://example.com/draft',
    private.normalise_url('https://example.com/draft'),
    'reading', 'A draft.', 'Interesting for reasons.', null, null),
 
-  -- Hidden resource, submitter 1
+  -- Hidden entry, submitter 1
   ('44440000-0000-0000-0000-000000000003', '33331111-0000-0000-0000-000000000001',
-   'hidden', 'Hidden resource', 'https://example.com/hidden',
+   'hidden', 'Hidden entry', 'https://example.com/hidden',
    private.normalise_url('https://example.com/hidden'),
    'community', 'Hidden.', 'Relevant but hidden.', null, null),
 
-  -- Soft-deleted resource, submitter 1
+  -- Soft-deleted entry, submitter 1
   ('44440000-0000-0000-0000-000000000004', '33331111-0000-0000-0000-000000000001',
-   'published', 'Deleted resource', 'https://example.com/deleted',
+   'published', 'Deleted entry', 'https://example.com/deleted',
    private.normalise_url('https://example.com/deleted'),
    'research_tool', 'Deleted.', 'This was deleted.', now(), '33331111-0000-0000-0000-000000000001'),
 
-  -- Published resource, submitter 2
+  -- Published entry, submitter 2
   ('44440000-0000-0000-0000-000000000005', '33331111-0000-0000-0000-000000000002',
    'published', 'ChatGPT for mathematics', 'https://chat.openai.com/',
    private.normalise_url('https://chat.openai.com/'),
@@ -89,18 +89,18 @@ insert into public.resources (
 set local role anon;
 
 select is(
-  (select count(*)::int from public.resources),
+  (select count(*)::int from public.network_entries),
   2,
-  'anon sees only published, undeleted resources'
+  'anon sees only published, undeleted entries'
 );
 
 select is_empty(
-  $$ select id from public.resources where status <> 'published' $$,
+  $$ select id from public.network_entries where status <> 'published' $$,
   'anon sees nothing pending or hidden'
 );
 
 select is_empty(
-  $$ select id from public.resources where deleted_at is not null $$,
+  $$ select id from public.network_entries where deleted_at is not null $$,
   'anon sees nothing soft-deleted'
 );
 
@@ -110,7 +110,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.resources),
+  (select count(*)::int from public.network_entries),
   2,
   'another member sees the published corpus and no more'
 );
@@ -121,7 +121,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.resources),
+  (select count(*)::int from public.network_entries),
   5,
   'a submitter sees their own work in every state, plus the published corpus'
 );
@@ -132,7 +132,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000005","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.resources),
+  (select count(*)::int from public.network_entries),
   5,
   'a moderator sees everything, including deleted rows'
 );
@@ -144,12 +144,12 @@ reset role;
 set local role anon;
 
 select throws_ok(
-  $$ insert into public.resources
+  $$ insert into public.network_entries
        (submitter_id, title, url, category, description, relevance)
      values ('33331111-0000-0000-0000-000000000001', 'From nowhere', 'https://example.com/anon',
              'reading', 'A description.', 'Some relevance.') $$,
   '42501'::text, null::text,
-  'anon cannot post a resource'
+  'anon cannot post an entry'
 );
 
 reset role;
@@ -158,7 +158,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.resources
+  $$ insert into public.network_entries
        (submitter_id, title, url, category, description, relevance)
      values ('33331111-0000-0000-0000-000000000003', 'Unconfirmed', 'https://example.com/unconfirmed',
              'reading', 'A description.', 'Some relevance.') $$,
@@ -172,7 +172,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000004","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.resources
+  $$ insert into public.network_entries
        (submitter_id, title, url, category, description, relevance)
      values ('33331111-0000-0000-0000-000000000004', 'Banned', 'https://example.com/banned',
              'reading', 'A description.', 'Some relevance.') $$,
@@ -186,7 +186,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.resources
+  $$ insert into public.network_entries
        (submitter_id, title, url, category, description, relevance)
      values ('33331111-0000-0000-0000-000000000001', 'Under a false name', 'https://example.com/false-name',
              'reading', 'A description.', 'Some relevance.') $$,
@@ -195,22 +195,22 @@ select throws_ok(
 );
 
 -- The allowed case.
-insert into public.resources
+insert into public.network_entries
   (submitter_id, title, url, category, description, relevance)
 values ('33331111-0000-0000-0000-000000000002',
         'A perfectly ordinary submission', 'https://example.com/ordinary',
-        'educational', 'An educational resource.', 'Useful for mathematicians learning AI tools.');
+        'educational', 'An educational entry.', 'Useful for mathematicians learning AI tools.');
 
 reset role;
 
 select is(
-  (select status::text from public.resources where title = 'A perfectly ordinary submission'),
+  (select status::text from public.network_entries where title = 'A perfectly ordinary submission'),
   'pending'::text,
   'a confirmed member may post, and what they post starts pending'
 );
 
 select is(
-  (select url_normalised from public.resources where title = 'A perfectly ordinary submission'),
+  (select url_normalised from public.network_entries where title = 'A perfectly ordinary submission'),
   'example.com/ordinary',
   'url_normalised is computed on insert (scheme stripped, lowercase)'
 );
@@ -220,42 +220,42 @@ select is(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.resources
+update public.network_entries
    set title = 'Lean 4 documentation, revised'
  where id = '44440000-0000-0000-0000-000000000002';
 
 reset role;
 
 select is(
-  (select title from public.resources where id = '44440000-0000-0000-0000-000000000002'),
+  (select title from public.network_entries where id = '44440000-0000-0000-0000-000000000002'),
   'Lean 4 documentation, revised'::text,
-  'a submitter may edit their own pending resource'
+  'a submitter may edit their own pending entry'
 );
 
 -- Self-publishing: guard reverts status, WITH CHECK passes on still-pending row.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.resources set status = 'published'
+update public.network_entries set status = 'published'
  where id = '44440000-0000-0000-0000-000000000002';
 
 reset role;
 
 select is(
-  (select status::text from public.resources where id = '44440000-0000-0000-0000-000000000002'),
+  (select status::text from public.network_entries where id = '44440000-0000-0000-0000-000000000002'),
   'pending'::text,
-  'a submitter cannot publish their own resource; the guard reverts status silently'
+  'a submitter cannot publish their own entry; the guard reverts status silently'
 );
 
--- Editing a published resource.
+-- Editing a published entry.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ update public.resources set title = 'Rewriting history'
+  $$ update public.network_entries set title = 'Rewriting history'
       where id = '44440000-0000-0000-0000-000000000001' $$,
   '42501'::text, null::text,
-  'a submitter cannot edit their own resource once it is published'
+  'a submitter cannot edit their own entry once it is published'
 );
 
 reset role;
@@ -265,31 +265,31 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.resources
+update public.network_entries
    set deleted_at = now(), deleted_by = '33331111-0000-0000-0000-000000000001'
  where id = '44440000-0000-0000-0000-000000000001';
 
 reset role;
 
 select isnt(
-  (select deleted_at from public.resources where id = '44440000-0000-0000-0000-000000000001'),
+  (select deleted_at from public.network_entries where id = '44440000-0000-0000-0000-000000000001'),
   null::timestamptz,
-  'a submitter may soft-delete their own published resource'
+  'a submitter may soft-delete their own published entry'
 );
 
 -- Restoring: silent no-op (no policy accepts a deleted row for its owner).
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
-update public.resources set deleted_at = null, deleted_by = null
+update public.network_entries set deleted_at = null, deleted_by = null
  where id = '44440000-0000-0000-0000-000000000001';
 
 reset role;
 
 select isnt(
-  (select deleted_at from public.resources where id = '44440000-0000-0000-0000-000000000001'),
+  (select deleted_at from public.network_entries where id = '44440000-0000-0000-0000-000000000001'),
   null::timestamptz,
-  'a submitter cannot restore a resource they deleted (silent no-op)'
+  'a submitter cannot restore an entry they deleted (silent no-op)'
 );
 
 -- ── Moderation ───────────────────────────────────────────────────────────────────────────
@@ -299,16 +299,16 @@ set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000005","
 
 select lives_ok(
   $$ select public.moderate(
-       'resource',
-       (select id from public.resources where title = 'A perfectly ordinary submission'),
+       'entry',
+       (select id from public.network_entries where title = 'A perfectly ordinary submission'),
        'publish') $$,
-  'a moderator may publish a pending resource through the audited path'
+  'a moderator may publish a pending entry through the audited path'
 );
 
 reset role;
 
 select is(
-  (select status::text from public.resources where title = 'A perfectly ordinary submission'),
+  (select status::text from public.network_entries where title = 'A perfectly ordinary submission'),
   'published'::text,
   'and it is published'
 );
@@ -317,13 +317,13 @@ select is(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000005","role":"authenticated"}';
 
-update public.resources set status = 'hidden'
+update public.network_entries set status = 'hidden'
  where title = 'A perfectly ordinary submission';
 
 reset role;
 
 select is(
-  (select status::text from public.resources where title = 'A perfectly ordinary submission'),
+  (select status::text from public.network_entries where title = 'A perfectly ordinary submission'),
   'published'::text,
   'a direct moderator update changes nothing: the audit log cannot be stepped around'
 );
@@ -334,59 +334,59 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ delete from public.resources where id = '44440000-0000-0000-0000-000000000002' $$,
+  $$ delete from public.network_entries where id = '44440000-0000-0000-0000-000000000002' $$,
   '42501'::text, null::text,
-  'a submitter cannot hard-delete their own resource'
+  'a submitter cannot hard-delete their own entry'
 );
 
 reset role;
 
 select ok(
-  not has_table_privilege('authenticated', 'public.resources', 'DELETE'),
+  not has_table_privilege('authenticated', 'public.network_entries', 'DELETE'),
   'the absent DELETE grant is the reason, not an absent policy'
 );
 
 -- ── URL deduplication ────────────────────────────────────────────────────────────────────
 
--- Submitting the same URL as an existing published resource fails.
+-- Submitting the same URL as an existing published entry fails.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ insert into public.resources
+  $$ insert into public.network_entries
        (submitter_id, title, url, category, description, relevance)
      values ('33331111-0000-0000-0000-000000000002',
              'ChatGPT again', 'https://chat.openai.com/',
              'research_tool', 'OpenAI.', 'Useful.') $$,
   '23505'::text, null::text,
-  'the same URL cannot be submitted twice among non-deleted resources'
+  'the same URL cannot be submitted twice among non-deleted entries'
 );
 
 -- UTM variants are also deduplicated: the normalised URL strips tracking params.
 select throws_ok(
-  $$ insert into public.resources
+  $$ insert into public.network_entries
        (submitter_id, title, url, category, description, relevance)
      values ('33331111-0000-0000-0000-000000000002',
              'ChatGPT with UTM', 'https://chat.openai.com/?utm_source=newsletter',
              'research_tool', 'OpenAI.', 'Useful.') $$,
   '23505'::text, null::text,
-  'a UTM-decorated URL of a submitted resource is also rejected'
+  'a UTM-decorated URL of a submitted entry is also rejected'
 );
 
 reset role;
 
--- A deleted resource's URL can be resubmitted.
--- (resource 44440000-0000-0000-0000-000000000004 is already soft-deleted above).
+-- A deleted entry's URL can be resubmitted.
+-- (entry 44440000-0000-0000-0000-000000000004 is already soft-deleted above).
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select lives_ok(
-  $$ insert into public.resources
+  $$ insert into public.network_entries
        (submitter_id, title, url, category, description, relevance)
      values ('33331111-0000-0000-0000-000000000002',
              'Deleted URL resubmitted', 'https://example.com/deleted',
              'reading', 'Resubmitted.', 'The original was deleted.') $$,
-  'a URL belonging only to a deleted resource may be resubmitted'
+  'a URL belonging only to a deleted entry may be resubmitted'
 );
 
 reset role;
@@ -396,13 +396,13 @@ reset role;
 delete from auth.users where id = '33331111-0000-0000-0000-000000000002';
 
 select is(
-  (select count(*)::int from public.resources where id = '44440000-0000-0000-0000-000000000005'),
+  (select count(*)::int from public.network_entries where id = '44440000-0000-0000-0000-000000000005'),
   1,
-  'erasing an account leaves the resources it submitted in place'
+  'erasing an account leaves the entries it submitted in place'
 );
 
 select is(
-  (select submitter_id from public.resources where id = '44440000-0000-0000-0000-000000000005'),
+  (select submitter_id from public.network_entries where id = '44440000-0000-0000-0000-000000000005'),
   null::uuid,
   'and strips the attribution from them'
 );

@@ -43,7 +43,7 @@ update public.profiles set role = 'admin'     where id = '11111111-0000-0000-000
 
 -- ── Things to decide about ──────────────────────────────────────────────────────────
 
-insert into public.practices (
+insert into public.reports (
   id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
   verification, third_party_material_confirmed
 ) values
@@ -72,7 +72,7 @@ insert into public.practices (
    'Prove a bound.', 'Asked for a sketch.', 'partial', 'The sketch had a gap.',
    'Checked the induction step by hand.', true);
 
-insert into public.propositions (id, author_id, statement, status, activated_at, area)
+insert into public.debates (id, author_id, statement, status, activated_at, area)
 values
   ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000002',
    'AI-assisted literature search should be disclosed in papers.', 'proposed', null, 'writing'),
@@ -86,12 +86,12 @@ values
 
 insert into public.comments (id, parent_type, parent_id, author_id, body)
 values
-  ('44444444-0000-0000-0000-000000000001', 'practice', '22222222-0000-0000-0000-000000000002',
+  ('44444444-0000-0000-0000-000000000001', 'report', '22222222-0000-0000-0000-000000000002',
    '11111111-0000-0000-0000-000000000002', 'Was the hypothesis necessary or convenient?'),
-  ('44444444-0000-0000-0000-000000000002', 'practice', '22222222-0000-0000-0000-000000000002',
+  ('44444444-0000-0000-0000-000000000002', 'report', '22222222-0000-0000-0000-000000000002',
    '11111111-0000-0000-0000-000000000003', 'A remark from the moderator, in their own name.');
 
-insert into public.reports (id, subject_type, subject_id, reporter_id, reason, detail)
+insert into public.flags (id, subject_type, subject_id, flagger_id, reason, detail)
 values
   ('66666666-0000-0000-0000-000000000001', 'comment', '44444444-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000001', 'off_topic',
@@ -100,7 +100,7 @@ values
 insert into public.deletion_requests (id, user_id, note)
 values
   ('77777777-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000005',
-   'Please detach my practices rather than deleting them.');
+   'Please detach my reports rather than deleting them.');
 
 -- ── The shape of the log ────────────────────────────────────────────────────────────
 -- Grants first, because a missing grant and a missing policy are indistinguishable from a
@@ -136,7 +136,7 @@ select ok(
 set local role anon;
 
 select throws_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000001', 'publish') $$,
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000001', 'publish') $$,
   '42501'::text, null::text,
   'an anonymous caller cannot reach public.moderate() at all'
 );
@@ -147,7 +147,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000001', 'publish') $$,
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000001', 'publish') $$,
   '42501'::text, null::text,
   'an ordinary member cannot publish, including their own submission'
 );
@@ -163,7 +163,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000001', 'publish') $$,
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000001', 'publish') $$,
   '42501'::text, null::text,
   'a banned moderator cannot moderate'
 );
@@ -178,13 +178,13 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000002', 'hide') $$,
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000002', 'hide') $$,
   '23514'::text, null::text,
   'hiding without a reason is refused before anything is hidden'
 );
 
 select throws_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000002', 'hide', '   ') $$,
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000002', 'hide', '   ') $$,
   '23514'::text, null::text,
   'and a reason of whitespace is not a reason'
 );
@@ -192,9 +192,9 @@ select throws_ok(
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000002'),
   'published'::text,
-  'the practice is untouched by the refused hide'
+  'the report is untouched by the refused hide'
 );
 
 -- ── Publishing ──────────────────────────────────────────────────────────────────────
@@ -203,16 +203,16 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000001', 'publish') $$,
-  'a moderator publishes a pending practice'
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000001', 'publish') $$,
+  'a moderator publishes a pending report'
 );
 
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000001'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000001'),
   'published'::text,
-  'and the practice is published'
+  'and the report is published'
 );
 
 select is(
@@ -239,7 +239,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000005',
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000005',
                             'request_changes',
                             'The verification section describes what the model said rather than what you checked.') $$,
   'a moderator sends a submission back with a note'
@@ -248,30 +248,30 @@ select lives_ok(
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   'pending'::text,
   'sending it back leaves it pending rather than rejecting it'
 );
 
 select is(
-  (select moderation_note from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select moderation_note from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   'The verification section describes what the model said rather than what you checked.'::text,
   'and the note is on the row, where its author can read it'
 );
 
--- The author reads their own note through practices_select_own, and cannot clear it: there
+-- The author reads their own note through reports_select_own, and cannot clear it: there
 -- is no column grant, which is the failure a browser sees first.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select isnt(
-  (select moderation_note from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select moderation_note from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   null::text,
   'the author can read the change request on their own submission'
 );
 
 select throws_ok(
-  $$ update public.practices set moderation_note = null
+  $$ update public.reports set moderation_note = null
       where id = '22222222-0000-0000-0000-000000000005' $$,
   '42501'::text, null::text,
   'and cannot clear it: the note is not theirs to remove'
@@ -283,14 +283,14 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000005', 'publish') $$,
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000005', 'publish') $$,
   'the same submission is published later'
 );
 
 reset role;
 
 select is(
-  (select moderation_note from public.practices where id = '22222222-0000-0000-0000-000000000005'),
+  (select moderation_note from public.reports where id = '22222222-0000-0000-0000-000000000005'),
   null::text,
   'and publishing clears the change request, which no longer describes anything'
 );
@@ -301,15 +301,15 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000002', 'hide',
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000002', 'hide',
                             'Contains a referee report that is not the author''s to reproduce.') $$,
-  'a moderator hides a published practice: the hide path works'
+  'a moderator hides a published report: the hide path works'
 );
 
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000002'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000002'),
   'hidden'::text,
   'and it is hidden'
 );
@@ -323,21 +323,21 @@ select is(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
-update public.practices set status = 'hidden'
+update public.reports set status = 'hidden'
  where id = '22222222-0000-0000-0000-000000000004';
 
 update public.comments set status = 'hidden'
  where id = '44444444-0000-0000-0000-000000000001';
 
-update public.propositions set status = 'hidden'
+update public.debates set status = 'hidden'
  where id = '33333333-0000-0000-0000-000000000001';
 
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000004'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000004'),
   'published'::text,
-  'a moderator can no longer hide a practice by direct update: the log cannot be stepped around'
+  'a moderator can no longer hide a report by direct update: the log cannot be stepped around'
 );
 
 select is(
@@ -347,14 +347,14 @@ select is(
 );
 
 select is(
-  (select status::text from public.propositions where id = '33333333-0000-0000-0000-000000000001'),
+  (select status::text from public.debates where id = '33333333-0000-0000-0000-000000000001'),
   'proposed'::text,
-  'nor a proposition'
+  'nor a debate'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.reports', 'UPDATE'),
-  'and a report cannot be resolved by direct update: the grant is gone, not just the policy'
+  not has_table_privilege('authenticated', 'public.flags', 'UPDATE'),
+  'and a flag cannot be resolved by direct update: the grant is gone, not just the policy'
 );
 
 -- ── No self-approval ────────────────────────────────────────────────────────────────
@@ -363,15 +363,15 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select throws_ok(
-  $$ select public.moderate('practice', '22222222-0000-0000-0000-000000000003', 'publish') $$,
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000003', 'publish') $$,
   '42501'::text, null::text,
   'a moderator cannot publish their own submission'
 );
 
 select throws_ok(
-  $$ select public.moderate('proposition', '33333333-0000-0000-0000-000000000002', 'promote') $$,
+  $$ select public.moderate('debate', '33333333-0000-0000-0000-000000000002', 'promote') $$,
   '42501'::text, null::text,
-  'nor promote their own proposition'
+  'nor promote their own debate'
 );
 
 select throws_ok(
@@ -384,23 +384,23 @@ select throws_ok(
 reset role;
 
 select is(
-  (select status::text from public.practices where id = '22222222-0000-0000-0000-000000000003'),
+  (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000003'),
   'pending'::text,
   'the moderator''s own submission waits like everybody else''s'
 );
 
--- ── Propositions ────────────────────────────────────────────────────────────────────
+-- ── Debates ─────────────────────────────────────────────────────────────────────────
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('proposition', '33333333-0000-0000-0000-000000000001', 'promote') $$,
+  $$ select public.moderate('debate', '33333333-0000-0000-0000-000000000001', 'promote') $$,
   'a moderator promotes a proposed claim'
 );
 
 select lives_ok(
-  $$ select public.moderate('proposition', '33333333-0000-0000-0000-000000000003', 'hide',
+  $$ select public.moderate('debate', '33333333-0000-0000-0000-000000000003', 'hide',
                             'Two claims in one sentence; ratings on it would mean nothing.') $$,
   'and hides an active one'
 );
@@ -408,20 +408,20 @@ select lives_ok(
 reset role;
 
 select is(
-  (select status::text from public.propositions where id = '33333333-0000-0000-0000-000000000001'),
+  (select status::text from public.debates where id = '33333333-0000-0000-0000-000000000001'),
   'active'::text,
   'the promoted claim is active'
 );
 
 select is(
-  (select activated_at is not null from public.propositions
+  (select activated_at is not null from public.debates
     where id = '33333333-0000-0000-0000-000000000001'),
   true,
   'with the date that says when it joined the record'
 );
 
 select is(
-  (select activated_at from public.propositions where id = '33333333-0000-0000-0000-000000000003'),
+  (select activated_at from public.debates where id = '33333333-0000-0000-0000-000000000003'),
   null::timestamptz,
   'and hiding an active claim drops its activation date, which the CHECK requires'
 );
@@ -445,19 +445,19 @@ select is(
   'and hiding keeps the text and the name, unlike deleting'
 );
 
--- ── Reports ─────────────────────────────────────────────────────────────────────────
+-- ── Flags ───────────────────────────────────────────────────────────────────────────
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('report', '66666666-0000-0000-0000-000000000001', 'resolve_report',
+  $$ select public.moderate('flag', '66666666-0000-0000-0000-000000000001', 'resolve_flag',
                             'Comment hidden.') $$,
-  'a moderator closes a report'
+  'a moderator closes a flag'
 );
 
 select throws_ok(
-  $$ select public.moderate('report', '66666666-0000-0000-0000-000000000001', 'dismiss_report') $$,
+  $$ select public.moderate('flag', '66666666-0000-0000-0000-000000000001', 'dismiss_flag') $$,
   '23514'::text, null::text,
   'and cannot close it twice'
 );
@@ -465,7 +465,7 @@ select throws_ok(
 reset role;
 
 select is(
-  (select resolved_by from public.reports where id = '66666666-0000-0000-0000-000000000001'),
+  (select resolved_by from public.flags where id = '66666666-0000-0000-0000-000000000001'),
   '11111111-0000-0000-0000-000000000003'::uuid,
   'the resolution records a hand as well as a time'
 );
@@ -605,9 +605,9 @@ select is(
 );
 
 select is(
-  (select author_id from public.practices where id = '22222222-0000-0000-0000-000000000004'),
+  (select author_id from public.reports where id = '22222222-0000-0000-0000-000000000004'),
   null::uuid,
-  'their published practice stays in the corpus without a name on it'
+  'their published report stays in the corpus without a name on it'
 );
 
 select is(

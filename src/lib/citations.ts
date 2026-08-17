@@ -1,25 +1,25 @@
 /**
- * The citation graph: which practices and propositions point at which others.
+ * The citation graph: which reports and debates point at which others.
  *
  * This is the module that makes the two halves of the site one thing. Everything else here
- * treats a practice and a proposition as separate kinds of document; this treats them as
+ * treats a report and a debate as separate kinds of document; this treats them as
  * nodes, and resolves either into the same display shape — a title, a URL, and optionally
  * the exact comment that carried the quotation.
  *
  * Read at build time like the rest of the corpus, and resolved against it: a citation row
- * knows only a kind and an id, so the title comes from src/lib/practices.ts or
- * src/lib/propositions.ts. A citation whose endpoint is not in the corpus — hidden since,
+ * knows only a kind and an id, so the title comes from src/lib/reports.ts or
+ * src/lib/debates.ts. A citation whose endpoint is not in the corpus — hidden since,
  * or never published — resolves to nothing and is dropped rather than rendered as a broken
  * link. Row level security already refuses those rows to the anonymous key the build uses;
  * dropping them here is the second lock, for the day the site builds from a JSON export
  * somebody assembled by hand.
  */
 import { path } from './paths';
-import { getPractice } from './practices';
-import { getProposition } from './propositions';
+import { getReport } from './reports';
+import { getDebate } from './debates';
 import { getSupabase } from './supabase';
 
-export type NodeType = 'practice' | 'proposition';
+export type NodeType = 'report' | 'debate';
 
 export interface Citation {
   readonly id: string;
@@ -92,23 +92,23 @@ async function readCitations(): Promise<Citation[]> {
 /**
  * A kind and an id become a title and a URL, or nothing.
  *
- * A proposition's "title" is its statement, which is capped at 200 characters precisely so
+ * A debate's "title" is its statement, which is capped at 200 characters precisely so
  * that it can be used this way: one claim, quotable whole, no truncation needed.
  */
 async function resolve(
   type: NodeType,
   id: string,
 ): Promise<{ type: NodeType; id: string; title: string; href: string } | null> {
-  if (type === 'practice') {
-    const practice = await getPractice(id);
-    return practice
-      ? { type, id, title: practice.title, href: path(`/practices/${id}/`) }
+  if (type === 'report') {
+    const report = await getReport(id);
+    return report
+      ? { type, id, title: report.title, href: path(`/reports/${id}/`) }
       : null;
   }
 
-  const proposition = await getProposition(id);
-  return proposition
-    ? { type, id, title: proposition.statement, href: path(`/propositions/${id}/`) }
+  const debate = await getDebate(id);
+  return debate
+    ? { type, id, title: debate.statement, href: path(`/debates/${id}/`) }
     : null;
 }
 
@@ -160,7 +160,7 @@ export async function referencesTo(type: NodeType, id: string): Promise<Referenc
   );
 }
 
-/** Everything this page points at. Shown alongside, because a proposition built out of
+/** Everything this page points at. Shown alongside, because a debate built out of
  *  three accounts should say so on its own page and not only on theirs. */
 export async function referencesFrom(type: NodeType, id: string): Promise<Reference[]> {
   const all = await readCitations();
@@ -192,7 +192,7 @@ export interface NewCitation {
 /**
  * Record one reference.
  *
- * Called after the comment or proposition it belongs to already exists, because the
+ * Called after the comment or debate it belongs to already exists, because the
  * citation carries that row's id. That ordering means a failure here leaves a posted
  * comment with no citation attached rather than a citation pointing at nothing — the right
  * way round, since the comment is the contribution and the citation is the index entry.
@@ -250,7 +250,7 @@ function describe(error: unknown): string {
       return 'You have reached what one account can link in a day. Try again tomorrow.';
   }
 
-  // The comment or proposition it belongs to has already been posted, so the failure is
+  // The comment or debate it belongs to has already been posted, so the failure is
   // partial rather than total and the message has to say which half survived.
   return 'The text was posted, but the reference to the passage was not recorded.';
 }

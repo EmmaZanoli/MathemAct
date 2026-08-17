@@ -1,4 +1,4 @@
--- Citations, and the reports queue behind the report control.
+-- Citations, and the flags queue behind the flag control.
 --
 -- The rule doing the most work here is that a citation is visible only when **both** of its
 -- endpoints are. That is not symmetry for its own sake. The excerpt column holds a verbatim
@@ -10,8 +10,8 @@
 -- than the policy level. A policy can be loosened by somebody adding a feature; an absent
 -- UPDATE grant refuses before any policy is consulted.
 --
--- Reports get the treatment CLAUDE.md asks for: they live in `public` because a browser
--- moderation UI will read them, which makes "a reporter can read their own and nobody
+-- Flags get the treatment CLAUDE.md asks for: they live in `public` because a browser
+-- moderation UI will read them, which makes "a flagger can read their own and nobody
 -- else's" the assertion that matters most in this file.
 
 begin;
@@ -53,7 +53,7 @@ select is(
 
 -- ── Endpoints ───────────────────────────────────────────────────────────────────────
 
-insert into public.practices (
+insert into public.reports (
   id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
   verification, third_party_material_confirmed
 ) values
@@ -74,7 +74,7 @@ insert into public.practices (
    'hidden', 'Hidden by a moderator', 'research', 'other',
    'Something.', 'Something else.', 'failed', 'It did not.', 'Checked it.', true);
 
-insert into public.propositions (id, author_id, statement, status, activated_at, area)
+insert into public.debates (id, author_id, statement, status, activated_at, area)
 values
   ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001',
    'Every AI-generated proof step must be checked by a human before publication.',
@@ -82,11 +82,11 @@ values
 
 insert into public.comments (id, parent_type, parent_id, author_id, body)
 values
-  ('44444444-0000-0000-0000-000000000001', 'practice', '22222222-0000-0000-0000-000000000001',
+  ('44444444-0000-0000-0000-000000000001', 'report', '22222222-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000002', 'Was the hypothesis necessary or convenient?'),
-  ('44444444-0000-0000-0000-000000000002', 'proposition', '33333333-0000-0000-0000-000000000001',
+  ('44444444-0000-0000-0000-000000000002', 'debate', '33333333-0000-0000-0000-000000000001',
    '11111111-0000-0000-0000-000000000001', 'This is the case I had in mind.'),
-  ('44444444-0000-0000-0000-000000000003', 'practice', '22222222-0000-0000-0000-000000000002',
+  ('44444444-0000-0000-0000-000000000003', 'report', '22222222-0000-0000-0000-000000000002',
    '11111111-0000-0000-0000-000000000001', 'Compare the Lean account, which found the gap.');
 
 -- ── Citations ───────────────────────────────────────────────────────────────────────
@@ -94,21 +94,21 @@ values
 insert into public.citations
   (id, source_type, source_id, source_comment_id, target_type, target_id, excerpt, context, created_by)
 values
-  -- A proposition resting on a practice: the case the whole table exists for.
-  ('55555555-0000-0000-0000-000000000001', 'proposition', '33333333-0000-0000-0000-000000000001',
-   null, 'practice', '22222222-0000-0000-0000-000000000001',
+  -- A debate resting on a report: the case the whole table exists for.
+  ('55555555-0000-0000-0000-000000000001', 'debate', '33333333-0000-0000-0000-000000000001',
+   null, 'report', '22222222-0000-0000-0000-000000000001',
    'It found a missing hypothesis.', 'The account that prompted this claim.',
    '11111111-0000-0000-0000-000000000001'),
 
-  -- A practice referencing another from inside its discussion.
-  ('55555555-0000-0000-0000-000000000002', 'practice', '22222222-0000-0000-0000-000000000002',
-   '44444444-0000-0000-0000-000000000003', 'practice', '22222222-0000-0000-0000-000000000001',
+  -- A report referencing another from inside its discussion.
+  ('55555555-0000-0000-0000-000000000002', 'report', '22222222-0000-0000-0000-000000000002',
+   '44444444-0000-0000-0000-000000000003', 'report', '22222222-0000-0000-0000-000000000001',
    'Lean accepted the proof.', 'A verification that actually caught something.',
    '11111111-0000-0000-0000-000000000001'),
 
-  -- Pointing at a practice a moderator has hidden.
-  ('55555555-0000-0000-0000-000000000003', 'practice', '22222222-0000-0000-0000-000000000001',
-   null, 'practice', '22222222-0000-0000-0000-000000000004',
+  -- Pointing at a report a moderator has hidden.
+  ('55555555-0000-0000-0000-000000000003', 'report', '22222222-0000-0000-0000-000000000001',
+   null, 'report', '22222222-0000-0000-0000-000000000004',
    'Something.', 'Should vanish with its target.',
    '11111111-0000-0000-0000-000000000001');
 
@@ -123,7 +123,7 @@ select is(
 select is_empty(
   $$ select id from public.citations
       where target_id = '22222222-0000-0000-0000-000000000004' $$,
-  'and none pointing at a hidden practice, so the stored excerpt cannot outlive the original'
+  'and none pointing at a hidden report, so the stored excerpt cannot outlive the original'
 );
 
 reset role;
@@ -145,7 +145,7 @@ set local role anon;
 
 select throws_ok(
   $$ insert into public.citations (source_type, source_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000002', 'proposition',
+     values ('report', '22222222-0000-0000-0000-000000000002', 'debate',
              '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000002') $$,
   '42501'::text, null::text,
   'anon cannot create a citation'
@@ -158,7 +158,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","
 
 select throws_ok(
   $$ insert into public.citations (source_type, source_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000002', 'proposition',
+     values ('report', '22222222-0000-0000-0000-000000000002', 'debate',
              '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000003') $$,
   '42501'::text, null::text,
   'an unconfirmed account cannot create one'
@@ -171,7 +171,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000004","
 
 select throws_ok(
   $$ insert into public.citations (source_type, source_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000002', 'proposition',
+     values ('report', '22222222-0000-0000-0000-000000000002', 'debate',
              '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000004') $$,
   '42501'::text, null::text,
   'a banned account cannot create one'
@@ -184,7 +184,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","
 
 select throws_ok(
   $$ insert into public.citations (source_type, source_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000002', 'proposition',
+     values ('report', '22222222-0000-0000-0000-000000000002', 'debate',
              '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001') $$,
   '42501'::text, null::text,
   'a member cannot create a citation under somebody else''s name'
@@ -193,7 +193,7 @@ select throws_ok(
 -- The target exists and is real; this caller simply cannot see it.
 select throws_ok(
   $$ insert into public.citations (source_type, source_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000002', 'practice',
+     values ('report', '22222222-0000-0000-0000-000000000002', 'report',
              '22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000002') $$,
   '42501'::text, null::text,
   'a member cannot cite a target they cannot see'
@@ -202,7 +202,7 @@ select throws_ok(
 -- Only the CHECK can refuse this one: every clause of the insert policy passes.
 select throws_ok(
   $$ insert into public.citations (source_type, source_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000002', 'practice',
+     values ('report', '22222222-0000-0000-0000-000000000002', 'report',
              '22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000002') $$,
   '23514'::text, null::text,
   'a page cannot reference itself'
@@ -218,8 +218,8 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","
 select throws_ok(
   $$ insert into public.citations
        (source_type, source_id, source_comment_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
-             '44444444-0000-0000-0000-000000000001', 'proposition',
+     values ('report', '22222222-0000-0000-0000-000000000001',
+             '44444444-0000-0000-0000-000000000001', 'debate',
              '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001') $$,
   '42501'::text, null::text,
   'a member cannot hang a citation off somebody else''s comment'
@@ -231,8 +231,8 @@ select throws_ok(
 select throws_ok(
   $$ insert into public.citations
        (source_type, source_id, source_comment_id, target_type, target_id, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000001',
-             '44444444-0000-0000-0000-000000000002', 'proposition',
+     values ('report', '22222222-0000-0000-0000-000000000001',
+             '44444444-0000-0000-0000-000000000002', 'debate',
              '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001') $$,
   '23503'::text, null::text,
   'a source comment must belong to the page doing the citing'
@@ -246,7 +246,7 @@ set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","
 
 insert into public.citations
   (source_type, source_id, target_type, target_id, excerpt, context, created_by)
-values ('practice', '22222222-0000-0000-0000-000000000002', 'practice',
+values ('report', '22222222-0000-0000-0000-000000000002', 'report',
         '22222222-0000-0000-0000-000000000001',
         'Lean accepted the proof.', 'The same passage, cited from the page itself.',
         '11111111-0000-0000-0000-000000000002');
@@ -254,7 +254,7 @@ values ('practice', '22222222-0000-0000-0000-000000000002', 'practice',
 select throws_ok(
   $$ insert into public.citations
        (source_type, source_id, target_type, target_id, excerpt, created_by)
-     values ('practice', '22222222-0000-0000-0000-000000000002', 'practice',
+     values ('report', '22222222-0000-0000-0000-000000000002', 'report',
              '22222222-0000-0000-0000-000000000001', 'Lean accepted the proof.',
              '11111111-0000-0000-0000-000000000002') $$,
   '23505'::text, null::text,
@@ -320,21 +320,21 @@ select is(
   'and a moderator may remove one whose excerpt should not be there'
 );
 
--- ── Reports ─────────────────────────────────────────────────────────────────────────
+-- ── Flags ───────────────────────────────────────────────────────────────────────────
 
 select ok(
-  not has_table_privilege('anon', 'public.reports', 'SELECT'),
-  'anon has no endpoint on reports at all, not merely no rows'
+  not has_table_privilege('anon', 'public.flags', 'SELECT'),
+  'anon has no endpoint on flags at all, not merely no rows'
 );
 
 set local role anon;
 
 select throws_ok(
-  $$ insert into public.reports (subject_type, subject_id, reporter_id, reason)
+  $$ insert into public.flags (subject_type, subject_id, flagger_id, reason)
      values ('comment', '44444444-0000-0000-0000-000000000002',
              '11111111-0000-0000-0000-000000000002', 'abusive') $$,
   '42501'::text, null::text,
-  'anonymous reporting is not offered: a volunteer moderator''s first question is who filed it'
+  'anonymous flagging is not offered: a volunteer moderator''s first question is who filed it'
 );
 
 reset role;
@@ -342,31 +342,31 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
 
-insert into public.reports (subject_type, subject_id, reporter_id, reason, detail)
+insert into public.flags (subject_type, subject_id, flagger_id, reason, detail)
 values ('comment', '44444444-0000-0000-0000-000000000002',
         '11111111-0000-0000-0000-000000000002', 'inaccurate',
         'The transcript does not show what this claims it shows.');
 
 select throws_ok(
-  $$ insert into public.reports (subject_type, subject_id, reporter_id, reason)
+  $$ insert into public.flags (subject_type, subject_id, flagger_id, reason)
      values ('comment', '44444444-0000-0000-0000-000000000002',
              '11111111-0000-0000-0000-000000000002', 'spam') $$,
   '23505'::text, null::text,
-  'reporting the same thing twice is refused: it is not a stronger signal'
+  'flagging the same thing twice is refused: it is not a stronger signal'
 );
 
 select throws_ok(
-  $$ insert into public.reports (subject_type, subject_id, reporter_id, reason, status)
+  $$ insert into public.flags (subject_type, subject_id, flagger_id, reason, status)
      values ('comment', '44444444-0000-0000-0000-000000000001',
              '11111111-0000-0000-0000-000000000002', 'spam', 'dismissed') $$,
   '42501'::text, null::text,
-  'a reporter cannot file something already resolved: status has no INSERT grant'
+  'a flagger cannot file something already resolved: status has no INSERT grant'
 );
 
 select is(
-  (select count(*)::int from public.reports),
+  (select count(*)::int from public.flags),
   1,
-  'a reporter sees their own report'
+  'a flagger sees their own flag'
 );
 
 reset role;
@@ -375,9 +375,9 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.reports),
+  (select count(*)::int from public.flags),
   0,
-  'and nobody else does -- including the person who was reported'
+  'and nobody else does -- including the person who was flagged'
 );
 
 reset role;
@@ -386,25 +386,25 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
 select is(
-  (select count(*)::int from public.reports),
+  (select count(*)::int from public.flags),
   1,
   'a moderator sees the queue'
 );
 
 reset role;
 
--- A report that can be retracted after a moderator has read it makes the log incomplete in
+-- A flag that can be retracted after a moderator has read it makes the log incomplete in
 -- exactly the cases that matter. Since 20260815200300 the resolution columns have no UPDATE
 -- grant at all, so a direct write fails at the grant, before any policy is consulted — for
--- the reporter and for the moderator alike. Resolving a report is an audited action and
+-- the flagger and for the moderator alike. Resolving a flag is an audited action and
 -- public.moderate() is the only route to it.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000002","role":"authenticated"}';
 
 select throws_ok(
-  $$ update public.reports set status = 'dismissed', resolved_at = now() $$,
+  $$ update public.flags set status = 'dismissed', resolved_at = now() $$,
   '42501'::text, null::text,
-  'a reporter cannot resolve their own report'
+  'a flagger cannot resolve their own flag'
 );
 
 reset role;
@@ -413,29 +413,29 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000005","role":"authenticated"}';
 
 select throws_ok(
-  $$ update public.reports set status = 'actioned', resolved_at = now(),
+  $$ update public.flags set status = 'actioned', resolved_at = now(),
             resolved_by = '11111111-0000-0000-0000-000000000005' $$,
   '42501'::text, null::text,
   'and neither can a moderator by hand: that would be a decision with no record of itself'
 );
 
 select lives_ok(
-  $$ select public.moderate('report', (select id from public.reports limit 1),
-                            'resolve_report', 'The comment has been hidden.') $$,
+  $$ select public.moderate('flag', (select id from public.flags limit 1),
+                            'resolve_flag', 'The comment has been hidden.') $$,
   'a moderator closes it through the audited path'
 );
 
 reset role;
 
 select is(
-  (select resolved_by from public.reports limit 1),
+  (select resolved_by from public.flags limit 1),
   '11111111-0000-0000-0000-000000000005'::uuid,
   'and the resolution records a hand as well as a time'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.reports', 'DELETE'),
-  'nothing can delete a report: the queue is a record of what was raised'
+  not has_table_privilege('authenticated', 'public.flags', 'DELETE'),
+  'nothing can delete a flag: the queue is a record of what was raised'
 );
 
 -- ── The rate limits are actually attached ───────────────────────────────────────────
@@ -446,8 +446,8 @@ select has_trigger(
 );
 
 select has_trigger(
-  'public', 'reports', 'reports_daily_limit',
-  'and so is the report queue, which has the lowest limit on the site'
+  'public', 'flags', 'flags_daily_limit',
+  'and so is the flag queue, which has the lowest limit on the site'
 );
 
 -- ── Erasure detaches rather than destroys ───────────────────────────────────────────

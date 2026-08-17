@@ -14,13 +14,13 @@
  *   The tombstone carries the outcome colour and nothing else does. The labels stay in ink,
  *   partly because --outcome-partial is 4.4:1 on the ground and short of the floor for
  *   text, and mostly because colour must never be the only thing saying what an option is.
- *   Every square is open, because a practice nobody has confirmed is unverified whatever
+ *   Every square is open, because a report nobody has confirmed is unverified whatever
  *   its outcome. Filling the "worked" square would be a claim the submission cannot make.
  *   The line underneath says the thing outright. Layout can imply a ranking no matter how
  *   carefully it is balanced; a sentence cannot be misread as easily.
  */
 import Tombstone from './Tombstone.astro';
-import { OUTCOME_CHOICES } from '../lib/practice-schema';
+import { OUTCOME_CHOICES } from '../lib/report-schema';
 
 interface Props {
   name: string;
