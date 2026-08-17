@@ -181,15 +181,29 @@ export async function saveRating(
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
+  // upsert() generates ON CONFLICT DO UPDATE SET proposition_id, user_id, score — but the
+  // authenticated role only has UPDATE (score). PostgreSQL checks column-level UPDATE
+  // privileges at parse time for all SET columns, even when no conflict occurs, so every
+  // upsert fails with 42501. INSERT then UPDATE avoids the problem: the UPDATE SET clause
+  // only touches score, which is the one column that is granted.
   try {
-    const { error } = await supabase
+    const { error: insertError } = await supabase
       .from('ratings')
-      .upsert(
-        { proposition_id: propositionId, user_id: userId, score },
-        { onConflict: 'proposition_id,user_id' },
-      );
+      .insert({ proposition_id: propositionId, user_id: userId, score });
 
-    if (error) return { ok: false, message: describe(error) };
+    if (!insertError) return { ok: true, value: null };
+
+    if (insertError.code !== '23505') {
+      return { ok: false, message: describe(insertError) };
+    }
+
+    const { error: updateError } = await supabase
+      .from('ratings')
+      .update({ score })
+      .eq('proposition_id', propositionId)
+      .eq('user_id', userId);
+
+    if (updateError) return { ok: false, message: describe(updateError) };
     return { ok: true, value: null };
   } catch (error) {
     return { ok: false, message: describe(error) };
