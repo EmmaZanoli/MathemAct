@@ -125,13 +125,14 @@ declare
     -- The flags table only, whose objects are still named reports_*.
     array['flags',        'reports_',      'flags_'],
     array['flags',        'reporter',      'flagger'],
-    -- Everything else.
-    array['%',            'practices_',    'reports_'],
-    array['%',            'practice_',     'report_'],
-    array['%',            'propositions_', 'debates_'],
-    array['%',            'proposition_',  'debate_'],
-    array['%',            'resources_',    'network_entries_'],
-    array['%',            'resource_',     'network_']
+    -- Everything else. No trailing underscore in the pattern, because the word is not
+    -- always followed by one: the trigger `ratings_promote_proposition` ends in it.
+    array['%',            'practices',     'reports'],
+    array['%',            'practice',      'report'],
+    array['%',            'propositions',  'debates'],
+    array['%',            'proposition',   'debate'],
+    array['%',            'resources',     'network_entries'],
+    array['%',            'resource',      'network']
   ];
   v_pair  text[];
   v_row   record;
@@ -1749,11 +1750,18 @@ begin
        and not g.tgisinternal
        and g.tgname ~ '(practice|proposition|resource|reporter)'
     union all
+    -- Tables and views only. An index has pg_attribute rows of its own, and Postgres does
+    -- not rewrite their attnames when the underlying table column is renamed, so
+    -- report_tools_report_idx keeps a key column called practice_id for ever. Nothing reads
+    -- it: \d prints an index through pg_get_indexdef, which resolves against the table. It
+    -- is an artefact, not a leftover, and including indexes here made this assertion fail on
+    -- a rename that was complete.
     select 'column ' || c.relname || '.' || a.attname
       from pg_attribute a
       join pg_class c on c.oid = a.attrelid
       join pg_namespace n on n.oid = c.relnamespace
      where n.nspname in ('public', 'private')
+       and c.relkind in ('r', 'v', 'm', 'p')
        and a.attnum > 0
        and not a.attisdropped
        and a.attname ~ '(practice|proposition|resource|reporter)'
