@@ -35,10 +35,12 @@ confirmed their role via localStorage, using the same pattern as the sign-in ind
 | ✅ | The submission form: twelve sections, draft autosave, one-transaction submit |
 | ✅ | Reading: listing with linkable filters, practice pages, author pages |
 | ✅ | Propositions, the agreement scale, and the histogram — median, never a mean |
+| ✅ | Resources: submission, moderation, and a monthly link check |
 | ✅ | Discussion, the citation graph, and the report queue |
 | ✅ | Moderation: an audited queue, and erasure that erases |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |
-| ⬜ | Search, and an edit screen for a submission sent back |
+| ✅ | Editing and resubmitting a submission a moderator sent back |
+| ⬜ | Search |
 
 The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
 the dashboard configuration in [docs/auth.md](docs/auth.md). Without them they render a
@@ -72,6 +74,15 @@ reading still works if the database is paused or over quota.
 The one read a browser makes is the freshness overlay: a listing hydrates from the static
 page and then asks, once and with a cap, whether anything has been posted since the export.
 It fails silently, because the page is already correct without it.
+
+Anything the overlay surfaces has no static page yet, so it links to a client-rendered view
+page — `/practices/view/`, `/propositions/view/`, `/authors/view/` — which fetches the row at
+runtime and is replaced by the real page at the next build. A view page only ever links to
+other view pages: it exists precisely when the export cannot be trusted to contain the rows,
+so a link out of it into a generated page would be a 404 one level down. The governing rule
+is that **a page exists exactly where a link to it exists**, which is why an author page
+covers practice authors, proposition authors, and resource submitters — everyone whose name
+is a link — and why comment authors, whose names are not links, have none.
 
 That same nightly job is the backup, the citable CC BY dataset, and — because a free Supabase
 project pauses after about a week without a connection — the keep-alive.
@@ -180,17 +191,22 @@ database monthly and reports what the matcher makes of real mathematics institut
 ## Repository layout
 
 ```
-src/pages/              home, about, privacy, code of conduct, 404
-src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase
+src/pages/              home, about, privacy, code of conduct, search, 404
+src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase,
+                        edit and resubmit a submission sent back
 src/pages/practices/    the listing, a practice, the submission form
-src/pages/authors/      one contributor's published practices
+src/pages/authors/      one contributor's practices, propositions, and submitted resources
 src/pages/propositions/ the index, a proposition, and the suggest form
+src/pages/resources/    the listing and the submission form
+src/pages/moderate/     the queues; ships as the 404 page and reveals itself to a moderator
+*/view.astro            client-rendered stand-ins for pages the last export predates
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
 src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)
 src/lib/                paths, site constants, status vocabulary, markdown, auth, session,
                         session-hint (sign-in localStorage guess), mod-hint (moderator
                         localStorage guess), profile queries, validation, formatting,
-                        form helpers
+                        form helpers, the corpus readers (practices, propositions,
+                        resources), authors (who gets a page), fresh (the overlay)
 src/styles/             tokens.css (single source of truth), base.css, forms.css
 public/fonts/           self-hosted IBM Plex woff2 + the @font-face that loads them
 data/                   the committed export the site builds from, plus the CSV dataset
@@ -199,7 +215,8 @@ supabase/migrations/    numbered SQL, applied in order, append-only
 supabase/tests/         pgTAP: RLS, grants, triggers, matching
 scripts/load-ror.mjs    streams the ROR dump into the private schema
 scripts/export.mjs      writes data/ from the database; the whole read path
-.github/workflows/      deploy, migrate, test-db, ror-verify, auth-config, export
+.github/workflows/      deploy, migrate, test-db, ror-verify, auth-config, export,
+                        link-check, embed
 docs/                   decisions log, ROR notes, auth runbook, moderation runbook,
                         code of conduct
 ```
