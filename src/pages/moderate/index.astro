@@ -391,6 +391,7 @@ import { path } from '../../lib/paths';
     moderates,
     NEEDS_REASON,
   } from '../../lib/moderation';
+  import { setModHint, clearModHint } from '../../lib/mod-hint';
   import type {
     Action,
     QueueAuthor,
@@ -424,12 +425,17 @@ import { path } from '../../lib/paths';
     query<HTMLElement>('[data-fixtures]').hidden = false;
   } else {
     subscribeToSession(async (state) => {
+      if (state.status === 'signed-out') {
+        clearModHint();
+        return;
+      }
       if (state.status !== 'signed-in') return;
       if (opened) return;
 
       role = await loadRole(state.userId);
       if (!moderates(role)) return;
 
+      setModHint();
       open();
     });
 

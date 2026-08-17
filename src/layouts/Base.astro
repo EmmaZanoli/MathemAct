@@ -118,6 +118,14 @@ const year = new Date().getFullYear();
 
               {
                 !landing && (
+                  <li data-mod-link hidden>
+                    <a href={path('/moderate/')}>Moderation</a>
+                  </li>
+                )
+              }
+
+              {
+                !landing && (
                   <li class="nav__account" data-account-link="out" hidden>
                     <a href={path('/account/sign-in/')}>Sign in</a>
                   </li>
@@ -163,14 +171,18 @@ const year = new Date().getFullYear();
 
     <script>
       // Deliberately the only script on a reading page, and it imports nothing from
-      // Supabase. See src/lib/session-hint.ts.
+      // Supabase. See src/lib/session-hint.ts and src/lib/mod-hint.ts.
       import { readSessionHint } from '../lib/session-hint';
+      import { readModHint } from '../lib/mod-hint';
 
       const hint = readSessionHint();
 
       for (const item of document.querySelectorAll<HTMLElement>('[data-account-link]')) {
         item.hidden = item.dataset.accountLink !== hint;
       }
+
+      const modLink = document.querySelector<HTMLElement>('[data-mod-link]');
+      if (modLink) modLink.hidden = !readModHint();
     </script>
 
     <main id="main">
