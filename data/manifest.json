@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-08-16T11:32:46.883Z",
+  "exportedAt": "2026-08-17T04:02:37.018Z",
   "generator": "scripts/export.mjs",
   "licence": "CC BY 4.0",
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
@@ -32,6 +32,10 @@
       "rows": 0,
       "bytes": 3
     },
+    "resources.json": {
+      "rows": 0,
+      "bytes": 3
+    },
     "csv/practices.csv": {
       "rows": 0,
       "bytes": 369
@@ -43,6 +47,10 @@
     "csv/practice-tags.csv": {
       "rows": 0,
       "bytes": 32
+    },
+    "csv/resources.csv": {
+      "rows": 0,
+      "bytes": 215
     }
   }
 }
