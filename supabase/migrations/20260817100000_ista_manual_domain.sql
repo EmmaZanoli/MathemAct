@@ -11,6 +11,13 @@
 -- institution's former address; see https://ista.ac.at/en/institute/ and archived
 -- pages at ist.ac.at prior to 2022.
 
+-- Ensure ISTA is in ror_institutions. The ROR dump loaded into production predates
+-- ISTA's entry (or the entry arrived after the last loader run). ON CONFLICT DO NOTHING
+-- makes this safe to leave in place once the loader catches up.
+insert into private.ror_institutions (ror_id, name, country_code, country_name)
+values ('03gnh5541', 'Institute of Science and Technology Austria', 'AT', 'Austria')
+on conflict (ror_id) do nothing;
+
 insert into private.manual_domains (domain, ror_id, added_by, evidence) values
   ('ist.ac.at', '03gnh5541', 'emma.zanoli',
    'IST Austria / ISTA (Institute of Science and Technology Austria), ROR 03gnh5541, '
