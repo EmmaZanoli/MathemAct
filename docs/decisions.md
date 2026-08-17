@@ -1407,3 +1407,18 @@ one link that was broken was in `/practices/view/`, and it is the one that chang
 **CLAUDE.md note** — the "Fresh cards link to /practices/view/?id=<id>" trap bullet now has
 a third view page to name, and the repo layout entry for `src/pages/authors/` covers two
 files rather than one.
+
+## 2026-08-17 — Resource submitter badges: the compact variant, and a sibling
+
+`/resources/` passed `profile={resource.submitter}` to `Badges`, which takes `institution`.
+Astro does not fail on an unknown prop, so the component rendered its no-institution branch
+on every row and the badge was silently blank for everyone. `astro check` had it as a type
+error the whole time, which is the argument for keeping that at zero.
+
+Two things about the fix. It uses `compact`, the one-line variant written for comment
+headers: the full badge block is a bordered card that also states Registered, and one per
+row down a list would be the loudest thing on the page — the same reasoning, and the reason
+that variant exists rather than a line written somewhere else. And it sits *outside*
+`.resource-card__submitter` rather than inside it, because `.badge-line` is a `<p>` and a
+`<p>` is not phrasing content — inside a `<span>` it is invalid markup. `.resource-card__meta`
+is a wrapping flex row, so a sibling lands where the child would have.

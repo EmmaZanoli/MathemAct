@@ -107,14 +107,22 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
                     {categoryLabel(resource.category as ResourceCategory)}
                   </span>
                   {resource.submitter && (
-                    <span class="resource-card__submitter">
-                      Submitted by{' '}
-                      <a href={path(`/authors/${resource.submitter.id}/`)}>
-                        {resource.submitter.displayName}
-                        {resource.submitter.isPseudonym && ' (a pseudonym)'}
-                      </a>
-                      <Badges profile={resource.submitter} />
-                    </span>
+                    <Fragment>
+                      <span class="resource-card__submitter">
+                        Submitted by{' '}
+                        <a href={path(`/authors/${resource.submitter.id}/`)}>
+                          {resource.submitter.displayName}
+                          {resource.submitter.isPseudonym && ' (a pseudonym)'}
+                        </a>
+                      </span>
+                      {/* Compact, and a sibling rather than a child of the line above. The
+                          full badge block is a bordered card that also states Registered,
+                          which on every row of a list would be the loudest thing on the
+                          page — the same reasoning that gave comment headers this variant.
+                          Outside the span because `.badge-line` is a <p>, which is not
+                          phrasing content and may not sit inside one. */}
+                      <Badges institution={resource.submitter.institution} compact />
+                    </Fragment>
                   )}
                   {!resource.submitter && (
                     <span class="resource-card__submitter resource-card__erased">
