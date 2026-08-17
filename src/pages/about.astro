@@ -15,202 +15,119 @@ $$\zeta(s) = \prod_{p \text{ prime}} \frac{1}{1 - p^{-s}}, \qquad \Re(s) > 1.$$`
 <Page
   title="About"
   description="What MathemAct is for, why accounts follow a fixed schema, and how verification works."
-  lead="MathemAct is a record of how mathematicians actually use AI tools, kept in a form that can be read as evidence rather than as opinion."
+  lead="MathemAct is a place for mathematicians to document, examine, and shape how AI is becoming part of mathematical practice."
 >
-  <h2>What this is for</h2>
+  <h2>Why MathemAct</h2>
 
   <p>
-    Something is happening to mathematical practice, and almost none of it is written
-    down. Tools get used in the middle of real work, they help or they mislead, and the
-    account of what happened stays in a corridor conversation or a group chat. When the
-    paper appears there is often no trace of any of it.
-  </p>
-
-  <p>
-    That is a poor position for a discipline to be in while it decides its norms. Norms
-    set on the basis of impressions tend to be either too permissive or too strict, and
-    both are expensive. MathemAct exists to give the argument something to stand on.
-  </p>
-
-  <h2>Principles and practice</h2>
-
-  <p>
-    In {LEIDEN.published} the <a href={LEIDEN.url}>{LEIDEN.name}</a>, endorsed by the
-    International Mathematical Union, asked researchers to <q>{LEIDEN.quotes.disclosure}</q
-    >. It added, sensibly, that <q>{LEIDEN.quotes.evolving}</q>.
+    AI tools are already being used in mathematical research, learning, teaching, and writing. But most of what
+    we learn from using them disappears: what worked, what failed, what required careful checking, and what changed
+    the way we approached a problem.
   </p>
 
   <p>
-    MathemAct is the layer underneath. It is not a general forum about AI and it takes no
-    position on whether these tools are good for mathematics. Its job is narrower: to
-    accumulate a corpus concrete and well-structured enough that a journal could adopt the
-    posting schema as a disclosure template, and that anyone arguing about norms has cases
-    to point at.
-  </p>
-
-  <p class="disclaimer">
-    MathemAct is an independent project. It is not affiliated with the Leiden Declaration,
-    its working group, or the International Mathematical Union, and carries no endorsement
-    from any of them.
-  </p>
-
-  <h2>Why a fixed schema</h2>
-
-  <p>
-    Every constraint the form places on what you can write is deliberate. A free-text box
-    produces prose that reads well and cannot be compared with anything. A schema produces
-    accounts that can be filtered by task, grouped by tool, counted by outcome, and read
-    side by side five years from now. This is closer to a reporting standard — CONSORT,
-    PRISMA — than to a message board, and it is meant to be.
+    MathemAct exists to make that experience visible.
   </p>
 
   <p>
-    One field carries more weight than the rest. <strong
-      >How you verified correctness</strong
-    > is required on every account, with no skip and no <q>not applicable</q>. An account
-    without it records that something felt right, which is not a finding. With it, the
-    account tells a reader what standard of checking was actually applied, and that is the
-    thing a mathematician needs in order to judge whether to trust the rest.
+    The goal is not to decide whether AI is good or bad for mathematics. It is to build a public record
+    of how these tools are actually being used, so that mathematicians can learn from one another and make
+    informed decisions about how mathematical practice should evolve.
+  </p>
+
+  <h2>A record of practice</h2>
+
+  <p>
+    MathemAct is built around first-hand accounts rather than general opinions.
   </p>
 
   <p>
-    Accounts that report failure are worth as much as accounts that report success, and
-    often more, because failure modes are what nobody publishes. Nothing in the form or
-    the interface treats a failure as the lesser contribution.
+    Contributions follow a common structure: what you were trying to do, which tool you used, what happened,
+    and - crucially - <b>how you checked that the result was correct.</b>
   </p>
 
-  <h3>Writing mathematics</h3>
+  <p>
+    Failures belong here as much as successes. So do partial successes, unexpected uses, and approaches
+    that stopped working when models changed.
+  </p>
+
+  <p>
+    The structure is deliberate. It makes individual experiences easier to compare, search, revisit, and
+    eventually study as a collective record.
+  </p>
+
+  <h2>A space to learn, question, and build</h2>
+
+  <p>
+    MathemAct has three parts:
+    <ul>
+      <li><b>Educate</b> collects concrete practices and experiences from which we can all learn.</li>
+      <li><b>Agitate</b> is a place to question existing habits and propose alternative ones.</li>
+      <li><b>Organize</b> gathers the tools, resources, projects, and people needed to turn those ideas into practice.</li>
+    </ul>
+  </p>
+
+  <p>
+    The three names are a reference to a quote by Antonio Gramsci. The point here is that the changes
+    brought by AI should not merely happen to mathematical practice; mathematicians should be equipped to shape
+    them collectively.
+  </p>
+
+  <h2>Openness and trust</h2>
+
+  <p>
+    Contributions can be made under a real name or a pseudonym. Institutional verification is available for
+    people who want to establish that they are connected to a research institution without revealing their
+    email address.
+  </p>
+
+  <p>
+    Published contributions are openly available under a <a href={LICENCE.url} rel="license"
+      >{LICENCE.fullName} ({LICENCE.name})</a
+    >, and the underlying corpus is made available as structured data.
+  </p>
+
+ 
+
+  <p>
+    While MathemAct was not inspired by the <a class="principles__link" href={LEIDEN.url}>Leiden Declaration on Artificial Intelligence and Mathematics</a>, its aims
+    closely align with the declaration’s call for transparent disclosure of AI and computational tools in
+    mathematical work.
+  </p>
+
+  <p>
+    MathemAct is an independent project and is not affiliated with any existing group or institution.
+  </p>
+
+  <h2>An experiment</h2>
+
+  <p>
+    MathemAct is itself experimental and the code is <a href={SITE.repository}>public</a>. Its structure,
+    categories, and ways of presenting information will evolve as people use it and as mathematical practice changes. 
+  </p>
+
+  <p>
+    Suggestions, criticism, complaints, and reports of things that do not work are especially useful. You can
+    send them to <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+  </p>
+
+  <h2>Writing mathematics</h2>
 
   <p>
     Accounts are written in Markdown, and TeX between dollar signs is rendered when the
     page is built. Nothing is sent to a third-party service to typeset it.
   </p>
 
-  {/* Wrapped rather than styled via a class on <Markdown> directly: Astro's scoped
-      styles key off a per-file attribute that is not applied to a child component's root
-      element, so `.example` on the component would compile to a selector that matches
-      nothing. The wrapper is an element of this file, so it is scoped normally. */}
-  <div class="example">
-    <Markdown content={mathExample} />
-  </div>
-
-  <h2>How verification works</h2>
-
-  <p>Two signals. Institutional stacks on top of Registered.</p>
-
-  <dl class="tiers">
-    <dt>Registered</dt>
-    <dd>
-      A confirmed email address at any domain. Shows your display name and nothing else.
-    </dd>
-
-    <dt>Institutional</dt>
-    <dd>
-      A confirmed email address whose domain matches a record in the
-      <a href="https://ror.org/">Research Organization Registry</a>. Shows the institution
-      name, the country, and the month the check was made.
-    </dd>
-  </dl>
+  <h2>Who is behind it</h2>
 
   <p>
-    Affiliation is derived from your confirmed email address by the database itself, never
-    from anything you type. There is no field anywhere that lets you set your own
-    institution, and the columns holding affiliation and verification dates cannot be
-    changed by the account that owns them.
+    MathemAct was started by <b>Anna Zanoli</b>, a PhD student in number theory at IST Austria.
   </p>
 
-  <p>
-    Domain matching uses the registry's own domain records and the longest matching
-    suffix, so <code>maths.ox.ac.uk</code> resolves to Oxford. It does not use rules of
-    thumb about <code>.edu</code> or <code>.ac.uk</code>, because those fail on exactly the
-    institutions this site is for — <code>ens.fr</code>, <code>inria.fr</code>,
-    <code>mis.mpg.de</code>, <code>sissa.it</code>, <code>weizmann.ac.il</code>.
-  </p>
-
-  <h3>What a badge does and does not claim</h3>
-
-  <p>
-    A badge states only what was checked: that on a particular date, an email address at a
-    particular institution's domain was confirmed to work. It does not claim you are
-    faculty there, that you hold any particular position, or that you still work there
-    today. The date of the check is always shown, and re-verification is prompted once a
-    year.
-  </p>
-
-  <p>
-    Your email address itself is never displayed, never returned by the API, never included
-    in the export, and never shown to moderators.
-  </p>
-
-  <p>
-    <strong>A pseudonym is allowed at every tier</strong>, including with an institutional
-    badge. Admitting to heavy reliance on these tools still carries professional risk, and
-    an account that can only be given under a real name is an account that will not be
-    given. Do not attempt to work out who a pseudonymous contributor is.
-  </p>
-
-  <h2>How a practice ages</h2>
-
-  <p>
-    Model, version, and date of use are required on every account, and any signed-in
-    mathematician can record that a practice still works or no longer does. Listings sort
-    by recency. A practice written against a 2025 model may be actively misleading by
-    2026, and the interface has to say so without being read closely:
-  </p>
-
-  <ul class="legend" role="list">
-    <li>
-      <Tombstone status="verified" /> — a correctness check is on record and someone has confirmed
-      it still works
-    </li>
-    <li><Tombstone status="unverified" /> — nobody has confirmed it either way</li>
-    <li><Tombstone status="stale" /> — not rechecked since an older model</li>
-    <li><Tombstone status="broken" /> — someone tried it and reported that it failed</li>
-  </ul>
-
-  <h2>Moderation, licence, and your data</h2>
-
-  <p>
-    Moderation is volunteer-run, which means it is careful and slow rather than instant.
-    Anything posted can be reported, and anything reported can be hidden while it is
-    looked at. The <a href={path('/code-of-conduct/')}>code of conduct</a> sets out what is
-    expected and what happens when it is not met.
-  </p>
-
-  <p>
-    Contributed content is published under <a href={LICENCE.url} rel="license"
-      >{LICENCE.fullName} ({LICENCE.name})</a
-    >. You keep copyright in what you write and you are credited. Everything published is
-    exported nightly as JSON, so the corpus can be analysed or archived by anyone without
-    scraping the site.
-  </p>
-
-  <p>
-    Deleting an account genuinely removes your profile and detaches your content rather
-    than merely hiding it. What is stored, who processes it, and how to have it erased are
-    set out in the <a href={path('/privacy/')}>privacy notice</a>.
-  </p>
-
-  <h2>Who runs this</h2>
-
-  <p>
-    MathemAct was conceived by Anna Zanoli, a PhD researcher at the Institute of Science
-    and Technology Austria (ISTA). The website is built and maintained by her sister Emma.
-    The code is <a href={SITE.repository}>public</a>, and questions, corrections, and
-    objections are welcome at
-    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
-  </p>
-
-  <p>Posting opens once accounts and moderation are in place.</p>
+  <p>The website is built and maintained together with her sister Emma.</p>
 </Page>
 
 <style>
-  .disclaimer {
-    padding-inline-start: var(--space-sm);
-    border-inline-start: var(--border-width-thick) solid var(--rule);
-    color: var(--ink-muted);
-    font-size: var(--size-2);
-  }
 
   /* The rendered TeX sample. Set on a raised surface so it reads as a specimen of the
      rendering rather than as part of the argument. */
