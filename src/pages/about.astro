@@ -1,15 +1,20 @@
 ---
 import Page from '../layouts/Page.astro';
 import Markdown from '../components/Markdown.astro';
-import Tombstone from '../components/Tombstone.astro';
-import { path } from '../lib/paths';
 import { LEIDEN, LICENCE, SITE } from '../lib/site';
 
 /** Demonstrates the markdown-and-TeX pipeline with a definition every reader already
- *  knows, so the example carries no claim of its own. */
+ *  knows, so the example carries no claim of its own.
+ *
+ *  The `$$` delimiters are on their own lines because remark-math 6 reads `$$x$$` written
+ *  on one line as *inline* math, even alone in its own paragraph. It renders — as cramped
+ *  textstyle, with the product's limits beside the operator instead of under it — which is
+ *  why this was wrong here for a while without looking broken. */
 const mathExample = String.raw`The Euler product for $\zeta(s) = \sum_{n \ge 1} n^{-s}$:
 
-$$\zeta(s) = \prod_{p \text{ prime}} \frac{1}{1 - p^{-s}}, \qquad \Re(s) > 1.$$`;
+$$
+\zeta(s) = \prod_{p \text{ prime}} \frac{1}{1 - p^{-s}}, \qquad \Re(s) > 1.
+$$`;
 ---
 
 <Page
@@ -117,6 +122,18 @@ $$\zeta(s) = \prod_{p \text{ prime}} \frac{1}{1 - p^{-s}}, \qquad \Re(s) > 1.$$`
     Accounts are written in Markdown, and TeX between dollar signs is rendered when the
     page is built. Nothing is sent to a third-party service to typeset it.
   </p>
+
+  {/* The specimen the paragraph above is claiming. It was dropped at some point while its
+      const, its import and its .example rule all stayed, which is how it turned up as four
+      unused-declaration hints rather than as a missing demonstration. This audience will
+      judge the typesetting before it reads the sentence, so showing beats asserting.
+
+      Wrapped rather than given class="example": a scoped-style attribute is not applied to
+      a child component's root element, so styling a class passed into Markdown would match
+      nothing. See CLAUDE.md. */}
+  <div class="example">
+    <Markdown content={mathExample} />
+  </div>
 
   <h2>Who is behind it</h2>
 

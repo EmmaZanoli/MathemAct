@@ -1703,3 +1703,45 @@ One thing this moved that had nothing to do with buttons: the network overlay's 
 point was `.corpus__submit` — the button now at the top of the page. It anchors on the empty
 message instead, which is where the list actually belongs. Appending to `[data-corpus]` would
 have worked by accident and put the listing after the `<template>` the cards are cloned from.
+
+## 2026-08-18 — Name the row rather than reflow the select string
+
+`astro check` reported nineteen errors in `loadPendingReport`, every one of them a column
+that "does not exist on type `GenericStringError`". The columns exist. supabase-js infers a
+row from the **literal type** of the select string, and TypeScript widens `'a,' + 'b'` to
+`string`, so a select built by concatenation cannot be parsed and the row type collapses.
+Nothing else in the query is wrong.
+
+They predate the vocabulary rename — the pre-rename `loadPendingPractice` is the same code
+with different identifiers — and they read exactly like rename fallout, which is what makes
+them worth an entry. `astro build` does not typecheck, so they survived every green build.
+
+Two fixes were available. Reflowing the select onto one line restores the literal type and
+would have been a one-line diff; it was rejected because it fixes the problem by accident
+and the next person to wrap that line for readability breaks it again, with no failure that
+names the cause. The other is what `loadProfile` already does with the identically
+concatenated `PROFILE_COLUMNS`: name the row and pass it, `.maybeSingle<ProfileRow>()`. So
+`loadPendingReport` now has a `PendingReportRow` and calls `.single<PendingReportRow>()`.
+
+That is better than a workaround. The nineteen `data.title as string` casts and the two
+`(data as any)` embeds are gone, and the row shape is stated once where a reader can check
+it against the select string above it.
+
+## 2026-08-18 — The about page's TeX specimen, restored and actually in display mode
+
+`about.astro` imported `Markdown`, declared a `mathExample`, and carried an `.example` rule
+whose comment described "the rendered TeX sample" — and rendered none of it. The specimen
+had been dropped from the markup while everything supporting it stayed, so it surfaced as
+four unused-declaration hints rather than as a missing demonstration. The page still claimed,
+in prose, that TeX between dollar signs is rendered at build time. For this audience a claim
+about typesetting with nothing to look at is weaker than no claim.
+
+Restoring it exposed a second thing. The example wrote its display equation as `$$…$$` on a
+single line, and remark-math 6 reads that as **inline** math even alone in its own paragraph
+— so it rendered, in textstyle, with the Euler product's limits beside the `\prod` instead of
+under it. Display math needs the delimiters on their own lines. The sanitiser was cleared of
+suspicion first: with the project's schema, a correctly written display formula keeps its
+class and comes out as `katex-display`.
+
+Worth knowing because it is a contributor-facing default, not a one-page mistake: anybody
+pasting `$$…$$` from a paper onto one line gets cramped inline math and no error.

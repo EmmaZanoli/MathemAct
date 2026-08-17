@@ -366,6 +366,45 @@ export interface PendingReportForEdit {
 }
 
 /**
+ * The row that query asks for, named because the query cannot describe itself.
+ *
+ * supabase-js infers the row from the *literal type* of the select string, and a string
+ * built with `+` is not a literal — TypeScript widens `'a,' + 'b'` to `string`. The parser
+ * then gives up and types `data` as `GenericStringError`, so every `data.title` in the
+ * block below is an error rather than a column. Nineteen of them, all reading as though
+ * the columns had been renamed out from under the query, when the query is fine and the
+ * string is the only thing wrong.
+ *
+ * Passing the row type to `.single<T>()` settles it, which is what `loadProfile` already
+ * does with `PROFILE_COLUMNS` — same concatenated select, no errors, because it names its
+ * row. Reformatting the select onto one line would also work and would be worse: it would
+ * fix this by accident, and the next person to wrap the line would break it again.
+ */
+interface PendingReportRow {
+  id: string;
+  title: string;
+  area: Area;
+  task_type: TaskType;
+  aim: string;
+  method: string;
+  outcome: Outcome;
+  outcome_notes: string;
+  verification: string;
+  transcript_excerpt: string | null;
+  transcript_url: string | null;
+  caveats: string | null;
+  third_party_material_confirmed: boolean;
+  time_spent_minutes: number | null;
+  was_published: boolean | null;
+  was_disclosed: boolean | null;
+  author_confidence: number | null;
+  moderation_note: string | null;
+  moderation_note_at: string | null;
+  report_tools: { id: string; tool_name: string; tool_version: string; used_on: string }[];
+  report_tags: { tags: { code: string } | null }[];
+}
+
+/**
  * The full content of one pending report, owned by the caller.
  *
  * Used to pre-fill the edit form. The explicit author_id and status filters agree with the
@@ -392,7 +431,7 @@ export async function loadPendingReport(
       .eq('id', reportId)
       .eq('author_id', userId)
       .eq('status', 'pending')
-      .single();
+      .single<PendingReportRow>();
 
     if (error) {
       if (error.code === 'PGRST116') {
@@ -402,42 +441,40 @@ export async function loadPendingReport(
     }
     if (!data) return { ok: false, message: 'Not found.' };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = ((data as any).report_tools ?? []) as {
-      id: string; tool_name: string; tool_version: string; used_on: string;
-    }[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tagLinks = ((data as any).report_tags ?? []) as { tags: { code: string } | null }[];
+    // Both embeds are arrays PostgREST always sends, but an empty one is sent as [] only
+    // when the relation resolves; keep the guard rather than trusting that.
+    const tools = data.report_tools ?? [];
+    const tagLinks = data.report_tags ?? [];
 
     return {
       ok: true,
       value: {
-        id: data.id as string,
-        title: data.title as string,
-        area: data.area as Area,
-        taskType: data.task_type as TaskType,
-        aim: data.aim as string,
-        method: data.method as string,
-        outcome: data.outcome as Outcome,
-        outcomeNotes: data.outcome_notes as string,
-        verification: data.verification as string,
-        transcriptExcerpt: (data.transcript_excerpt as string | null) ?? null,
-        transcriptUrl: (data.transcript_url as string | null) ?? null,
-        caveats: (data.caveats as string | null) ?? null,
-        thirdPartyMaterialConfirmed: data.third_party_material_confirmed as boolean,
-        timeSpentMinutes: (data.time_spent_minutes as number | null) ?? null,
-        wasPublished: (data.was_published as boolean | null) ?? null,
-        wasDisclosed: (data.was_disclosed as boolean | null) ?? null,
-        authorConfidence: (data.author_confidence as number | null) ?? null,
-        moderationNote: (data.moderation_note as string | null) ?? null,
-        moderationNoteAt: (data.moderation_note_at as string | null) ?? null,
-        tools: tools.map((t) => ({
-          id: t.id,
-          name: t.tool_name,
-          version: t.tool_version,
-          usedOn: t.used_on,
+        id: data.id,
+        title: data.title,
+        area: data.area,
+        taskType: data.task_type,
+        aim: data.aim,
+        method: data.method,
+        outcome: data.outcome,
+        outcomeNotes: data.outcome_notes,
+        verification: data.verification,
+        transcriptExcerpt: data.transcript_excerpt,
+        transcriptUrl: data.transcript_url,
+        caveats: data.caveats,
+        thirdPartyMaterialConfirmed: data.third_party_material_confirmed,
+        timeSpentMinutes: data.time_spent_minutes,
+        wasPublished: data.was_published,
+        wasDisclosed: data.was_disclosed,
+        authorConfidence: data.author_confidence,
+        moderationNote: data.moderation_note,
+        moderationNoteAt: data.moderation_note_at,
+        tools: tools.map((tool) => ({
+          id: tool.id,
+          name: tool.tool_name,
+          version: tool.tool_version,
+          usedOn: tool.used_on,
         })),
-        tagCodes: tagLinks.flatMap((pt) => (pt.tags ? [pt.tags.code] : [])),
+        tagCodes: tagLinks.flatMap((link) => (link.tags ? [link.tags.code] : [])),
       },
     };
   } catch (error) {
