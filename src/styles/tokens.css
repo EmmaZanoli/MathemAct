@@ -30,6 +30,24 @@
   --accent-strong: #16405c; /* link hover and active         9.4:1 */
   --accent-wash: color-mix(in srgb, var(--accent) 8%, var(--ground));
 
+  /* ── Landing page ────────────────────────────────────────────────────────────── */
+  --home-paper: #fbfaf6;
+  --home-ink: #0b3142;
+  --home-navy: #0a3344;
+  --home-rule: #d6dfdc;
+  --home-mist: #eef7f5;
+
+  --home-teal: #21776f;
+  --home-teal-wash: #e2f2ee;
+
+  --home-violet: #7459a6;
+  --home-violet-wash: #eee9f7;
+
+  --home-gold: #a67721;
+  --home-gold-wash: #f7eedc;
+
+  --home-radius: 0.55rem;
+
   /* ── Outcome semantics ────────────────────────────────────────────────────────────
    * worked / partially worked / did not work. These three appear NOWHERE else — the
    * moment they are borrowed for a button or a link, they stop meaning anything.

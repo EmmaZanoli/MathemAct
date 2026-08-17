@@ -1,311 +1,944 @@
 ---
 import Base from '../layouts/Base.astro';
-import Tombstone from '../components/Tombstone.astro';
 import { path } from '../lib/paths';
 import { LEIDEN, LICENCE, SITE } from '../lib/site';
-
-/** The practice schema, in submission order. Mirrors CLAUDE.md's content model. When the
- *  form is built this list moves to src/lib/ and both read from it. */
-const fields = [
-  'A title, and whether the work was research, learning, teaching, or writing',
-  'The task — literature search, conjecture generation, proof drafting, proof checking, formalisation, computation, exposition, translation, referee work',
-  'Which tools, at which version, on which date',
-  'What you were trying to do, and then what you actually did, step by step',
-  'The outcome: worked, partially worked, or did not work',
-  'How you verified correctness',
-  'An excerpt of the transcript',
-  'Caveats, and what you would do differently',
-  'Tags, so the account can be found by subject',
-  'Time spent, whether the work was published, whether the AI use was disclosed in the paper, and how confident you are in the result',
-];
 ---
 
-<Base title={SITE.name} description={SITE.description} bareTitle>
-  <div class="shell">
-    {/* ── Statement ────────────────────────────────────────────────────────────── */}
-    <section class="statement" aria-labelledby="statement-heading">
-      <h1 id="statement-heading">MathemAct</h1>
-      <p class="mission">{SITE.mission}</p>
+<Base
+  title={SITE.name}
+  description="A public record of how AI is actually being used in mathematics."
+  bareTitle
+  landing
+>
+  <div class="home">
+    <!-- ── Hero ─────────────────────────────────────────────────────────────── -->
 
-      <div class="statement__body prose">
-        <p class="lead">
-          MathemAct collects first-hand accounts of how mathematicians use AI tools in
-          their work: what you set out to do, what you actually did, what came out, and
-          how you checked that the result was correct.
-        </p>
-        <p>
-          Every account follows the same structure, so that
-          it can be compared, filtered, counted, and cited. This amounts to a corpus of detailed knowledge rather than a series of impressions shared in passing among colleagues.
-        </p>
-      </div>
-    </section>
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="shell hero__inner">
+        <div class="hero__copy">
+          <h1 id="hero-heading">
+            A public record of how AI is actually being used in mathematics.
+          </h1>
 
-    {/* ── Principles and practice ──────────────────────────────────────────────── */}
-    <section class="section" aria-labelledby="principles-heading">
-      <h2 id="principles-heading">Principles, and the practice underneath them</h2>
+          <p class="hero__lead">
+            MathemAct brings together first-hand accounts of AI-assisted
+            mathematical work, community views on emerging questions, and useful
+            resources for mathematicians.
+          </p>
 
-      <div class="prose">
-        <p>
-          In June 2026 the <a href={LEIDEN.url}>{LEIDEN.name}</a> asked researchers to
-          <q>{LEIDEN.quotes.disclosure}</q>. It also conceded something useful:
-          <q>{LEIDEN.quotes.evolving}</q>.
-        </p>
-        <p>
-          That concession is where this site works. A principle can say that disclosure
-          should happen. It cannot say what a disclosure should contain when the tool was
-          used across four sessions over six hours, produced two usable lemmas and one
-          confident falsehood, and the error was caught only because someone thought to
-          check a boundary case.
-        </p>
-        <p>
-          Nobody can specify that in the abstract. It has to be read off real cases. So
-          MathemAct accumulates them in a fixed schema, until the schema is good enough
-          that a journal could hand it to authors as a disclosure template.
-        </p>
-      </div>
+          <p class="hero__lead">
+            The aim is to make the changes happening in mathematical practice
+            visible, comparable, and easier to learn from.
+          </p>
 
-      <p class="disclaimer">
-        MathemAct is an independent project. It is not affiliated with the Leiden
-        Declaration, its working group, or the International Mathematical Union, and it
-        carries no endorsement from any of them.
-      </p>
-    </section>
+          <div class="hero__actions">
+            <a class="button button--primary" href="#explore">
+              Explore MathemAct
+              <span aria-hidden="true">→</span>
+            </a>
 
-    {/* ── What a contribution looks like ───────────────────────────────────────── */}
-    <section class="section" aria-labelledby="contribution-heading">
-      <h2 id="contribution-heading">What a contribution looks like</h2>
-
-      <div class="prose">
-        <p>
-          An account is called a practice: one piece of work, reported by the person who
-          did it. The form asks for these, in this order.
-        </p>
-      </div>
-
-      <ul class="tombstone-list prose">
-        {fields.map((field) => <li>{field}</li>)}
-      </ul>
-
-      <div class="prose">
-        <p>
-          One of them has no skip and no <q>not applicable</q>.
-          <strong>How you verified correctness</strong> is required on every account, without
-          exception. It is the field that separates a corpus a mathematician can use from a
-          pile of anecdotes. There are plenty of places to put anecdotes; this is not one.
-        </p>
-        <p>
-          The transcript excerpt is pasted in and stored here rather than linked. Share
-          links expire, get revoked, and sometimes breach the provider's terms. The
-          excerpt is the record. You confirm, before posting, that you have removed
-          anyone else's unpublished material from it.
-        </p>
-        <p>
-          Writing one should take under ten minutes. If it takes longer, the form is
-          wrong, not you.
-        </p>
-      </div>
-    </section>
-
-    {/* ── Three things worth knowing ───────────────────────────────────────────── */}
-    <section class="section" aria-labelledby="different-heading">
-      <h2 id="different-heading">Three things worth knowing</h2>
-
-      <div class="points">
-        <article class="point">
-          <h3>Failures count the same as successes</h3>
-          <div class="point__body">
-            <p>
-              An account reporting that the tool got it wrong is worth as much here as one
-              reporting that it got it right, and often more, because failure modes are
-              what nobody publishes. A corpus of successes alone would be advertising.
-              Nothing in the form or the interface treats a failure as the lesser
-              contribution.
-            </p>
+            <a class="button button--secondary" href="#why">
+              Why this exists
+              <span aria-hidden="true">→</span>
+            </a>
           </div>
-        </article>
+        </div>
 
-        <article class="point">
-          <h3>Every practice has an expiry</h3>
-          <div class="point__body">
-            <p>
-              Model, version, and date of use are required, and any signed-in
-              mathematician can record that a practice still works or no longer does. A
-              method that held against a 2025 model may be nonsense against a 2026 one.
-              The square beside each account says which it is:
-            </p>
-            <ul class="legend" role="list">
-              <li><Tombstone status="verified" /> — a correctness check is recorded, and someone has confirmed it still works</li>
-              <li><Tombstone status="stale" /> — not rechecked since an older model</li>
-              <li><Tombstone status="broken" /> — someone tried it and reported that it failed</li>
-            </ul>
-          </div>
-        </article>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 600 520">
+            <defs>
+              <radialGradient id="hero-glow">
+                <stop offset="0" stop-color="var(--home-teal)" stop-opacity=".45" />
+                <stop offset=".22" stop-color="var(--home-teal)" stop-opacity=".12" />
+                <stop offset="1" stop-color="var(--home-teal)" stop-opacity="0" />
+              </radialGradient>
+            </defs>
 
-        <article class="point">
-          <h3>The whole corpus is downloadable</h3>
-          <div class="point__body">
-            <p>
-              Everything published here is exported nightly as JSON and licensed
-              <a href={LICENCE.url} rel="license">{LICENCE.name}</a>, so it can be analysed
-              without scraping and without asking. Researchers studying how mathematics
-              adopts these tools are among the people this is built for.
-            </p>
-          </div>
-        </article>
+            <g class="contours">
+              <path d="M32 52C109 80 110 144 171 168s94-12 135 20 19 83 78 113 112 9 177 47" />
+              <path d="M18 84c88 22 91 91 156 116s104-15 144 24 9 81 75 113 119 4 173 51" />
+              <path d="M10 119c91 17 105 83 164 107s108-21 150 20 15 88 78 115 112 1 154 51" />
+              <path d="M6 158c82 12 112 69 169 91s112-29 153 12 23 94 81 117 95-6 139 44" />
+              <path d="M15 202c72 7 105 53 165 74s113-31 156 7 30 91 83 111 82-8 119 31" />
+              <path d="M38 251c60-1 92 39 149 56s105-31 151 1 37 81 87 97 70-4 99 22" />
+              <path d="M83 305c43-9 69 22 116 34s89-25 136-4 44 63 85 75 56 2 77 14" />
+            </g>
+
+            <circle cx="335" cy="268" r="93" fill="url(#hero-glow)" />
+            <circle cx="335" cy="268" r="3.5" class="hero-dot" />
+
+            <text x="96" y="244" class="math-label">dμ(x)</text>
+            <text x="480" y="58" class="math-label math-label--limit">∞</text>
+            <text x="466" y="87" class="math-label math-label--sum">∑</text>
+            <text x="500" y="87" class="math-label math-label--sumarg">aₙ</text>
+            <text x="476" y="104" class="math-label math-label--limit">n=1</text>
+            <text x="484" y="445" class="math-label">ℝᵈ</text>
+          </svg>
+        </div>
       </div>
     </section>
 
-    {/* ── Call to action ───────────────────────────────────────────────────────── */}
-    <section class="cta" aria-labelledby="cta-heading">
-      <h2 id="cta-heading" class="cta__heading">Read how this works</h2>
-      <p class="cta__body">
-        The about page has the full picture: the schema, how a verified email becomes an
-        institutional badge, and what is and is not kept about you.
-      </p>
-      <p><a class="button" href={path('/about/')}>How this works</a></p>
-      <p class="cta__note">
-        Posting opens once accounts and moderation are in place.
-      </p>
+    <!-- ── Three parts ──────────────────────────────────────────────────────── -->
+
+    <section id="explore" class="explore" aria-labelledby="explore-heading">
+      <div class="shell">
+        <header class="section-heading">
+          <h2 id="explore-heading">What you'll find here</h2>
+          <p>
+            MathemAct has three connected parts. Together they show what
+            mathematicians do with AI, what they think about it, and what helps
+            in practice.
+          </p>
+        </header>
+
+        <div class="cards">
+          <article class="card card--practices">
+            <div class="card__icon">
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <path d="M9 5.5h10l5 5V27H9z" />
+                <path d="M19 5.5V11h5" />
+                <path d="M12.5 16h8M12.5 20h8" />
+              </svg>
+            </div>
+
+            <p class="card__label">Practices</p>
+            <h3>What people do</h3>
+
+            <p>
+              Detailed, first-hand accounts of mathematicians using AI in
+              research, learning, teaching, and writing.
+            </p>
+
+            <p>
+              What they tried, which tools they used, what worked or failed, and
+              how they checked the result.
+            </p>
+
+            <a class="card__link" href={path('/practices/')}>
+              Browse practices <span aria-hidden="true">→</span>
+            </a>
+          </article>
+
+          <article class="card card--propositions">
+            <div class="card__icon">
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="12" cy="11" r="4" />
+                <circle cx="21.5" cy="12" r="3.2" />
+                <path d="M5.5 25c.6-5 3-7 6.5-7s6 2 6.5 7" />
+                <path d="M18 19c1-.8 2.1-1.2 3.5-1.2 3.2 0 5 1.9 5.5 5.8" />
+              </svg>
+            </div>
+
+            <p class="card__label">Propositions</p>
+            <h3>What people think</h3>
+
+            <p>
+              Respond to short claims about AI and mathematics, then see how
+              others answered.
+            </p>
+
+            <p>
+              MathemAct records where the community agrees, disagrees, or splits.
+            </p>
+
+            <a class="card__link" href={path('/propositions/')}>
+              View propositions <span aria-hidden="true">→</span>
+            </a>
+          </article>
+
+          <article class="card card--resources">
+            <div class="card__icon">
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <path d="M5.5 7.5c4-.8 7 .2 10.5 2.5v16c-3.5-2.3-6.5-3.2-10.5-2.5z" />
+                <path d="M26.5 7.5c-4-.8-7 .2-10.5 2.5v16c3.5-2.3 6.5-3.2 10.5-2.5z" />
+              </svg>
+            </div>
+
+            <p class="card__label">Resources</p>
+            <h3>What helps</h3>
+
+            <p>
+              Community-curated tools, courses, libraries, guidelines, and other
+              resources for using and thinking about AI in mathematical work.
+            </p>
+
+            <a class="card__link" href={path('/resources/')}>
+              Browse resources <span aria-hidden="true">→</span>
+            </a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Why ──────────────────────────────────────────────────────────────── -->
+
+    <section id="why" class="why" aria-labelledby="why-heading">
+      <div class="shell why__inner">
+        <div class="why__graphic" aria-hidden="true">
+          <svg viewBox="0 0 160 160">
+            <circle cx="80" cy="80" r="56" />
+            <ellipse cx="80" cy="80" rx="27" ry="56" />
+            <ellipse cx="80" cy="80" rx="47" ry="56" />
+            <path d="M24 80h112M32 53h96M32 107h96" />
+          </svg>
+        </div>
+
+        <div class="why__copy">
+          <h2 id="why-heading">Why MathemAct?</h2>
+
+          <p>
+            Mathematical practice is changing faster than we are documenting it.
+            Useful workflows, misleading outputs, verification techniques, and
+            failed experiments are often shared informally and then disappear.
+            That makes it difficult to learn from one another — and difficult for
+            the mathematical community to develop sensible norms around AI use.
+          </p>
+
+          <p>
+            MathemAct turns those experiences into a public, structured record:
+            detailed enough to learn from, consistent enough to compare, and open
+            enough to study.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Evidence ─────────────────────────────────────────────────────────── -->
+
+    <section class="evidence" aria-labelledby="evidence-heading">
+      <div class="shell">
+        <header class="section-heading section-heading--compact">
+          <h2 id="evidence-heading">Built as evidence, not testimonials</h2>
+          <p>
+            MathemAct is designed to be a trustworthy record that the community
+            can learn from.
+          </p>
+        </header>
+
+        <div class="evidence-grid">
+          <article class="evidence-item evidence-item--teal">
+            <div class="evidence-item__icon">
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <path d="M16 4 25 8v7c0 6.4-3.7 10.4-9 13-5.3-2.6-9-6.6-9-13V8z" />
+              </svg>
+            </div>
+
+            <h3>Failures belong in the record.</h3>
+            <p>
+              Negative results and bad AI outputs matter because otherwise the
+              corpus gives a distorted picture.
+            </p>
+          </article>
+
+          <article class="evidence-item evidence-item--violet">
+            <div class="evidence-item__icon">
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r="11" />
+                <path d="M16 9v7h6" />
+              </svg>
+            </div>
+
+            <h3>AI results age.</h3>
+            <p>
+              Every Practice records model, version, and date, and people can
+              report whether an approach still works as tools change.
+            </p>
+          </article>
+
+          <article class="evidence-item evidence-item--gold">
+            <div class="evidence-item__icon">
+              <svg viewBox="0 0 32 32" aria-hidden="true">
+                <ellipse cx="16" cy="8" rx="9" ry="4" />
+                <path d="M7 8v8c0 2.2 4 4 9 4s9-1.8 9-4V8" />
+                <path d="M7 16v8c0 2.2 4 4 9 4s9-1.8 9-4v-8" />
+              </svg>
+            </div>
+
+            <h3>The data is open.</h3>
+            <p>
+              Published material is available as structured data for analysis and
+              reuse under {LICENCE.name}.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Leiden ───────────────────────────────────────────────────────────── -->
+
+    <section class="principles" aria-labelledby="principles-heading">
+      <div class="shell principles__inner">
+        <div class="principles__graphic" aria-hidden="true">
+          <svg viewBox="0 0 96 96">
+            <path d="M17 31 48 17l31 14z" />
+            <path d="M23 37h50M20 72h56M16 79h64" />
+            <path d="M27 37v35M39 37v35M57 37v35M69 37v35" />
+          </svg>
+        </div>
+
+        <div>
+          <h2 id="principles-heading">From principles to practice</h2>
+
+          <p>
+            In 2026, the {LEIDEN.name} called on researchers to disclose their use
+            of AI and computational tools in mathematical papers.
+          </p>
+
+          <p>
+            But what should a useful disclosure actually contain?
+          </p>
+
+          <p>
+            MathemAct approaches that question from the ground up. By collecting
+            concrete cases in a common format — including the task, tool,
+            process, outcome, and method of verification — it can help show what
+            meaningful disclosure looks like in practice.
+          </p>
+
+          <a class="principles__link" href={LEIDEN.url}>
+            Learn more about the Leiden Declaration
+            <span aria-hidden="true">→</span>
+          </a>
+
+          <p class="principles__note">
+            MathemAct is an independent community project and is not affiliated
+            with the Leiden Declaration.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Closing CTA ───────────────────────────────────────────────────────── -->
+
+    <section class="join" aria-labelledby="join-heading">
+      <div class="shell join__inner">
+        <div class="join__graphic" aria-hidden="true">
+          <svg viewBox="0 0 72 72">
+            <path d="M35 59C34 39 39 25 54 12" />
+            <path d="M39 40c8 1 14-2 18-9-8-2-14 1-18 9Z" />
+            <path d="M34 49c-8 0-14-4-18-11 9-1 15 3 18 11Z" />
+            <path d="M43 28c-4-7-3-13 2-19 5 7 4 13-2 19Z" />
+          </svg>
+        </div>
+
+        <div class="join__copy">
+          <h2 id="join-heading">Join as a reader, contributor, or collaborator</h2>
+          <p>
+            Posting is not open yet. You can explore, follow updates, and get
+            involved as the project grows.
+          </p>
+        </div>
+
+        <a
+          class="button button--primary join__button"
+          href={`mailto:${SITE.contactEmail}?subject=MathemAct%20updates`}
+        >
+          Stay updated
+          <span class="mail-icon" aria-hidden="true">✉</span>
+        </a>
+      </div>
     </section>
   </div>
 </Base>
 
 <style>
-  /* Section rhythm is set here, once, rather than on each section's own class, so a new
-     section inherits it without anyone remembering to. Element selectors inside a
-     section are wrapped in :where() to keep them at zero specificity — a component
-     dropped into a section must never have to out-specify the page. */
-  .statement {
-    padding-block: var(--space-2xl) var(--space-xl);
+  .home {
+    color: var(--home-ink);
+    background: var(--home-paper);
   }
 
-  .section {
-    padding-block: var(--space-xl);
-    border-block-start: var(--border);
+  /* ── Hero ─────────────────────────────────────────────────────────────────── */
+
+  .hero {
+    overflow: hidden;
+    border-block-end: 1px solid var(--home-rule);
+    background: var(--home-paper);
   }
 
-  .statement :where(h1) {
-    font-size: var(--size-8);
-    letter-spacing: -0.02em;
-  }
-
-  .mission {
-    max-width: var(--measure);
-    margin-block-start: var(--space-xs);
-    font-family: var(--font-serif);
-    font-size: var(--size-4);
-    font-style: italic;
-    color: var(--ink-muted);
-    text-wrap: balance;
-  }
-
-  .statement__body {
-    margin-block-start: var(--space-lg);
-  }
-
-  .lead {
-    font-size: var(--size-4);
-    line-height: var(--leading-relaxed);
-  }
-
-  .section :where(h2) {
-    max-width: var(--measure);
-    margin-block-end: var(--space-md);
-  }
-
-  /* Set apart from the surrounding prose because it is a legal statement, not an
-     argument, and it must not read as part of the case being made. */
-  .disclaimer {
-    max-width: var(--measure);
-    margin-block-start: var(--space-lg);
-    padding-inline-start: var(--space-sm);
-    border-inline-start: var(--border-width-thick) solid var(--rule);
-    color: var(--ink-muted);
-    font-size: var(--size-2);
-  }
-
-  .tombstone-list {
-    margin-block: var(--space-md);
-  }
-
-  /* Three columns on wide screens, one on narrow. auto-fit rather than a media query, so
-     the breakpoint follows the content width instead of a guessed device size. */
-  .points {
+  .hero__inner {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-    gap: var(--space-lg);
+    grid-template-columns: minmax(0, 1.08fr) minmax(19rem, 0.92fr);
+    align-items: center;
+    gap: clamp(var(--space-lg), 5vw, var(--space-3xl));
+    min-height: 31rem;
+    padding-block: var(--space-xl) var(--space-2xl);
+  }
+
+  .hero__copy {
+    position: relative;
+    z-index: 2;
+    max-width: 42rem;
+  }
+
+  .hero h1 {
+    max-width: 13ch;
+    color: var(--home-ink);
+    font-size: clamp(3rem, 5.1vw, 4.4rem);
+    font-weight: var(--weight-semibold);
+    line-height: 1.02;
+    letter-spacing: -0.035em;
+  }
+
+  .hero__lead {
+    max-width: 37rem;
     margin-block-start: var(--space-md);
+    font-size: var(--size-3);
+    line-height: 1.5;
   }
 
-  /* Subgrid so the headings share a row and the bodies share the next one. Without it a
-     heading that wraps to two lines pushes its own paragraph down and the three columns
-     start at three different heights, which is exactly the kind of raggedness this
-     audience reads as carelessness. */
-  .point {
-    display: grid;
-    grid-template-rows: subgrid;
-    grid-row: span 2;
-    row-gap: var(--space-2xs);
-  }
-
-  .point :where(h3) {
-    font-size: var(--size-4);
-  }
-
-  .legend {
-    margin-block-start: var(--space-sm);
-    padding: 0;
-    font-size: var(--size-2);
-  }
-
-  /* Normal inline flow, not flex. Tombstone's root is already inline-flex, so it sits on
-     the text baseline unaided — whereas making the li a flex container turns the trailing
-     description into one unbreakable flex item, which wraps onto its own line and reads
-     as a separate legend entry. */
-  .legend > li + li {
-    margin-block-start: var(--space-3xs);
-  }
-
-  /* ── Call to action ─────────────────────────────────────────────────────────── */
-  .cta {
-    margin-block-start: var(--space-xl);
-    padding: var(--space-lg);
-    border: var(--border-strong);
-    background-color: var(--surface);
-  }
-
-  .cta__heading {
-    font-size: var(--size-5);
-  }
-
-  .cta__body {
-    max-width: var(--measure);
-    margin-block: var(--space-2xs) var(--space-md);
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-block-start: var(--space-lg);
   }
 
   .button {
-    display: inline-block;
-    padding: var(--space-2xs) var(--space-md);
-    border: var(--border-strong);
-    color: var(--ink);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-md);
+    min-height: 3rem;
+    padding: 0.7rem 1.25rem;
+    border: 1px solid var(--home-navy);
+    border-radius: var(--home-radius);
+    font-size: var(--size-2);
     font-weight: var(--weight-semibold);
     text-decoration: none;
   }
 
-  .button:hover {
-    background-color: var(--ink);
-    color: var(--ground);
+  .button--primary {
+    background: var(--home-navy);
+    color: var(--home-paper);
   }
 
-  .cta__note {
+  .button--primary:hover {
+    background: var(--home-ink);
+    color: white;
+  }
+
+  .button--secondary {
+    background: transparent;
+    color: var(--home-ink);
+  }
+
+  .button--secondary:hover {
+    background: var(--home-mist);
+    color: var(--home-ink);
+  }
+
+  .hero-art {
+    width: min(100%, 34rem);
+    color: color-mix(in srgb, var(--home-teal) 32%, transparent);
+  }
+
+  .hero-art svg {
+    width: 100%;
+  }
+
+  .hero-art .contours {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+  }
+
+  .hero-dot {
+    fill: var(--home-teal);
+  }
+
+  .math-label {
+    fill: color-mix(in srgb, var(--home-ink) 35%, transparent);
+    font-family: var(--font-serif);
+    font-size: 19px;
+    font-style: italic;
+  }
+
+  .math-label--sum {
+    font-size: 32px;
+    font-style: normal;
+  }
+
+  .math-label--sumarg {
+    font-size: 18px;
+  }
+
+  .math-label--limit {
+    font-size: 13px;
+    font-style: normal;
+  }
+
+  /* ── Section headings ─────────────────────────────────────────────────────── */
+
+  .section-heading {
+    max-width: 48rem;
+    margin-inline: auto;
+    margin-block-end: var(--space-xl);
+    text-align: center;
+  }
+
+  .section-heading h2,
+  .why h2,
+  .principles h2,
+  .join h2 {
+    color: var(--home-ink);
+    font-size: clamp(1.8rem, 3vw, 2.3rem);
+  }
+
+  .section-heading p {
+    margin-block-start: var(--space-xs);
+  }
+
+  .section-heading--compact {
+    margin-block-end: var(--space-lg);
+  }
+
+  /* ── Three cards ──────────────────────────────────────────────────────────── */
+
+  .explore {
+    padding-block: var(--space-xl) var(--space-2xl);
+    background: color-mix(in srgb, var(--home-paper) 94%, white);
+  }
+
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-lg);
+  }
+
+  .card {
+    --card-accent: var(--home-teal);
+    display: flex;
+    flex-direction: column;
+    min-height: 25rem;
+    padding: var(--space-md);
+    border: 1px solid color-mix(in srgb, var(--card-accent) 45%, var(--home-rule));
+    border-radius: var(--home-radius);
+    background: color-mix(in srgb, var(--home-paper) 97%, var(--card-accent));
+  }
+
+  .card--practices {
+    --card-accent: var(--home-teal);
+  }
+
+  .card--propositions {
+    --card-accent: var(--home-violet);
+  }
+
+  .card--resources {
+    --card-accent: var(--home-gold);
+  }
+
+  .card__icon,
+  .evidence-item__icon {
+    display: grid;
+    width: 3.1rem;
+    height: 3.1rem;
+    place-items: center;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--card-accent) 12%, var(--home-paper));
+    color: var(--card-accent);
+  }
+
+  .card__icon svg,
+  .evidence-item__icon svg {
+    width: 1.75rem;
+    height: 1.75rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .card__label {
     margin-block-start: var(--space-md);
-    color: var(--ink-muted);
+    color: var(--card-accent);
+    font-size: var(--size-0);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .card h3 {
+    margin-block-start: var(--space-2xs);
+    color: var(--home-ink);
+    font-size: 1.7rem;
+  }
+
+  .card h3 + p {
+    margin-block-start: var(--space-md);
+  }
+
+  .card p + p {
+    margin-block-start: var(--space-sm);
+  }
+
+  .card__link {
+    margin-block-start: auto;
+    padding-block-start: var(--space-lg);
+    color: var(--card-accent);
+    font-size: var(--size-2);
+    font-weight: var(--weight-semibold);
+    text-decoration: none;
+  }
+
+  .card__link span {
+    margin-inline-start: var(--space-2xs);
+  }
+
+  /* ── Why ──────────────────────────────────────────────────────────────────── */
+
+  .why {
+    border-block: 1px solid var(--home-rule);
+    background: var(--home-mist);
+  }
+
+  .why__inner {
+    display: grid;
+    grid-template-columns: 10rem minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(var(--space-xl), 7vw, var(--space-3xl));
+    padding-block: var(--space-xl);
+  }
+
+  .why__graphic svg {
+    width: 9rem;
+    fill: none;
+    stroke: var(--home-ink);
+    stroke-width: 1.3;
+  }
+
+  .why__copy {
+    max-width: 47rem;
+  }
+
+  .why__copy p {
+    margin-block-start: var(--space-sm);
+  }
+
+  /* ── Evidence ─────────────────────────────────────────────────────────────── */
+
+  .evidence {
+    padding-block: var(--space-xl);
+    background: var(--home-paper);
+  }
+
+  .evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 64rem;
+    margin-inline: auto;
+  }
+
+  .evidence-item {
+    --card-accent: var(--home-teal);
+    padding: var(--space-sm) var(--space-xl);
+    text-align: center;
+  }
+
+  .evidence-item + .evidence-item {
+    border-inline-start: 1px solid var(--home-rule);
+  }
+
+  .evidence-item--teal {
+    --card-accent: var(--home-teal);
+  }
+
+  .evidence-item--violet {
+    --card-accent: var(--home-violet);
+  }
+
+  .evidence-item--gold {
+    --card-accent: var(--home-gold);
+  }
+
+  .evidence-item__icon {
+    margin-inline: auto;
+    background: transparent;
+  }
+
+  .evidence-item h3 {
+    margin-block-start: var(--space-xs);
+    color: var(--card-accent);
+    font-family: var(--font-sans);
     font-size: var(--size-2);
   }
 
-  @media (max-width: 30rem) {
-    .cta {
-      padding: var(--space-md);
+  .evidence-item p {
+    margin-block-start: var(--space-xs);
+    font-size: var(--size-2);
+    line-height: 1.45;
+  }
+
+  /* ── Principles ───────────────────────────────────────────────────────────── */
+
+  .principles {
+    border-block: 1px solid var(--home-rule);
+    background: color-mix(in srgb, var(--home-gold-wash) 55%, var(--home-paper));
+  }
+
+  .principles__inner {
+    display: grid;
+    grid-template-columns: 9rem minmax(0, 1fr);
+    gap: clamp(var(--space-lg), 6vw, var(--space-3xl));
+    align-items: center;
+    padding-block: var(--space-lg);
+  }
+
+  .principles__graphic {
+    display: grid;
+    width: 6.5rem;
+    height: 6.5rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--home-gold-wash);
+  }
+
+  .principles__graphic svg {
+    width: 4.2rem;
+    fill: none;
+    stroke: var(--home-gold);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+  }
+
+  .principles p {
+    max-width: 54rem;
+    margin-block-start: var(--space-xs);
+    font-size: var(--size-2);
+  }
+
+  .principles__link {
+    display: inline-block;
+    margin-block-start: var(--space-xs);
+    color: var(--home-gold);
+    font-size: var(--size-2);
+    font-weight: var(--weight-semibold);
+    text-decoration: none;
+  }
+
+  .principles__note {
+    color: var(--ink-muted);
+    font-size: var(--size-0) !important;
+  }
+
+  /* ── Final CTA ────────────────────────────────────────────────────────────── */
+
+  .join {
+    background: var(--home-mist);
+  }
+
+  .join__inner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-lg);
+    padding-block: var(--space-md);
+  }
+
+  .join__graphic {
+    display: grid;
+    width: 4rem;
+    height: 4rem;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--home-teal-wash);
+  }
+
+  .join__graphic svg {
+    width: 2.8rem;
+    fill: none;
+    stroke: var(--home-teal);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.4;
+  }
+
+  .join h2 {
+    font-size: 1.6rem;
+  }
+
+  .join p {
+    margin-block-start: var(--space-3xs);
+    font-size: var(--size-2);
+  }
+
+  .join__button {
+    min-width: 10.5rem;
+  }
+
+  .mail-icon {
+    font-size: 1rem;
+  }
+
+  /* ── Responsive ───────────────────────────────────────────────────────────── */
+
+  @media (max-width: 52rem) {
+    .hero__inner {
+      grid-template-columns: 1fr;
+      min-height: 0;
+    }
+
+    .hero h1 {
+      max-width: 15ch;
+    }
+
+    .hero-art {
+      max-width: 28rem;
+      margin-inline: auto;
+      margin-block-start: calc(-1 * var(--space-lg));
+    }
+
+    .cards {
+      grid-template-columns: 1fr;
+    }
+
+    .card {
+      min-height: 0;
+    }
+
+    .why__inner,
+    .principles__inner {
+      grid-template-columns: 1fr;
+    }
+
+    .why__graphic,
+    .principles__graphic {
+      margin-inline: auto;
+    }
+
+    .evidence-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .evidence-item {
+      max-width: 32rem;
+      margin-inline: auto;
+      padding-block: var(--space-lg);
+    }
+
+    .evidence-item + .evidence-item {
+      border-inline-start: 0;
+      border-block-start: 1px solid var(--home-rule);
+    }
+
+    .join__inner {
+      grid-template-columns: auto 1fr;
+    }
+
+    .join__button {
+      grid-column: 1 / -1;
+      width: fit-content;
+      margin-inline-start: calc(4rem + var(--space-lg));
+    }
+  }
+
+  @media (max-width: 34rem) {
+    .hero__inner {
+      padding-block-start: var(--space-lg);
+    }
+
+    .hero h1 {
+      font-size: clamp(2.65rem, 13vw, 3.3rem);
+    }
+
+    .hero__actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .hero-art {
+      opacity: 0.7;
+    }
+
+    .why__inner,
+    .principles__inner {
+      padding-block: var(--space-lg);
+    }
+
+    .join__inner {
+      grid-template-columns: 1fr;
+    }
+
+    .join__graphic {
+      display: none;
+    }
+
+    .join__button {
+      grid-column: auto;
+      margin-inline-start: 0;
+    }
+  }
+
+  /* ── Height breakpoints: CTA buttons always above the fold ───────────────── */
+
+  @media (max-height: 860px) {
+    .hero__inner {
+      min-height: 0;
+      padding-block: var(--space-md) var(--space-lg);
+    }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 3.8vw, 3.2rem);
+    }
+
+    .hero__lead + .hero__lead {
+      display: none;
+    }
+
+    .hero__lead {
+      margin-block-start: var(--space-xs);
+    }
+
+    .hero__actions {
+      margin-block-start: var(--space-md);
+    }
+
+    .hero-art {
+      width: min(100%, 20rem);
+    }
+  }
+
+  @media (max-height: 640px) {
+    .hero__inner {
+      padding-block: var(--space-sm);
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 10vw, 3rem);
+    }
+
+    .hero__lead {
+      display: none;
+    }
+
+    .hero__actions {
+      margin-block-start: var(--space-sm);
+    }
+
+    .hero-art {
+      display: none;
+    }
+  }
+
+  @media (max-height: 500px) {
+    .hero__inner {
+      padding-block: var(--space-2xs);
+    }
+
+    .hero h1 {
+      font-size: clamp(1.8rem, 4vw, 2.5rem);
+      max-width: 26ch;
+    }
+
+    .hero__actions {
+      margin-block-start: var(--space-xs);
+    }
+
+    .button {
+      min-height: 2.5rem;
+      padding: 0.45rem 1rem;
     }
   }
 </style>

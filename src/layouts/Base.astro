@@ -21,6 +21,8 @@ interface Props {
   description?: string;
   /** Set on the home page, where "MathemAct — MathemAct" would be absurd. */
   bareTitle?: boolean;
+  /** Use the visual landing-page header/footer treatment. */
+  landing?: boolean;
   /**
    * Keep this page out of search results. Set on /moderate/, which ships as the not-found
    * page and reveals itself only to a moderator: an indexed 404 would defeat the point of
@@ -33,6 +35,7 @@ const {
   title,
   description = SITE.description,
   bareTitle = false,
+  landing = false,
   noindex = false,
 } = Astro.props;
 
@@ -53,7 +56,7 @@ const year = new Date().getFullYear();
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{documentTitle}</title>
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#edf0f2" />
+    <meta name="theme-color" content={landing ? '#fbfaf6' : '#edf0f2'} />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical.href} />
 
@@ -79,58 +82,81 @@ const year = new Date().getFullYear();
     <link rel="stylesheet" href={asset('/fonts/fonts.css')} />
   </head>
 
-  <body>
+  <body class:list={{ 'landing-body': landing }}>
     <a class="skip-link" href="#main">Skip to content</a>
 
-    <header class="site-header">
+    <header class:list={['site-header', { 'site-header--landing': landing }]}>
       <div class="shell site-header__inner">
-        <a class="wordmark" href={path('/')}>MathemAct</a>
+        <div class="brand-lockup">
+          <a class="wordmark" href={path('/')}>MathemAct</a>
+
+          {
+            landing && (
+              <span class="brand-kicker">
+                Documenting AI in<br />
+                Mathematical Practice
+              </span>
+            )
+          }
+        </div>
 
         <div class="header-end">
-        <nav aria-label="Main">
-          <ul class="nav" role="list">
-            {
-              NAV.map((link) => (
-                <li>
-                  <a
-                    href={path(link.href)}
-                    aria-current={here === path(link.href) ? 'page' : undefined}
-                  >
-                    {link.label}
-                  </a>
-                </li>
-              ))
-            }
+          <nav aria-label="Main">
+            <ul class="nav" role="list">
+              {
+                NAV.map((link) => (
+                  <li>
+                    <a
+                      href={path(link.href)}
+                      aria-current={here === path(link.href) ? 'page' : undefined}
+                    >
+                      {link.label}
+                    </a>
+                  </li>
+                ))
+              }
 
-            {/* Both destinations ship, and one is revealed once the browser has guessed
-                which applies. They are real pages either way, so a wrong guess costs a
-                click and never a broken flow — see src/lib/session-hint.ts for why the
-                header guesses instead of asking. Neither is shown before the guess is
-                made: an "Account" link that turns into "Sign in" a moment later is worse
-                than a header that settles a frame late. */}
-            <li class="nav__account" data-account-link="out" hidden>
-              <a href={path('/account/sign-in/')}>Sign in</a>
-            </li>
-            <li class="nav__account" data-account-link="in" hidden>
-              <a
-                href={path('/account/')}
-                aria-current={here === path('/account/') ? 'page' : undefined}
+              {
+                !landing && (
+                  <li class="nav__account" data-account-link="out" hidden>
+                    <a href={path('/account/sign-in/')}>Sign in</a>
+                  </li>
+                )
+              }
+
+              {
+                !landing && (
+                  <li class="nav__account" data-account-link="in" hidden>
+                    <a
+                      href={path('/account/')}
+                      aria-current={here === path('/account/') ? 'page' : undefined}
+                    >
+                      Account
+                    </a>
+                  </li>
+                )
+              }
+            </ul>
+          </nav>
+
+          {
+            !landing && (
+              <form
+                class="header-search"
+                role="search"
+                method="get"
+                action={path('/search/')}
               >
-                Account
-              </a>
-            </li>
-          </ul>
-        </nav>
-
-        <form class="header-search" role="search" method="get" action={path('/search/')}>
-          <input
-            class="header-search__input"
-            type="search"
-            name="q"
-            placeholder="Search"
-            aria-label="Search practices and propositions"
-          />
-        </form>
+                <input
+                  class="header-search__input"
+                  type="search"
+                  name="q"
+                  placeholder="Search"
+                  aria-label="Search practices and propositions"
+                />
+              </form>
+            )
+          }
         </div>
       </div>
     </header>
@@ -151,34 +177,79 @@ const year = new Date().getFullYear();
       <slot />
     </main>
 
-    <footer class="site-footer">
-      <div class="shell site-footer__inner">
-        <nav aria-label="Footer">
-          <ul class="footer-nav" role="list">
-            {
-              FOOTER_NAV.map((link) => (
+    {
+      landing ? (
+        <footer class="site-footer site-footer--landing">
+          <div class="shell landing-footer__inner">
+            <div class="landing-footer__brand">
+              <a class="wordmark" href={path('/')}>MathemAct</a>
+              <span>Documenting AI in Mathematical Practice</span>
+            </div>
+
+            <nav aria-label="Footer">
+              <ul class="landing-footer__nav" role="list">
+                {
+                  FOOTER_NAV.map((link) => (
+                    <li>
+                      <a href={path(link.href)}>{link.label}</a>
+                    </li>
+                  ))
+                }
                 <li>
-                  <a href={path(link.href)}>{link.label}</a>
+                  <a href={`mailto:${SITE.contactEmail}`}>Contact</a>
                 </li>
-              ))
-            }
-            <li>
-              <a href={`mailto:${SITE.contactEmail}`}>Contact</a>
-            </li>
-          </ul>
-        </nav>
+              </ul>
+            </nav>
 
-        <p class="site-footer__licence">
-          Contributed content is published under <a href={LICENCE.url} rel="license"
-            >{LICENCE.name}</a
-          >. Contributors keep copyright and are credited.
-        </p>
+            <div class="landing-footer__actions">
+              <a href={SITE.repository} aria-label="MathemAct on GitHub">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M12 2.5a9.5 9.5 0 0 0-3 18.5c.48.09.66-.2.66-.46v-1.68c-2.68.58-3.25-1.14-3.25-1.14-.44-1.12-1.08-1.42-1.08-1.42-.88-.6.07-.59.07-.59.97.07 1.48 1 1.48 1 .87 1.48 2.27 1.05 2.83.8.09-.62.34-1.05.61-1.29-2.14-.24-4.39-1.07-4.39-4.75 0-1.05.37-1.9 1-2.57-.1-.25-.43-1.22.1-2.54 0 0 .81-.26 2.61.98a9.1 9.1 0 0 1 4.76 0c1.8-1.24 2.61-.98 2.61-.98.53 1.32.2 2.29.1 2.54.62.67 1 1.52 1 2.57 0 3.69-2.25 4.5-4.4 4.74.35.3.65.89.65 1.79v2.65c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.5Z"
+                  />
+                </svg>
+              </a>
 
-        <p class="site-footer__meta">
-          <span class="mono">MathemAct {year}</span>
-        </p>
-      </div>
-    </footer>
+              <a href={`mailto:${SITE.contactEmail}`} aria-label="Email MathemAct">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="14" rx="1.5" />
+                  <path d="m4 7 8 6 8-6" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </footer>
+      ) : (
+        <footer class="site-footer">
+          <div class="shell site-footer__inner">
+            <nav aria-label="Footer">
+              <ul class="footer-nav" role="list">
+                {
+                  FOOTER_NAV.map((link) => (
+                    <li>
+                      <a href={path(link.href)}>{link.label}</a>
+                    </li>
+                  ))
+                }
+                <li>
+                  <a href={`mailto:${SITE.contactEmail}`}>Contact</a>
+                </li>
+              </ul>
+            </nav>
+
+            <p class="site-footer__licence">
+              Contributed content is published under{' '}
+              <a href={LICENCE.url} rel="license">{LICENCE.name}</a>.
+              Contributors keep copyright and are credited.
+            </p>
+
+            <p class="site-footer__meta">
+              <span class="mono">MathemAct {year}</span>
+            </p>
+          </div>
+        </footer>
+      )
+    }
   </body>
 </html>
 
@@ -360,6 +431,181 @@ const year = new Date().getFullYear();
       flex-direction: column;
       align-items: flex-start;
       gap: var(--space-xs);
+    }
+  }
+
+  /* ── Landing variant ───────────────────────────────────────────────────────── */
+
+  :global(body.landing-body) {
+    background: var(--home-paper);
+    color: var(--home-ink);
+  }
+
+  .brand-lockup {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  .brand-kicker {
+    display: none;
+  }
+
+  .site-header--landing {
+    border-block-end: 0;
+    background: var(--home-paper);
+  }
+
+  .site-header--landing .site-header__inner {
+    align-items: center;
+    padding-block: var(--space-lg);
+  }
+
+  .site-header--landing .wordmark {
+    color: var(--home-ink);
+    font-size: 2rem;
+  }
+
+  .site-header--landing .brand-kicker {
+    display: block;
+    max-width: 12rem;
+    padding-block-start: 0.1rem;
+    color: var(--ink-muted);
+    font-size: var(--size-0);
+    font-weight: var(--weight-semibold);
+    line-height: 1.25;
+  }
+
+  .site-header--landing .header-end {
+    margin-inline-start: auto;
+  }
+
+  .site-header--landing .nav {
+    gap: clamp(var(--space-sm), 3vw, var(--space-xl));
+  }
+
+  .site-header--landing .nav a {
+    color: var(--home-ink);
+    font-weight: var(--weight-semibold);
+  }
+
+  .site-header--landing .nav a:hover {
+    color: var(--home-teal);
+  }
+
+  .site-footer--landing {
+    margin-block-start: 0;
+    padding-block: var(--space-md);
+    border: 0;
+    background: var(--home-navy);
+    color: var(--home-paper);
+  }
+
+  .landing-footer__inner {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: var(--space-xl);
+  }
+
+  .landing-footer__brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .landing-footer__brand .wordmark {
+    color: var(--home-paper);
+    font-size: var(--size-5);
+  }
+
+  .landing-footer__brand .wordmark:hover {
+    color: white;
+  }
+
+  .landing-footer__brand span {
+    font-size: var(--size-0);
+    color: color-mix(in srgb, var(--home-paper) 72%, transparent);
+  }
+
+  .landing-footer__nav {
+    display: flex;
+    gap: var(--space-lg);
+    margin: 0;
+    padding: 0;
+  }
+
+  .landing-footer__nav a {
+    color: var(--home-paper);
+    text-decoration: none;
+  }
+
+  .landing-footer__nav a:hover {
+    color: white;
+  }
+
+  .landing-footer__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .landing-footer__actions a {
+    color: var(--home-paper);
+  }
+
+  .landing-footer__actions svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+
+  .landing-footer__actions svg path {
+    vector-effect: non-scaling-stroke;
+  }
+
+  @media (max-width: 48rem) {
+    .site-header--landing .site-header__inner {
+      align-items: flex-start;
+    }
+
+    .site-header--landing .header-end {
+      width: 100%;
+      margin-inline-start: 0;
+    }
+
+    .landing-footer__inner {
+      grid-template-columns: 1fr;
+      gap: var(--space-md);
+    }
+
+    .landing-footer__nav {
+      flex-wrap: wrap;
+      gap: var(--space-sm) var(--space-lg);
+    }
+  }
+
+  @media (max-width: 32rem) {
+    .brand-kicker {
+      display: none !important;
+    }
+  }
+
+  @media (max-height: 860px) {
+    .site-header--landing .site-header__inner {
+      padding-block: var(--space-md);
+    }
+
+    .site-header--landing .brand-kicker {
+      display: none !important;
+    }
+  }
+
+  @media (max-height: 500px) {
+    .site-header--landing .site-header__inner {
+      padding-block: var(--space-xs);
     }
   }
 </style>
