@@ -193,10 +193,10 @@ const groups = [
 
         <p class="card__fresh">
           <span class="mono">new since the last build</span>
-          <span>— its own page follows at the next one</span>
+          <span>— static page follows at the next one</span>
         </p>
 
-        <h3 class="card__title" data-title></h3>
+        <h3 class="card__title"><a data-title></a></h3>
         <p class="card__aim" data-aim></p>
 
         <ul class="card__facts" role="list">
@@ -552,7 +552,11 @@ const groups = [
       if (label) label.textContent = OUTCOME[practice.outcome].label;
     }
 
-    put(node, '[data-title]', practice.title);
+    const titleLink = node.querySelector<HTMLAnchorElement>('[data-title]');
+    if (titleLink) {
+      titleLink.textContent = practice.title;
+      titleLink.href = `view/?id=${practice.id}`;
+    }
     put(node, '[data-aim]', practice.aim);
     put(node, '[data-area]', areaLabel(practice.area));
     put(node, '[data-task]', taskTypeLabel(practice.taskType));
@@ -595,25 +599,7 @@ const groups = [
 </script>
 
 <style>
-  /* The overlay's marker. Mono for the fact, muted prose for the consequence — small
-     enough to read as a footnote on the card rather than as an announcement, which is what
-     "subtle" has to mean here: a reader skimming the corpus should not be pulled to the
-     newest thing by its formatting.
-
-     Scoped, and it reaches the cloned template because the template is authored in this
-     file. `.card__fresh` deliberately does not live in corpus.css: nothing else has one. */
-  .card__fresh {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3xs) var(--space-2xs);
-    font-size: var(--size-1);
-    color: var(--ink-muted);
-  }
-
-  .card__fresh .mono {
-    font-family: var(--font-mono);
-    letter-spacing: var(--tracking-wide);
-  }
+  /* `.card__fresh` is now in corpus.css — both practices and resources use it. */
 
   /* The container the overlay uses when the corpus is empty. It has no filters and no
      results head, so it needs the top rule that .listing would otherwise provide. */

@@ -59,6 +59,17 @@ export interface FreshProposition {
   readonly createdAt: string;
 }
 
+export interface FreshResource {
+  readonly id: string;
+  readonly title: string;
+  readonly url: string;
+  readonly urlNormalised: string;
+  readonly category: string;
+  readonly description: string;
+  readonly relevance: string;
+  readonly createdAt: string;
+}
+
 /**
  * One request, or none.
  *
@@ -159,9 +170,40 @@ interface RawFreshPractice {
   practice_tags: { tags: { code: string } | null }[];
 }
 
+/** Published resources created after `since`. */
+export async function resourcesSince(since: string): Promise<FreshResource[]> {
+  const rows = await ask<RawFreshResource>(
+    'resources?select=id,title,url,url_normalised,category,description,relevance,created_at' +
+      `&status=eq.published&created_at=gt.${encodeURIComponent(since)}` +
+      `&order=created_at.desc&limit=${LIMIT}`,
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    url: row.url,
+    urlNormalised: row.url_normalised,
+    category: row.category,
+    description: row.description,
+    relevance: row.relevance,
+    createdAt: row.created_at,
+  }));
+}
+
 interface RawFreshProposition {
   id: string;
   statement: string;
   area: string;
+  created_at: string;
+}
+
+interface RawFreshResource {
+  id: string;
+  title: string;
+  url: string;
+  url_normalised: string;
+  category: string;
+  description: string;
+  relevance: string;
   created_at: string;
 }

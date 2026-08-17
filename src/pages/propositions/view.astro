@@ -1,0 +1,396 @@
+---
+/**
+ * Client-rendered proposition viewer for propositions that do not yet have a static page.
+ *
+ * A proposition is added to the export by the nightly workflow, so between the moment
+ * someone posts one and the following build there is no /propositions/<id>/ to visit. The
+ * freshness overlay on the listing shows those new propositions but cannot link them — that
+ * link would be a 404 dressed as a result.
+ *
+ * This page is the answer. It fetches the proposition from Supabase at runtime, exactly as
+ * /moderate/ does, and renders the same layout as the static proposition pages. The
+ * canonical URL for a proposition is still /propositions/<id>/ once the build has run; this
+ * page is only ever reached from the freshness overlay.
+ *
+ * One Supabase read (anon, plain fetch) gets the statement, rationale, area, author, and
+ * dates. Everything else — ratings, the histogram, comments — is already client-side on the
+ * static pages too, so the page initialises exactly the same way once it has the ID.
+ */
+import Base from '../../layouts/Base.astro';
+import CommentThread from '../../components/CommentThread.astro';
+import FormStatus from '../../components/FormStatus.astro';
+import Histogram from '../../components/Histogram.astro';
+import RatingScale from '../../components/RatingScale.astro';
+import References from '../../components/References.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { path } from '../../lib/paths';
+---
+
+<Base title="Proposition" description="A proposition submitted to MathemAct.">
+  <div class="shell corpus proposition">
+    <p class="breadcrumb"><a href={path('/propositions/')}>← All propositions</a></p>
+
+    <div data-loading>
+      <p class="field__hint">Loading…</p>
+    </div>
+
+    <div data-error hidden>
+      <p>This proposition could not be found, or has been removed.</p>
+      <p><a href={path('/propositions/')}>Back to all propositions</a></p>
+    </div>
+
+    <div data-content hidden>
+      <header data-quotable>
+        <span data-pagefind-filter="type:proposition" hidden></span>
+        <p class="proposition__label">
+          <span class="meta" data-status-label></span>
+        </p>
+
+        <blockquote class="proposition__statement">
+          <p data-statement></p>
+        </blockquote>
+
+        <ul class="card__facts" role="list">
+          <li data-pagefind-filter="area" data-area></li>
+          <li data-author></li>
+          <li><span class="meta" data-date></span></li>
+        </ul>
+      </header>
+
+      <section class="field-block" data-rationale hidden data-quotable>
+        <span class="field-block__label">Why this was proposed</span>
+        <p class="field-block__body" data-rationale-text></p>
+      </section>
+
+      <section class="rate" data-rate data-proposition-id="" data-pagefind-ignore>
+        <h2>Where do you stand?</h2>
+
+        <div class="panel" data-rate-signedout hidden>
+          <p>
+            <a href={path('/account/sign-in/')}>Sign in</a> to answer this one. The distribution
+            appears once you have — you are asked what you think before you are told what
+            everybody else thinks.
+          </p>
+        </div>
+
+        <div class="panel" data-rate-unconfirmed hidden>
+          <p>
+            Rating needs a confirmed email address.
+            <a href={path('/account/confirm/')}>Get another confirmation link</a>.
+          </p>
+        </div>
+
+        <form class="form" data-rate-form hidden novalidate>
+          <RatingScale name="score" />
+
+          <div class="actions">
+            <button class="button button--primary" type="submit">Record my answer</button>
+          </div>
+
+          <FormStatus id="rate-status" />
+        </form>
+
+        <p class="rate__withheld" data-rate-withheld hidden>
+          The distribution is hidden until you have answered, so that what other people think
+          does not decide what you think.
+        </p>
+
+        <div data-aggregate-wrap hidden>
+          <h3>How people answered</h3>
+          <Histogram />
+        </div>
+      </section>
+
+      <References incoming={[]} outgoing={[]} />
+
+      <div data-pagefind-ignore>
+        <CommentThread
+          parentType="proposition"
+          parentId=""
+          nodes={[]}
+          title=""
+          href=""
+        />
+      </div>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import { renderHistogram } from '../../lib/histogram';
+  import { loadAggregate, loadMyRating, saveRating } from '../../lib/propositions';
+  import { loadProfile, mayPost } from '../../lib/profile';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
+  import { areaLabel } from '../../lib/practice-schema';
+  import { longDate } from '../../lib/format';
+  import { path } from '../../lib/paths';
+
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+
+  const loadingEl = document.querySelector<HTMLElement>('[data-loading]')!;
+  const errorEl = document.querySelector<HTMLElement>('[data-error]')!;
+  const contentEl = document.querySelector<HTMLElement>('[data-content]')!;
+
+  if (!id) {
+    loadingEl.hidden = true;
+    errorEl.hidden = false;
+  } else {
+    await init(id);
+  }
+
+  async function init(propositionId: string): Promise<void> {
+    const proposition = await fetchProposition(propositionId);
+
+    if (!proposition) {
+      loadingEl.hidden = true;
+      errorEl.hidden = false;
+      return;
+    }
+
+    // Populate static content.
+    document.title = `${proposition.statement} | MathemAct`;
+
+    const statusLabel = document.querySelector<HTMLElement>('[data-status-label]')!;
+    statusLabel.textContent =
+      proposition.status === 'active' ? 'Active proposition' : 'Proposed';
+
+    const statementEl = document.querySelector<HTMLElement>('[data-statement]')!;
+    statementEl.textContent = proposition.statement;
+
+    const areaEl = document.querySelector<HTMLElement>('[data-area]')!;
+    areaEl.textContent = areaLabel(proposition.area);
+
+    const authorEl = document.querySelector<HTMLElement>('[data-author]')!;
+    if (proposition.author) {
+      authorEl.textContent =
+        `Proposed by ${proposition.author.displayName}` +
+        (proposition.author.isPseudonym ? ' (a pseudonym)' : '');
+    } else {
+      const erased = document.createElement('span');
+      erased.className = 'card__erased';
+      erased.textContent = 'Proposer since erased';
+      authorEl.appendChild(erased);
+    }
+
+    const dateEl = document.querySelector<HTMLElement>('[data-date]')!;
+    dateEl.textContent = proposition.activatedAt
+      ? `Active since ${longDate(proposition.activatedAt)}`
+      : `Proposed ${longDate(proposition.createdAt)}`;
+
+    if (proposition.rationale) {
+      const rationaleSection = document.querySelector<HTMLElement>('[data-rationale]')!;
+      const rationaleText = document.querySelector<HTMLElement>('[data-rationale-text]')!;
+      rationaleText.textContent = proposition.rationale;
+      rationaleSection.hidden = false;
+    }
+
+    // Wire up the interactive sections with the now-known ID.
+    const rateSection = query<HTMLElement>('[data-rate]');
+    rateSection.dataset.propositionId = propositionId;
+
+    const thread = document.querySelector<HTMLElement>('[data-thread]')!;
+    thread.dataset.parentId = propositionId;
+    thread.dataset.nodeTitle = proposition.statement;
+    thread.dataset.nodeHref = path(`/propositions/${propositionId}/`);
+
+    // Reveal the content.
+    loadingEl.hidden = true;
+    contentEl.hidden = false;
+
+    // Initialise the rating section — same logic as the static proposition page.
+    initRating(propositionId);
+  }
+
+  // ── Rating ────────────────────────────────────────────────────────────────────────────
+
+  function initRating(propositionId: string): void {
+    const root = query<HTMLElement>('[data-rate]');
+    const signedOut = query<HTMLElement>('[data-rate-signedout]', root);
+    const unconfirmed = query<HTMLElement>('[data-rate-unconfirmed]', root);
+    const form = query<HTMLFormElement>('[data-rate-form]', root);
+    const withheld = query<HTMLElement>('[data-rate-withheld]', root);
+    const wrap = query<HTMLElement>('[data-aggregate-wrap]', root);
+    const histogram = query<HTMLElement>('[data-histogram]', root);
+    const status = query<HTMLElement>('#rate-status', root);
+    const submit = query<HTMLButtonElement>('button[type="submit"]', form);
+
+    let userId: string | null = null;
+    let iRated = false;
+    let myScore: number | null = null;
+
+    subscribeToSession((state) => {
+      if (state.status === 'loading') return;
+
+      if (state.status !== 'signed-in') {
+        userId = null;
+        signedOut.hidden = false;
+        form.hidden = true;
+        withheld.hidden = false;
+        return;
+      }
+
+      if (userId === state.userId) return;
+      userId = state.userId;
+      void open(state.userId);
+    });
+
+    void startSession();
+
+    async function open(id: string): Promise<void> {
+      const profile = await loadProfile(id);
+
+      if (profile.ok && !mayPost(profile.value)) {
+        unconfirmed.hidden = false;
+        withheld.hidden = false;
+        return;
+      }
+
+      form.hidden = false;
+
+      const mine = await loadMyRating(propositionId, id);
+      if (!mine.ok) {
+        showStatus(status, 'error', mine.message);
+        return;
+      }
+
+      iRated = mine.value.rated;
+      myScore = mine.value.score;
+
+      if (iRated) {
+        const value = myScore === null ? 'none' : String(myScore);
+        const input = form.querySelector<HTMLInputElement>(
+          `input[name="score"][value="${value}"]`,
+        );
+        if (input) input.checked = true;
+
+        submit.textContent = 'Update my answer';
+        await reveal();
+      } else {
+        withheld.hidden = false;
+      }
+    }
+
+    async function reveal(): Promise<void> {
+      const aggregate = await loadAggregate(propositionId);
+      if (!aggregate.ok) {
+        showStatus(status, 'error', aggregate.message);
+        return;
+      }
+
+      withheld.hidden = true;
+      wrap.hidden = false;
+      renderHistogram(histogram, aggregate.value, myScore, iRated);
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      hideStatus(status);
+
+      if (!userId) return;
+
+      const chosen = form.querySelector<HTMLInputElement>(
+        'input[name="score"]:checked',
+      )?.value;
+      if (chosen === undefined) {
+        showStatus(
+          status,
+          'error',
+          'Choose a point on the scale, or say that you have no opinion — that is a real answer and it is recorded as one.',
+        );
+        return;
+      }
+
+      const score = chosen === 'none' ? null : Number(chosen);
+      const editing = iRated;
+
+      setBusy(submit, true, editing ? 'Updating…' : 'Recording…');
+      const result = await saveRating(propositionId, userId, score);
+      setBusy(submit, false);
+
+      if (!result.ok) {
+        showStatus(status, 'error', result.message);
+        return;
+      }
+
+      iRated = true;
+      myScore = score;
+      submit.textContent = 'Update my answer';
+
+      await reveal();
+
+      showStatus(
+        status,
+        'success',
+        editing
+          ? 'Rating updated.'
+          : 'Answer recorded. Yours is never shown next to your name — only the distribution is public.',
+      );
+    });
+  }
+
+  // ── Data fetch ────────────────────────────────────────────────────────────────────────
+
+  interface FetchedProposition {
+    readonly id: string;
+    readonly statement: string;
+    readonly rationale: string | null;
+    readonly status: 'proposed' | 'active';
+    readonly area: string;
+    readonly createdAt: string;
+    readonly activatedAt: string | null;
+    readonly author: {
+      readonly id: string;
+      readonly displayName: string;
+      readonly isPseudonym: boolean;
+    } | null;
+  }
+
+  async function fetchProposition(id: string): Promise<FetchedProposition | null> {
+    const base = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
+    const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
+    if (!base || !key) return null;
+
+    const select = [
+      'id,statement,rationale,status,area,created_at,activated_at',
+      'author:profiles!propositions_author_id_fkey(id,display_name,is_pseudonym)',
+    ].join(',');
+
+    try {
+      const response = await fetch(
+        `${base}/rest/v1/propositions` +
+          `?select=${encodeURIComponent(select)}` +
+          `&id=eq.${encodeURIComponent(id)}` +
+          `&status=neq.hidden`,
+        { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+      );
+
+      if (!response.ok) return null;
+
+      const rows = await response.json();
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+
+      const row = rows[0];
+      return {
+        id: row.id,
+        statement: row.statement,
+        rationale: row.rationale ?? null,
+        status: row.status,
+        area: row.area,
+        createdAt: row.created_at,
+        activatedAt: row.activated_at ?? null,
+        author: row.author
+          ? {
+              id: row.author.id,
+              displayName: row.author.display_name,
+              isPseudonym: row.author.is_pseudonym,
+            }
+          : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+</script>

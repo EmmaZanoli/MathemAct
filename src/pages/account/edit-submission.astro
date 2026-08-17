@@ -1,0 +1,831 @@
+---
+/**
+ * Edit a pending practice submission that a moderator has sent back for changes.
+ *
+ * The page is reached from the "Your submissions" section of /account/ when a submission's
+ * state is "sent back for changes". It pre-fills every form field from the existing practice,
+ * shows the moderator's note at the top so the author knows what to address, and on submit
+ * calls resubmit_practice — an RPC that replaces all content, tools, and tags in one
+ * transaction (necessary because the deferred at-least-one-tool constraint would fire between
+ * a DELETE and a subsequent INSERT if they were separate PostgREST requests).
+ *
+ * Deliberately no draft system. The submission already exists in the database — editing and
+ * resubmitting is one deliberate action, not something that should accumulate in localStorage
+ * and produce a "a draft from three weeks ago has been restored" banner on the next login.
+ */
+import Account from '../../layouts/Account.astro';
+import Field from '../../components/Field.astro';
+import FormSection from '../../components/FormSection.astro';
+import FormStatus from '../../components/FormStatus.astro';
+import OutcomeChoice from '../../components/OutcomeChoice.astro';
+import ToolRows from '../../components/ToolRows.astro';
+import TagPicker from '../../components/TagPicker.astro';
+import ConfidenceScale from '../../components/ConfidenceScale.astro';
+import { path } from '../../lib/paths';
+import { LICENCE } from '../../lib/site';
+import { AREAS, FIELD_COPY, PRACTICE_LIMITS, TASK_TYPES } from '../../lib/practice-schema';
+---
+
+<Account
+  title="Edit your submission"
+  description="Address the changes requested and resubmit for review."
+  lead="Read the note below, make the changes, and save when you are done. The submission stays pending until a moderator publishes it."
+  gate="required"
+>
+  <div data-loading>
+    <p class="field__hint">Loading your submission&hellip;</p>
+  </div>
+
+  <div class="panel" data-error hidden>
+    <p class="panel__heading" data-error-heading>Could not load submission</p>
+    <p data-error-body></p>
+    <p class="actions">
+      <a class="button button--secondary" href={path('/account/')}>Back to your account</a>
+    </p>
+  </div>
+
+  <div data-form-wrapper hidden>
+    {/* The moderator's note — the reason the author is here. Shown when present. */}
+    <div class="mod-note" data-note-panel hidden>
+      <p class="mod-note__head">Changes asked for</p>
+      <p class="mod-note__body" data-moderation-note></p>
+    </div>
+
+    <form class="practice-form" id="practice-edit" novalidate>
+      <FormStatus id="edit-status" />
+
+      <FormSection id="title" number={1} title="Title">
+        <Field
+          id="title"
+          label="One line saying what you did"
+          required
+          maxlength={PRACTICE_LIMITS.title}
+          counter
+          hint={FIELD_COPY.title.hint}
+          example={FIELD_COPY.title.example}
+        />
+      </FormSection>
+
+      <FormSection id="area" number={2} title="Area">
+        <fieldset class="choices">
+          <legend class="visually-hidden">What kind of work was this</legend>
+          {
+            AREAS.map((choice) => (
+              <label class="choice" for={`area-${choice.value}`}>
+                <input
+                  class="choice__input"
+                  type="radio"
+                  id={`area-${choice.value}`}
+                  name="area"
+                  value={choice.value}
+                />
+                <span>{choice.label}</span>
+                <span class="choice__hint">{choice.hint}</span>
+              </label>
+            ))
+          }
+        </fieldset>
+        <p class="field__error" id="area-error" hidden></p>
+      </FormSection>
+
+      <FormSection
+        id="task-type"
+        number={3}
+        title="Task type"
+        lead="What the tool was asked to do. This is the axis the corpus is most often grouped by, so it is worth a moment."
+      >
+        <fieldset class="choices">
+          <legend class="visually-hidden">What the tool was asked to do</legend>
+          {
+            TASK_TYPES.map((choice) => (
+              <label class="choice" for={`task-${choice.value}`}>
+                <input
+                  class="choice__input"
+                  type="radio"
+                  id={`task-${choice.value}`}
+                  name="task_type"
+                  value={choice.value}
+                />
+                <span>{choice.label}</span>
+                <span class="choice__hint">{choice.hint}</span>
+              </label>
+            ))
+          }
+        </fieldset>
+        <p class="field__error" id="task_type-error" hidden></p>
+      </FormSection>
+
+      <FormSection
+        id="tools"
+        number={4}
+        title="Tools used"
+        lead="Name, version, and the date you used it. At least one. The date is what lets a listing show that an account has gone stale."
+      >
+        <ToolRows />
+      </FormSection>
+
+      <FormSection id="aim" number={5} title="What you were trying to do">
+        <Field
+          id="aim"
+          label="The problem, in a few sentences"
+          type="textarea"
+          required
+          rows={4}
+          maxlength={PRACTICE_LIMITS.aim}
+          counter
+          hint={FIELD_COPY.aim.hint}
+          example={FIELD_COPY.aim.example}
+        />
+      </FormSection>
+
+      <FormSection id="method" number={6} title="What you actually did">
+        <Field
+          id="method"
+          label="Stepwise"
+          type="textarea"
+          required
+          rows={10}
+          maxlength={PRACTICE_LIMITS.method}
+          counter
+          hint={FIELD_COPY.method.hint}
+          example={FIELD_COPY.method.example}
+        />
+      </FormSection>
+
+      <FormSection id="outcome" number={7} title="Outcome">
+        <OutcomeChoice name="outcome" />
+        <p class="field__error" id="outcome-error" hidden></p>
+
+        <Field
+          id="outcome_notes"
+          label="What happened"
+          type="textarea"
+          required
+          rows={5}
+          maxlength={PRACTICE_LIMITS.outcomeNotes}
+          counter
+          hint={FIELD_COPY.outcomeNotes.hint}
+          example={FIELD_COPY.outcomeNotes.example}
+        />
+      </FormSection>
+
+      <FormSection id="verification" number={8} title="How you verified correctness">
+        <Field
+          id="verification"
+          label="How you checked"
+          type="textarea"
+          required
+          rows={6}
+          maxlength={PRACTICE_LIMITS.verification}
+          counter
+          example={FIELD_COPY.verification.example}
+        >
+          <Fragment slot="hint">
+            <p>{FIELD_COPY.verification.hint}</p>
+            <p>
+              <strong>This one has no skip and no "not applicable".</strong> An account
+              without it records that something felt right, which is not a finding. With it,
+              a reader knows what standard of checking was actually applied — and that is
+              the thing a mathematician needs in order to judge whether to trust the rest.
+            </p>
+            <p>
+              If the answer is that you did not check, say so. That is a real and useful
+              answer, and considerably more useful than a plausible-sounding one.
+            </p>
+          </Fragment>
+        </Field>
+      </FormSection>
+
+      <FormSection
+        id="transcript"
+        number={9}
+        title="Transcript"
+        lead="The excerpt is the record. A share link is supplementary — links expire, are revoked, and may breach the provider's terms."
+      >
+        <Field
+          id="transcript_excerpt"
+          label="Paste the part that matters"
+          type="textarea"
+          rows={8}
+          maxlength={PRACTICE_LIMITS.transcriptExcerpt}
+          counter
+          hint={FIELD_COPY.transcriptExcerpt.hint}
+        />
+
+        <Field
+          id="transcript_url"
+          label="Share link"
+          type="text"
+          maxlength={PRACTICE_LIMITS.transcriptUrl}
+          hint="Optional, and only alongside an excerpt. Never on its own."
+        />
+
+        <div class="checkbox">
+          <input
+            class="checkbox__input"
+            type="checkbox"
+            id="third_party_confirmed"
+            name="third_party_confirmed"
+          />
+          <label class="checkbox__label" for="third_party_confirmed">
+            I have removed other people's unpublished material from what I pasted
+          </label>
+          <p class="checkbox__hint">
+            Transcripts pick things up. A referee report you were discussing, a preprint
+            somebody sent you, a student's draft, an unpublished argument from a seminar —
+            none of that is yours to post, and everything here is published under {
+              LICENCE.name
+            } for anyone to copy. Read back over the excerpt before you tick this.
+          </p>
+          <p class="field__error" id="third_party_confirmed-error" hidden></p>
+        </div>
+      </FormSection>
+
+      <FormSection id="caveats" number={10} title="Caveats" optional>
+        <Field
+          id="caveats"
+          label="What you would do differently"
+          type="textarea"
+          rows={4}
+          maxlength={PRACTICE_LIMITS.caveats}
+          counter
+          hint={FIELD_COPY.caveats.hint}
+          example={FIELD_COPY.caveats.example}
+        />
+      </FormSection>
+
+      <FormSection id="tags" number={11} title="Subject areas" optional>
+        <TagPicker />
+      </FormSection>
+
+      <FormSection
+        id="counting"
+        number={12}
+        title="So this can be counted"
+        optional
+        lead="Researchers studying how mathematicians actually use these tools will read this corpus as data. These four answers are what let them. Skip any that do not apply."
+      >
+        <Field
+          id="time_spent_minutes"
+          label="Time spent, in minutes"
+          type="text"
+          hint="Roughly. 90 for an hour and a half. Counting the checking, not only the asking."
+        />
+
+        <fieldset class="choices">
+          <legend class="field__label">Did this work end up published?</legend>
+          <label class="choice" for="published-yes">
+            <input class="choice__input" type="radio" id="published-yes" name="was_published" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="choice" for="published-notyet">
+            <input class="choice__input" type="radio" id="published-notyet" name="was_published" value="notyet" />
+            <span>Not yet, or not applicable</span>
+          </label>
+          <label class="choice" for="published-no">
+            <input class="choice__input" type="radio" id="published-no" name="was_published" value="no" />
+            <span>No, and I do not expect it to be</span>
+          </label>
+        </fieldset>
+
+        <fieldset class="choices" data-disclosure hidden>
+          <legend class="field__label">Was the AI use disclosed in the paper?</legend>
+          <label class="choice" for="disclosed-yes">
+            <input class="choice__input" type="radio" id="disclosed-yes" name="was_disclosed" value="yes" />
+            <span>Yes</span>
+          </label>
+          <label class="choice" for="disclosed-no">
+            <input class="choice__input" type="radio" id="disclosed-no" name="was_disclosed" value="no" />
+            <span>No</span>
+          </label>
+          <label class="choice" for="disclosed-none">
+            <input class="choice__input" type="radio" id="disclosed-none" name="was_disclosed" value="" />
+            <span>I would rather not say</span>
+          </label>
+        </fieldset>
+
+        <div class="field">
+          <span class="field__label" id="confidence-label">
+            How confident are you in the result?
+          </span>
+          <p class="field__hint">
+            Your own judgement, not a claim about the tool. It is what lets a reader weigh
+            an account against one from somebody who was sure.
+          </p>
+          <div aria-labelledby="confidence-label">
+            <ConfidenceScale name="author_confidence" />
+          </div>
+        </div>
+      </FormSection>
+
+      <div class="draft">
+        <button class="button button--primary" type="submit">Save and resubmit for review</button>
+        <a class="button button--quiet" href={path('/account/')}>Cancel</a>
+      </div>
+
+      <p class="field__hint">
+        Saving resubmits for moderation. Everything published here is licensed
+        <a href={LICENCE.url} rel="license">{LICENCE.name}</a>; you keep copyright and are credited.
+      </p>
+    </form>
+  </div>
+</Account>
+
+<script>
+  import {
+    loadPendingPractice,
+    loadTags,
+    resubmitPractice,
+    type SubmissionTool,
+  } from '../../lib/practices';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import { path } from '../../lib/paths';
+  import {
+    clearFieldErrors,
+    hideStatus,
+    query,
+    setBusy,
+    setFieldError,
+    showStatus,
+  } from '../../lib/forms';
+  import {
+    EARLIEST_TOOL_USE,
+    PRACTICE_LIMITS,
+  } from '../../lib/practice-schema';
+  import type { Area, TaskType } from '../../lib/practice-schema';
+  import type { Outcome } from '../../lib/status';
+  import {
+    validateOptionalText,
+    validateRequiredText,
+    validateTimeSpent,
+    validateTool,
+    validateTranscriptUrl,
+    validateVerification,
+  } from '../../lib/validation';
+
+  const loading = query<HTMLElement>('[data-loading]');
+  const errorPanel = query<HTMLElement>('[data-error]');
+  const errorHeading = query<HTMLElement>('[data-error-heading]');
+  const errorBody = query<HTMLElement>('[data-error-body]');
+  const wrapper = query<HTMLElement>('[data-form-wrapper]');
+
+  const form = query<HTMLFormElement>('#practice-edit');
+  const status = query<HTMLElement>('#edit-status');
+  const submit = query<HTMLButtonElement>('button[type="submit"]', form);
+  const disclosure = query<HTMLFieldSetElement>('[data-disclosure]');
+
+  const toolList = query<HTMLUListElement>('[data-tool-list]');
+  const toolTemplate = query<HTMLTemplateElement>('[data-tool-template]');
+  const addToolButton = query<HTMLButtonElement>('[data-tool-add]');
+
+  const tagOptions = query<HTMLFieldSetElement>('[data-tag-options]');
+  const tagTemplate = query<HTMLTemplateElement>('[data-tag-template]');
+  const tagSearch = query<HTMLInputElement>('[data-tag-search]');
+  const tagStatus = query<HTMLElement>('[data-tag-status]');
+  const tagChosen = query<HTMLElement>('[data-tag-chosen]');
+
+  let userId: string | null = null;
+  let practiceId: string | null = null;
+  let toolSeq = 0;
+  let pendingTagCodes: string[] = [];
+
+  // ── Identify the practice from the URL ─────────────────────────────────────────────
+
+  practiceId = new URLSearchParams(window.location.search).get('id');
+
+  subscribeToSession((state) => {
+    if (state.status !== 'signed-in') return;
+    if (userId === state.userId) return;
+
+    userId = state.userId;
+    void openForm(state.userId);
+  });
+
+  void startSession();
+
+  async function openForm(id: string): Promise<void> {
+    if (!practiceId) {
+      showError('No submission ID in the URL. Go back to your account and try the link again.');
+      return;
+    }
+
+    const result = await loadPendingPractice(practiceId, id);
+
+    loading.hidden = true;
+
+    if (!result.ok) {
+      showError(result.message);
+      return;
+    }
+
+    const practice = result.value;
+
+    // Show the moderator's note if present.
+    if (practice.moderationNote) {
+      const notePanel = query<HTMLElement>('[data-note-panel]');
+      notePanel.hidden = false;
+      query<HTMLElement>('[data-moderation-note]').textContent = practice.moderationNote;
+    }
+
+    // Pre-fill text fields.
+    setValue('title', practice.title);
+    setValue('aim', practice.aim);
+    setValue('method', practice.method);
+    setValue('outcome_notes', practice.outcomeNotes);
+    setValue('verification', practice.verification);
+    setValue('transcript_excerpt', practice.transcriptExcerpt ?? '');
+    setValue('transcript_url', practice.transcriptUrl ?? '');
+    setValue('caveats', practice.caveats ?? '');
+    if (practice.timeSpentMinutes !== null) {
+      setValue('time_spent_minutes', String(practice.timeSpentMinutes));
+    }
+
+    // Pre-check radio groups.
+    checkRadio('area', practice.area);
+    checkRadio('task_type', practice.taskType);
+    checkRadio('outcome', practice.outcome);
+
+    // was_published: map boolean | null back to the three-way radio value.
+    if (practice.wasPublished === true) {
+      checkRadio('was_published', 'yes');
+    } else if (practice.wasPublished === false) {
+      checkRadio('was_published', 'no');
+    } else {
+      checkRadio('was_published', 'notyet');
+    }
+
+    // was_disclosed: only meaningful when published.
+    if (practice.wasPublished === true) {
+      if (practice.wasDisclosed === true) checkRadio('was_disclosed', 'yes');
+      else if (practice.wasDisclosed === false) checkRadio('was_disclosed', 'no');
+      else checkRadio('was_disclosed', '');
+    }
+
+    // author_confidence.
+    if (practice.authorConfidence !== null) {
+      checkRadio('author_confidence', String(practice.authorConfidence));
+    }
+
+    // Third-party checkbox: re-check it (they confirmed this when submitting; they should
+    // re-read the excerpt if they have changed it).
+    form.querySelector<HTMLInputElement>('#third_party_confirmed')!.checked =
+      practice.thirdPartyMaterialConfirmed;
+
+    // Tool rows.
+    for (const tool of practice.tools) {
+      addToolRow({ name: tool.name, version: tool.version, usedOn: tool.usedOn });
+    }
+    if (practice.tools.length === 0) addToolRow();
+
+    // Tags are loaded asynchronously; hold the codes until fillTags resolves.
+    pendingTagCodes = [...practice.tagCodes];
+    void fillTags();
+
+    syncDisclosure();
+    syncCounters();
+
+    wrapper.hidden = false;
+  }
+
+  function showError(message: string): void {
+    loading.hidden = true;
+    errorHeading.textContent = 'Could not load this submission';
+    errorBody.textContent = message;
+    errorPanel.hidden = false;
+  }
+
+  // ── Tool rows ───────────────────────────────────────────────────────────────────────
+
+  function addToolRow(values?: SubmissionTool): HTMLLIElement {
+    const row = toolTemplate.content.firstElementChild!.cloneNode(true) as HTMLLIElement;
+    toolSeq += 1;
+
+    for (const part of ['name', 'version', 'used-on'] as const) {
+      const label = row.querySelector<HTMLLabelElement>(`[data-label-for="${part}"]`)!;
+      const input = row.querySelector<HTMLInputElement>(
+        part === 'used-on' ? '[data-tool-date]' : `[data-tool-${part}]`,
+      )!;
+
+      const id = `tool-${part}-${toolSeq}`;
+      input.id = id;
+      label.htmlFor = id;
+    }
+
+    if (values) {
+      row.querySelector<HTMLInputElement>('[data-tool-name]')!.value = values.name;
+      row.querySelector<HTMLInputElement>('[data-tool-version]')!.value = values.version;
+      row.querySelector<HTMLInputElement>('[data-tool-date]')!.value = values.usedOn;
+    }
+
+    row.querySelector<HTMLButtonElement>('[data-tool-remove]')!.addEventListener('click', () => {
+      if (toolList.children.length === 1) {
+        for (const input of row.querySelectorAll<HTMLInputElement>('input')) input.value = '';
+      } else {
+        row.remove();
+      }
+      syncCounters();
+    });
+
+    toolList.append(row);
+    return row;
+  }
+
+  addToolButton.addEventListener('click', () => {
+    const row = addToolRow();
+    row.querySelector<HTMLInputElement>('[data-tool-name]')?.focus();
+  });
+
+  function readTools(): SubmissionTool[] {
+    return [...toolList.children]
+      .map((row) => ({
+        name: row.querySelector<HTMLInputElement>('[data-tool-name]')?.value ?? '',
+        version: row.querySelector<HTMLInputElement>('[data-tool-version]')?.value ?? '',
+        usedOn: row.querySelector<HTMLInputElement>('[data-tool-date]')?.value ?? '',
+      }))
+      .filter((tool) => tool.name.trim() || tool.version.trim() || tool.usedOn);
+  }
+
+  // ── Tags ────────────────────────────────────────────────────────────────────────────
+
+  async function fillTags(): Promise<void> {
+    const result = await loadTags();
+
+    if (!result.ok) {
+      tagStatus.textContent =
+        'The subject categories could not be loaded. You can save without them.';
+      return;
+    }
+
+    for (const tag of result.value) {
+      const option = tagTemplate.content.firstElementChild!.cloneNode(true) as HTMLLabelElement;
+      const input = option.querySelector<HTMLInputElement>('.tag__input')!;
+
+      input.value = tag.code;
+      input.name = 'tags';
+      input.id = `tag-${tag.code}`;
+      option.htmlFor = input.id;
+      option.querySelector('.tag__code')!.textContent = tag.code;
+      option.querySelector('.tag__label')!.textContent = tag.label;
+      option.dataset.search = `${tag.code} ${tag.label}`.toLowerCase();
+
+      tagOptions.append(option);
+    }
+
+    tagStatus.hidden = true;
+    tagOptions.hidden = false;
+
+    // Apply the practice's existing tag codes now that the checkboxes exist.
+    for (const code of pendingTagCodes) {
+      const input = tagOptions.querySelector<HTMLInputElement>(`#${CSS.escape(`tag-${code}`)}`);
+      if (input) input.checked = true;
+    }
+    pendingTagCodes = [];
+    describeChosenTags();
+  }
+
+  tagSearch.addEventListener('input', () => {
+    const needle = tagSearch.value.trim().toLowerCase();
+    for (const option of tagOptions.querySelectorAll<HTMLLabelElement>('.tag')) {
+      const chosen = option.querySelector<HTMLInputElement>('.tag__input')!.checked;
+      option.hidden = !chosen && needle.length > 0 && !option.dataset.search!.includes(needle);
+    }
+  });
+
+  function chosenTags(): string[] {
+    return [...tagOptions.querySelectorAll<HTMLInputElement>('.tag__input:checked')].map(
+      (input) => input.value,
+    );
+  }
+
+  function describeChosenTags(): void {
+    const chosen = chosenTags();
+    tagChosen.textContent = chosen.length
+      ? `Chosen: ${chosen.join(', ')}`
+      : 'No categories chosen.';
+  }
+
+  tagOptions.addEventListener('change', describeChosenTags);
+
+  // ── The disclosure question ─────────────────────────────────────────────────────────
+
+  function syncDisclosure(): void {
+    const published =
+      form.querySelector<HTMLInputElement>('input[name="was_published"]:checked')?.value;
+    const show = published === 'yes';
+
+    disclosure.hidden = !show;
+    if (!show) {
+      form.querySelector<HTMLInputElement>('#disclosed-none')!.checked = true;
+    }
+  }
+
+  // ── Character counters ──────────────────────────────────────────────────────────────
+
+  function syncCounters(): void {
+    for (const counter of form.querySelectorAll<HTMLElement>('[data-counter-for]')) {
+      const field = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+        `#${CSS.escape(counter.dataset.counterFor!)}`,
+      );
+      if (!field) continue;
+
+      const max = Number(counter.dataset.max);
+      const used = field.value.length;
+
+      counter.querySelector('[data-counter-value]')!.textContent = String(used);
+      if (used > max * 0.9) counter.setAttribute('data-near', '');
+      else counter.removeAttribute('data-near');
+    }
+  }
+
+  form.addEventListener('input', () => {
+    syncCounters();
+    syncDisclosure();
+  });
+  form.addEventListener('change', () => {
+    syncCounters();
+    syncDisclosure();
+  });
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────────────
+
+  function value(name: string): string {
+    return (
+      form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${CSS.escape(name)}`)?.value.trim() ?? ''
+    );
+  }
+
+  function checked(name: string): string | undefined {
+    return (
+      form.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value || undefined
+    );
+  }
+
+  function tristate(name: string): boolean | null {
+    const answer = checked(name);
+    if (answer === 'yes') return true;
+    if (answer === 'no') return false;
+    return null;
+  }
+
+  function setValue(id: string, text: string): void {
+    const el = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#${CSS.escape(id)}`);
+    if (el) el.value = text;
+  }
+
+  function checkRadio(name: string, val: string): void {
+    const input = form.querySelector<HTMLInputElement>(
+      `input[name="${CSS.escape(name)}"][value="${CSS.escape(val)}"]`,
+    );
+    if (input) input.checked = true;
+  }
+
+  // ── Submission ──────────────────────────────────────────────────────────────────────
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearFieldErrors(form);
+    hideStatus(status);
+
+    if (!userId || !practiceId) {
+      showStatus(status, 'error', 'Your session has ended. Sign in again.');
+      return;
+    }
+
+    const tools = readTools();
+    const problems: { id: string; error: string | null }[] = [
+      { id: 'title', error: validateRequiredText(value('title'), PRACTICE_LIMITS.title, 'A title') },
+      { id: 'aim', error: validateRequiredText(value('aim'), PRACTICE_LIMITS.aim, 'The aim') },
+      { id: 'method', error: validateRequiredText(value('method'), PRACTICE_LIMITS.method, 'The method') },
+      { id: 'outcome_notes', error: validateRequiredText(value('outcome_notes'), PRACTICE_LIMITS.outcomeNotes, 'The outcome notes') },
+      { id: 'verification', error: validateVerification(value('verification'), PRACTICE_LIMITS.verification) },
+      { id: 'transcript_excerpt', error: validateOptionalText(value('transcript_excerpt'), PRACTICE_LIMITS.transcriptExcerpt, 'The transcript excerpt') },
+      { id: 'transcript_url', error: validateTranscriptUrl(value('transcript_url'), PRACTICE_LIMITS.transcriptUrl) },
+      { id: 'caveats', error: validateOptionalText(value('caveats'), PRACTICE_LIMITS.caveats, 'The caveats') },
+      { id: 'time_spent_minutes', error: validateTimeSpent(value('time_spent_minutes'), PRACTICE_LIMITS.timeSpentMinutes) },
+    ];
+
+    if (value('transcript_url') && !value('transcript_excerpt')) {
+      problems.push({
+        id: 'transcript_excerpt',
+        error: 'Paste an excerpt as well. Share links expire and get revoked, so a link on its own would leave nothing behind.',
+      });
+    }
+
+    let firstBad: string | null = null;
+
+    for (const problem of problems) {
+      setFieldError(problem.id, problem.error, form);
+      if (problem.error && !firstBad) firstBad = problem.id;
+    }
+
+    const groups: [string, string | undefined, string][] = [
+      ['area', checked('area'), 'Choose the kind of work this was.'],
+      ['task_type', checked('task_type'), 'Choose what the tool was asked to do.'],
+      ['outcome', checked('outcome'), 'Say what happened. All three answers are equally welcome.'],
+    ];
+
+    for (const [name, answer, message] of groups) {
+      const target = form.querySelector<HTMLElement>(`#${name}-error`)!;
+      target.textContent = answer ? '' : message;
+      target.hidden = Boolean(answer);
+      if (!answer && !firstBad) firstBad = `section-${name.replace('_', '-')}`;
+    }
+
+    const confirmedThirdParty = form.querySelector<HTMLInputElement>('#third_party_confirmed')!.checked;
+    const thirdPartyError = form.querySelector<HTMLElement>('#third_party_confirmed-error')!;
+    thirdPartyError.textContent = confirmedThirdParty
+      ? ''
+      : "Confirm you have removed other people's unpublished material. Everything here is published for anyone to copy.";
+    thirdPartyError.hidden = confirmedThirdParty;
+    if (!confirmedThirdParty && !firstBad) firstBad = 'third_party_confirmed';
+
+    const toolErrors = tools.map((tool) =>
+      validateTool(tool, { name: PRACTICE_LIMITS.toolName, version: PRACTICE_LIMITS.toolVersion }, EARLIEST_TOOL_USE),
+    );
+
+    [...toolList.children].forEach((row, index) => {
+      const target = row.querySelector<HTMLElement>('[data-tool-error]')!;
+      const message = toolErrors[index] ?? null;
+      target.textContent = message ?? '';
+      target.hidden = !message;
+    });
+
+    if (!tools.length) {
+      showStatus(status, 'error', 'Record at least one tool, with its version and the date you used it.');
+      document.querySelector('#section-tools')?.scrollIntoView({ block: 'start' });
+      return;
+    }
+
+    if (firstBad || toolErrors.some(Boolean)) {
+      const target =
+        document.querySelector<HTMLElement>(`#${CSS.escape(firstBad ?? 'section-tools')}`) ??
+        document.querySelector<HTMLElement>('#section-tools');
+
+      showStatus(status, 'error', 'Some sections still need an answer. They are marked below.');
+      target?.scrollIntoView({ block: 'center' });
+      if (firstBad && !firstBad.startsWith('section-')) {
+        form.querySelector<HTMLElement>(`#${CSS.escape(firstBad)}`)?.focus();
+      }
+      return;
+    }
+
+    setBusy(submit, true, 'Saving…');
+
+    const result = await resubmitPractice(practiceId, {
+      title: value('title'),
+      area: checked('area') as Area,
+      taskType: checked('task_type') as TaskType,
+      tools,
+      aim: value('aim'),
+      method: value('method'),
+      outcome: checked('outcome') as Outcome,
+      outcomeNotes: value('outcome_notes'),
+      verification: value('verification'),
+      transcriptExcerpt: value('transcript_excerpt'),
+      transcriptUrl: value('transcript_url'),
+      caveats: value('caveats'),
+      thirdPartyMaterialConfirmed: confirmedThirdParty,
+      timeSpentMinutes: value('time_spent_minutes') ? Number(value('time_spent_minutes')) : null,
+      wasPublished: tristate('was_published'),
+      wasDisclosed: tristate('was_published') === true ? tristate('was_disclosed') : null,
+      authorConfidence: checked('author_confidence') ? Number(checked('author_confidence')) : null,
+      tagCodes: chosenTags(),
+    });
+
+    setBusy(submit, false);
+
+    if (!result.ok) {
+      showStatus(status, 'error', result.message);
+      return;
+    }
+
+    window.location.assign(path('/account/'));
+  });
+</script>
+
+<style>
+  .mod-note {
+    margin-block-end: var(--space-xl);
+    padding: var(--space-sm) var(--space-md);
+    border-inline-start: var(--border-width-thick) solid var(--accent);
+    background-color: var(--surface);
+  }
+
+  .mod-note__head {
+    font-size: var(--size-1);
+    font-weight: var(--weight-semibold);
+    margin-block-end: var(--space-2xs);
+  }
+
+  .mod-note__body {
+    line-height: var(--leading-relaxed);
+  }
+
+  .draft {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-block-start: var(--space-xl);
+  }
+</style>

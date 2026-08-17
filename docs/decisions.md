@@ -1293,3 +1293,83 @@ The alternative — treating 403 as unreachable — would mark large numbers of 
 commercial sites as broken because they use Cloudflare or similar services that block
 automated HEAD requests from cloud IPs. A false 'unreachable' label is worse than no check:
 it tells moderators and readers that working links are broken.
+
+## 2026-08-17 — /propositions/view/ is the client-rendered viewer for pre-export propositions
+
+The static proposition pages at `/propositions/<id>/` are generated from the nightly
+export. A proposition posted between exports has no static page, so the freshness overlay
+on the listing previously showed it as unclickable text — visible but unreachable for up to
+24 hours.
+
+`/propositions/view/?id=<uuid>` is the fix. It follows the same pattern as `/moderate/`: a
+single static HTML shell that fetches its content from Supabase at runtime. One anon fetch
+against PostgREST gets the statement, rationale, area, author, and dates. The rating
+widget and comment thread initialise the same way as on the static pages.
+
+The freshness overlay now links fresh propositions to this URL instead of rendering
+unclickable text. Once the nightly export runs and the next build generates the static
+page, any further links from outside this site will use `/propositions/<id>/`; the view
+page remains reachable for as long as anyone has a link to it and continues to work
+correctly.
+
+Rejected alternatives:
+- **Trigger a rebuild on submission** via a Supabase Edge Function calling the GitHub
+  workflow_dispatch API. This would generate the canonical static page within ~10 minutes,
+  but adds Edge Function infrastructure, a GitHub token in Supabase secrets, and still
+  leaves a gap during the build. The view page gives immediate access with no new
+  infrastructure and degrades gracefully (falls back to empty when Supabase is paused,
+  exactly like the freshness overlay itself).
+- **Modifying the 404.html** to detect proposition paths. The 404 page is already the
+  moderation UI; routing two unrelated things through it would couple them with no benefit.
+
+## 2026-08-17 — Same view-page pattern applied to practices; freshness overlay added to resources
+
+`/practices/view/?id=<uuid>` follows the same pattern as `/propositions/view/`. One anon
+PostgREST fetch gets the full practice record including tool rows, tags, and author. The
+staleness-confirmation section and related-practices sidebar are omitted from the view page
+(the confirmation section reads `data-practice-id` at initialisation rather than at submit
+time, so setting it via JS after the fetch is not safe without restructuring it; related
+practices require the corpus to be in memory). Both appear in full on the static page once
+the build runs.
+
+`.card__fresh` moved from a scoped style in `practices/index.astro` to `corpus.css`,
+because resources now use the same class on their fresh overlay cards.
+
+Resources do not have internal pages — every card links to an external URL — so the fix for
+resources is different: a freshness overlay on `resources/index.astro` that prepends newly
+published resources to the list, each linking directly to its external URL. `resourcesSince`
+was added to `src/lib/fresh.ts` alongside `practicesSince` and `propositionsSince`.
+
+Both changes follow the same "silent on failure" rule: if Supabase is paused or the query
+times out, the page stays correct from the export and nothing is shown or broken.
+
+## 2026-08-17 — /account/edit-submission/ closes the "send back for changes" loop
+
+The moderation flow had a half-loop: a moderator could request changes and write a note
+the author would see under "Your submissions", but the author had no screen to act on it.
+The submission sat as pending indefinitely.
+
+`/account/edit-submission/?id=<uuid>` is the other half. It loads the full practice via
+`loadPendingPractice` (a Supabase query that enforces `status = 'pending'` and
+`author_id = auth.uid()`), shows the moderator's note at the top, pre-fills every form
+field, and on submit calls the `resubmit_practice` RPC. The account page now shows an
+"Edit and resubmit" button on any submission that has a moderation note.
+
+**Why an RPC rather than direct table updates** — the at-least-one-tool constraint on
+`practice_tools` is `DEFERRABLE INITIALLY DEFERRED`. That means it fires at COMMIT, not
+after each statement. A browser that deleted all tool rows and then inserted the new set in
+two separate PostgREST requests would see the first request fail at commit (no tools).
+Inside one RPC call both operations are in the same transaction, so the constraint checks
+the final state (the new tools) and is satisfied. This is exactly the reasoning behind
+`submit_practice`, and `resubmit_practice` is structured identically — `SECURITY INVOKER`,
+tag codes accepted rather than UUIDs, unknown or retired codes silently dropped.
+
+**No draft system on the edit form** — the submission already exists in the database.
+Accumulating a localStorage draft of an in-progress edit would produce a "a draft from
+three weeks ago has been restored" message on the next login, which would be confusing and
+incorrect. Editing and resubmitting is one deliberate action.
+
+**CLAUDE.md note** — the sentence "Not built: an edit screen for a pending submission —
+so 'send back' reaches the author but they cannot yet act on it" in the "What exists"
+section can now be removed. `docs/moderation.md` carries the authoritative list.
+

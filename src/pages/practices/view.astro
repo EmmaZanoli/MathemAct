@@ -1,0 +1,408 @@
+---
+/**
+ * Client-rendered practice viewer for practices that do not yet have a static page.
+ *
+ * Practices are exported nightly and built into static pages at /practices/<id>/. Between
+ * the export and the next build, a practice that was published that day has no static page.
+ * The freshness overlay on the listing shows those new practices but links them here rather
+ * than to a 404.
+ *
+ * Pattern and rationale: same as /propositions/view/ and /moderate/. One anon fetch
+ * against PostgREST gets the fields the static page would have baked in. The interactive
+ * sections — the staleness-confirmation form and the comment thread — are wired up by
+ * JavaScript after the fetch completes.
+ *
+ * What is omitted relative to the static page:
+ *   - StalenessNote / tombstone glyph: requires the confirmation aggregate from the DB;
+ *     a fresh practice has none, so the section would be empty regardless.
+ *   - Related practices: requires the full corpus to be in memory at build time.
+ *   - Institution badges: the author join here omits institution data to keep the query
+ *     small; badges carry a verification date that is not in this query.
+ *   - Citation string / CopyButton: minor; omitted for now.
+ * All of these appear in full on the static page once the build runs.
+ */
+import Base from '../../layouts/Base.astro';
+import CommentThread from '../../components/CommentThread.astro';
+import References from '../../components/References.astro';
+import '../../styles/corpus.css';
+import '../../styles/forms.css';
+import { path } from '../../lib/paths';
+---
+
+<Base title="Practice" description="A practice submitted to MathemAct.">
+  <div class="shell corpus">
+    <p class="breadcrumb"><a href={path('/practices/')}>← All practices</a></p>
+
+    <div data-loading>
+      <p class="field__hint">Loading…</p>
+    </div>
+
+    <div data-error hidden>
+      <p>This practice could not be found, or has been removed.</p>
+      <p><a href={path('/practices/')}>Back to all practices</a></p>
+    </div>
+
+    <div class="practice" data-content hidden>
+      <div class="practice__body" data-quotable>
+        <span data-pagefind-filter="type:practice" hidden></span>
+
+        <header>
+          <h1 data-title></h1>
+
+          <ul class="card__facts practice__facts" role="list">
+            <li data-pagefind-filter="area" data-area></li>
+            <li data-pagefind-filter="task_type" data-task></li>
+            <li><span class="meta" data-date></span></li>
+          </ul>
+        </header>
+
+        <section class="field-block field-block--key">
+          <span class="field-block__label">Outcome</span>
+          <p class="field-block__body">
+            <strong data-outcome-label></strong>
+            <span data-outcome-notes></span>
+          </p>
+        </section>
+
+        <section class="field-block field-block--key">
+          <span class="field-block__label">How this was verified</span>
+          <p class="field-block__body" data-verification></p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">What they were trying to do</span>
+          <p class="field-block__body" data-aim></p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">What they actually did</span>
+          <p class="field-block__body" data-method></p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">Tools used</span>
+          <table class="tools-table">
+            <thead>
+              <tr>
+                <th scope="col">Tool</th>
+                <th scope="col">Version</th>
+                <th scope="col">Date used</th>
+              </tr>
+            </thead>
+            <tbody data-tools-body></tbody>
+          </table>
+        </section>
+
+        <section class="field-block" data-transcript-section hidden>
+          <span class="field-block__label">Transcript</span>
+          <details class="transcript">
+            <summary class="transcript__summary" data-transcript-summary></summary>
+            <div class="transcript__head">
+              <p class="field__hint">
+                Pasted by the author, who confirmed that other people's unpublished
+                material had been removed.
+              </p>
+            </div>
+            <div class="transcript__body" data-transcript-body></div>
+            <p class="field__hint" data-transcript-link-note hidden>
+              The author also linked to <a data-transcript-link-href rel="nofollow noopener">the original conversation</a>.
+              Share links expire and get revoked, so the excerpt above is the record.
+            </p>
+          </details>
+        </section>
+
+        <section class="field-block" data-caveats-section hidden>
+          <span class="field-block__label">Caveats, and what they would do differently</span>
+          <p class="field-block__body" data-caveats></p>
+        </section>
+      </div>
+
+      <aside class="aside">
+        <div class="aside__block">
+          <span class="aside__label">Posted by</span>
+          <p data-author-block></p>
+        </div>
+
+        <div class="aside__block" data-tags-block hidden>
+          <span class="aside__label">Subject areas</span>
+          <ul class="card__tools" role="list" data-tags-list></ul>
+        </div>
+
+        <div class="aside__block" data-metadata-block hidden>
+          <span class="aside__label">For counting</span>
+          <dl data-metadata-dl></dl>
+        </div>
+
+        <div class="aside__block">
+          <p class="field__hint">
+            Fresh submission — the full static page, with citation, related practices, and
+            confirmation reports, appears at the next nightly build.
+          </p>
+        </div>
+      </aside>
+
+      <References incoming={[]} outgoing={[]} />
+
+      <div data-pagefind-ignore>
+        <CommentThread
+          parentType="practice"
+          parentId=""
+          nodes={[]}
+          title=""
+          href=""
+        />
+      </div>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import { longDate } from '../../lib/format';
+  import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/practice-schema';
+  import { path } from '../../lib/paths';
+
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+
+  const loadingEl = document.querySelector<HTMLElement>('[data-loading]')!;
+  const errorEl = document.querySelector<HTMLElement>('[data-error]')!;
+  const contentEl = document.querySelector<HTMLElement>('[data-content]')!;
+
+  if (!id) {
+    loadingEl.hidden = true;
+    errorEl.hidden = false;
+  } else {
+    await init(id);
+  }
+
+  async function init(practiceId: string): Promise<void> {
+    const practice = await fetchPractice(practiceId);
+
+    if (!practice) {
+      loadingEl.hidden = true;
+      errorEl.hidden = false;
+      return;
+    }
+
+    document.title = `${practice.title} | MathemAct`;
+
+    setText('[data-title]', practice.title);
+    setText('[data-area]', areaLabel(practice.area));
+    setText('[data-task]', taskTypeLabel(practice.taskType));
+    setText('[data-date]', `Posted ${longDate(practice.createdAt)}`);
+
+    setText('[data-outcome-label]', `${outcomeLabel(practice.outcome)}.`);
+    setText('[data-outcome-notes]', practice.outcomeNotes ?? '');
+    setText('[data-verification]', practice.verification);
+    setText('[data-aim]', practice.aim);
+    setText('[data-method]', practice.method);
+
+    const tbody = document.querySelector<HTMLElement>('[data-tools-body]')!;
+    for (const tool of practice.tools) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td></td><td></td><td></td>`;
+      (tr.cells[0] as HTMLTableCellElement).textContent = tool.name;
+      (tr.cells[1] as HTMLTableCellElement).textContent = tool.version;
+      (tr.cells[2] as HTMLTableCellElement).textContent = tool.usedOn ?? '';
+      tbody.appendChild(tr);
+    }
+
+    if (practice.transcriptExcerpt) {
+      const section = document.querySelector<HTMLElement>('[data-transcript-section]')!;
+      const summary = document.querySelector<HTMLElement>('[data-transcript-summary]')!;
+      const body = document.querySelector<HTMLElement>('[data-transcript-body]')!;
+      summary.textContent = `Show the excerpt (${practice.transcriptExcerpt.length.toLocaleString('en-GB')} characters)`;
+      body.textContent = practice.transcriptExcerpt;
+      if (practice.transcriptUrl) {
+        const note = document.querySelector<HTMLElement>('[data-transcript-link-note]')!;
+        const link = document.querySelector<HTMLAnchorElement>('[data-transcript-link-href]')!;
+        link.href = practice.transcriptUrl;
+        note.hidden = false;
+      }
+      section.hidden = false;
+    }
+
+    if (practice.caveats) {
+      setText('[data-caveats]', practice.caveats);
+      const section = document.querySelector<HTMLElement>('[data-caveats-section]')!;
+      section.hidden = false;
+    }
+
+    // Author block.
+    const authorBlock = document.querySelector<HTMLElement>('[data-author-block]')!;
+    if (practice.author) {
+      const link = document.createElement('a');
+      link.href = path(`/authors/${practice.author.id}/`);
+      link.textContent = practice.author.displayName;
+      authorBlock.appendChild(link);
+      if (practice.author.isPseudonym) {
+        const hint = document.createElement('span');
+        hint.className = 'field__hint';
+        hint.textContent = ' — a pseudonym';
+        authorBlock.appendChild(hint);
+      }
+    } else {
+      authorBlock.className = 'field__hint';
+      authorBlock.textContent =
+        'This account has since been erased. The contribution stays in the corpus without a name on it.';
+    }
+
+    // Tags.
+    if (practice.tags.length > 0) {
+      const block = document.querySelector<HTMLElement>('[data-tags-block]')!;
+      const list = document.querySelector<HTMLElement>('[data-tags-list]')!;
+      for (const tag of practice.tags) {
+        const li = document.createElement('li');
+        li.className = 'tool-chip tool-chip--tag';
+        const a = document.createElement('a');
+        a.href = path(`/practices/?tag=${tag}`);
+        const span = document.createElement('span');
+        span.className = 'tool-chip__name';
+        span.textContent = tag;
+        a.appendChild(span);
+        li.appendChild(a);
+        list.appendChild(li);
+      }
+      block.hidden = false;
+    }
+
+    // Metadata (time, confidence, published, disclosed).
+    const entries: { term: string; value: string }[] = [];
+    if (practice.timeSpentMinutes !== null)
+      entries.push({ term: 'Time spent', value: `${practice.timeSpentMinutes} min` });
+    if (practice.authorConfidence !== null)
+      entries.push({ term: 'Author confidence', value: `${practice.authorConfidence} / 10` });
+    if (practice.wasPublished !== null)
+      entries.push({ term: 'Published', value: practice.wasPublished ? 'yes' : 'no' });
+    if (practice.wasDisclosed !== null)
+      entries.push({
+        term: 'Disclosed in the paper',
+        value: practice.wasDisclosed ? 'yes' : 'no',
+      });
+    if (entries.length > 0) {
+      const block = document.querySelector<HTMLElement>('[data-metadata-block]')!;
+      const dl = document.querySelector<HTMLElement>('[data-metadata-dl]')!;
+      for (const { term, value } of entries) {
+        const dt = document.createElement('dt');
+        dt.textContent = term;
+        const dd = document.createElement('dd');
+        dd.textContent = value;
+        dl.append(dt, dd);
+      }
+      block.hidden = false;
+    }
+
+    // Wire up the comment thread.
+    const thread = document.querySelector<HTMLElement>('[data-thread]')!;
+    thread.dataset.parentId = practiceId;
+    thread.dataset.nodeTitle = practice.title;
+    thread.dataset.nodeHref = path(`/practices/${practiceId}/`);
+
+    loadingEl.hidden = true;
+    contentEl.hidden = false;
+  }
+
+  function setText(selector: string, text: string): void {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (el) el.textContent = text;
+  }
+
+  // ── Data fetch ────────────────────────────────────────────────────────────────────────
+
+  interface FetchedPractice {
+    readonly id: string;
+    readonly title: string;
+    readonly aim: string;
+    readonly method: string;
+    readonly outcome: 'worked' | 'partial' | 'failed';
+    readonly outcomeNotes: string | null;
+    readonly verification: string;
+    readonly transcriptExcerpt: string | null;
+    readonly transcriptUrl: string | null;
+    readonly caveats: string | null;
+    readonly area: string;
+    readonly taskType: string;
+    readonly createdAt: string;
+    readonly timeSpentMinutes: number | null;
+    readonly authorConfidence: number | null;
+    readonly wasPublished: boolean | null;
+    readonly wasDisclosed: boolean | null;
+    readonly tools: readonly { name: string; version: string; usedOn: string | null }[];
+    readonly tags: readonly string[];
+    readonly author: {
+      readonly id: string;
+      readonly displayName: string;
+      readonly isPseudonym: boolean;
+    } | null;
+  }
+
+  async function fetchPractice(id: string): Promise<FetchedPractice | null> {
+    const base = import.meta.env.PUBLIC_SUPABASE_URL as string | undefined;
+    const key = import.meta.env.PUBLIC_SUPABASE_ANON_KEY as string | undefined;
+    if (!base || !key) return null;
+
+    const select = [
+      'id,title,aim,method,outcome,outcome_notes,verification',
+      'transcript_excerpt,transcript_url,caveats,area,task_type,created_at',
+      'time_spent_minutes,author_confidence,was_published,was_disclosed',
+      'practice_tools(tool_name,tool_version,used_on)',
+      'practice_tags(tags(code))',
+      'author:profiles!practices_author_id_fkey(id,display_name,is_pseudonym)',
+    ].join(',');
+
+    try {
+      const response = await fetch(
+        `${base}/rest/v1/practices` +
+          `?select=${encodeURIComponent(select)}` +
+          `&id=eq.${encodeURIComponent(id)}` +
+          `&status=eq.published&deleted_at=is.null`,
+        { headers: { apikey: key, Authorization: `Bearer ${key}` } },
+      );
+
+      if (!response.ok) return null;
+
+      const rows = await response.json();
+      if (!Array.isArray(rows) || rows.length === 0) return null;
+
+      const row = rows[0];
+      return {
+        id: row.id,
+        title: row.title,
+        aim: row.aim,
+        method: row.method,
+        outcome: row.outcome,
+        outcomeNotes: row.outcome_notes ?? null,
+        verification: row.verification,
+        transcriptExcerpt: row.transcript_excerpt ?? null,
+        transcriptUrl: row.transcript_url ?? null,
+        caveats: row.caveats ?? null,
+        area: row.area,
+        taskType: row.task_type,
+        createdAt: row.created_at,
+        timeSpentMinutes: row.time_spent_minutes ?? null,
+        authorConfidence: row.author_confidence ?? null,
+        wasPublished: row.was_published ?? null,
+        wasDisclosed: row.was_disclosed ?? null,
+        tools: (row.practice_tools ?? []).map(
+          (t: { tool_name: string; tool_version: string; used_on: string | null }) => ({
+            name: t.tool_name,
+            version: t.tool_version,
+            usedOn: t.used_on ?? null,
+          }),
+        ),
+        tags: (row.practice_tags ?? []).flatMap(
+          (link: { tags: { code: string } | null }) => (link.tags ? [link.tags.code] : []),
+        ),
+        author: row.author
+          ? {
+              id: row.author.id,
+              displayName: row.author.display_name,
+              isPseudonym: row.author.is_pseudonym,
+            }
+          : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+</script>
