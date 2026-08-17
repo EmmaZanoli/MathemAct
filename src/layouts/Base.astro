@@ -56,7 +56,7 @@ const year = new Date().getFullYear();
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{documentTitle}</title>
     <meta name="description" content={description} />
-    <meta name="theme-color" content={landing ? '#fbfaf6' : '#edf0f2'} />
+    <meta name="theme-color" content="#fbfaf6" />
     {noindex && <meta name="robots" content="noindex, nofollow" />}
     <link rel="canonical" href={canonical.href} />
 
@@ -177,79 +177,55 @@ const year = new Date().getFullYear();
       <slot />
     </main>
 
-    {
-      landing ? (
-        <footer class="site-footer site-footer--landing">
-          <div class="shell landing-footer__inner">
-            <div class="landing-footer__brand">
-              <a class="wordmark" href={path('/')}>MathemAct</a>
-              <span>Documenting AI in Mathematical Practice</span>
-            </div>
+    <footer class="site-footer">
+      <div class="shell site-footer__inner">
+        <div class="site-footer__brand">
+          <a class="wordmark" href={path('/')}>MathemAct</a>
+          <span>Documenting AI in Mathematical Practice</span>
+        </div>
 
-            <nav aria-label="Footer">
-              <ul class="landing-footer__nav" role="list">
-                {
-                  FOOTER_NAV.map((link) => (
-                    <li>
-                      <a href={path(link.href)}>{link.label}</a>
-                    </li>
-                  ))
-                }
+        <nav aria-label="Footer">
+          <ul class="site-footer__nav" role="list">
+            {
+              FOOTER_NAV.map((link) => (
                 <li>
-                  <a href={`mailto:${SITE.contactEmail}`}>Contact</a>
+                  <a href={path(link.href)}>{link.label}</a>
                 </li>
-              </ul>
-            </nav>
+              ))
+            }
+            <li>
+              <a href={`mailto:${SITE.contactEmail}`}>Contact</a>
+            </li>
+          </ul>
+        </nav>
 
-            <div class="landing-footer__actions">
-              <a href={SITE.repository} aria-label="MathemAct on GitHub">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M12 2.5a9.5 9.5 0 0 0-3 18.5c.48.09.66-.2.66-.46v-1.68c-2.68.58-3.25-1.14-3.25-1.14-.44-1.12-1.08-1.42-1.08-1.42-.88-.6.07-.59.07-.59.97.07 1.48 1 1.48 1 .87 1.48 2.27 1.05 2.83.8.09-.62.34-1.05.61-1.29-2.14-.24-4.39-1.07-4.39-4.75 0-1.05.37-1.9 1-2.57-.1-.25-.43-1.22.1-2.54 0 0 .81-.26 2.61.98a9.1 9.1 0 0 1 4.76 0c1.8-1.24 2.61-.98 2.61-.98.53 1.32.2 2.29.1 2.54.62.67 1 1.52 1 2.57 0 3.69-2.25 4.5-4.4 4.74.35.3.65.89.65 1.79v2.65c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.5Z"
-                  />
-                </svg>
-              </a>
+        <div class="site-footer__actions">
+          <a href={SITE.repository} aria-label="MathemAct on GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 2.5a9.5 9.5 0 0 0-3 18.5c.48.09.66-.2.66-.46v-1.68c-2.68.58-3.25-1.14-3.25-1.14-.44-1.12-1.08-1.42-1.08-1.42-.88-.6.07-.59.07-.59.97.07 1.48 1 1.48 1 .87 1.48 2.27 1.05 2.83.8.09-.62.34-1.05.61-1.29-2.14-.24-4.39-1.07-4.39-4.75 0-1.05.37-1.9 1-2.57-.1-.25-.43-1.22.1-2.54 0 0 .81-.26 2.61.98a9.1 9.1 0 0 1 4.76 0c1.8-1.24 2.61-.98 2.61-.98.53 1.32.2 2.29.1 2.54.62.67 1 1.52 1 2.57 0 3.69-2.25 4.5-4.4 4.74.35.3.65.89.65 1.79v2.65c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.5Z"
+              />
+            </svg>
+          </a>
 
-              <a href={`mailto:${SITE.contactEmail}`} aria-label="Email MathemAct">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="3" y="5" width="18" height="14" rx="1.5" />
-                  <path d="m4 7 8 6 8-6" />
-                </svg>
-              </a>
-            </div>
-          </div>
-        </footer>
-      ) : (
-        <footer class="site-footer">
-          <div class="shell site-footer__inner">
-            <nav aria-label="Footer">
-              <ul class="footer-nav" role="list">
-                {
-                  FOOTER_NAV.map((link) => (
-                    <li>
-                      <a href={path(link.href)}>{link.label}</a>
-                    </li>
-                  ))
-                }
-                <li>
-                  <a href={`mailto:${SITE.contactEmail}`}>Contact</a>
-                </li>
-              </ul>
-            </nav>
+          <a href={`mailto:${SITE.contactEmail}`} aria-label="Email MathemAct">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="14" rx="1.5" />
+              <path d="m4 7 8 6 8-6" />
+            </svg>
+          </a>
+        </div>
+      </div>
 
-            <p class="site-footer__licence">
-              Contributed content is published under{' '}
-              <a href={LICENCE.url} rel="license">{LICENCE.name}</a>.
-              Contributors keep copyright and are credited.
-            </p>
-
-            <p class="site-footer__meta">
-              <span class="mono">MathemAct {year}</span>
-            </p>
-          </div>
-        </footer>
-      )
-    }
+      <div class="shell site-footer__sub">
+        <p>
+          Contributed content is published under{' '}
+          <a href={LICENCE.url} rel="license">{LICENCE.name}</a>.
+          Contributors keep copyright and are credited.
+        </p>
+        <p class="mono">MathemAct {year}</p>
+      </div>
+    </footer>
   </body>
 </html>
 
@@ -354,12 +330,13 @@ const year = new Date().getFullYear();
   }
 
   .nav a {
-    color: var(--ink-muted);
+    color: var(--ink);
+    font-weight: var(--weight-semibold);
     text-decoration: none;
   }
 
   .nav a:hover {
-    color: var(--accent-strong);
+    color: var(--accent);
   }
 
   /* The account link is a different kind of destination from the content nav — it is
@@ -381,40 +358,101 @@ const year = new Date().getFullYear();
   /* The current page is marked with a rule under it as well as the attribute, so the
      cue is not carried by colour alone. */
   .nav a[aria-current='page'] {
-    color: var(--ink);
+    color: var(--accent);
     border-block-end: var(--border-width-thick) solid var(--accent);
     padding-block-end: 2px;
   }
 
   /* ── Footer ─────────────────────────────────────────────────────────────────────── */
   .site-footer {
-    margin-block-start: var(--space-3xl);
-    border-block-start: var(--border);
-    padding-block: var(--space-lg) var(--space-xl);
+    padding-block: var(--space-md);
+    border: 0;
+    background: var(--home-navy);
+    color: var(--home-paper);
     font-size: var(--size-2);
-    color: var(--ink-muted);
   }
 
   .site-footer__inner {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: var(--space-xl);
   }
 
-  .footer-nav {
+  .site-footer__brand {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2xs) var(--space-md);
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .site-footer__brand .wordmark {
+    color: var(--home-paper);
+    font-size: var(--size-5);
+  }
+
+  .site-footer__brand .wordmark:hover {
+    color: white;
+  }
+
+  .site-footer__brand span {
+    font-size: var(--size-0);
+    color: color-mix(in srgb, var(--home-paper) 72%, transparent);
+  }
+
+  .site-footer__nav {
+    display: flex;
+    gap: var(--space-lg);
     margin: 0;
     padding: 0;
   }
 
-  .site-footer__licence {
-    max-width: var(--measure);
+  .site-footer__nav a {
+    color: var(--home-paper);
+    text-decoration: none;
   }
 
-  .site-footer__meta {
-    color: var(--ink-muted);
+  .site-footer__nav a:hover {
+    color: white;
+  }
+
+  .site-footer__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  .site-footer__actions a {
+    color: var(--home-paper);
+  }
+
+  .site-footer__actions svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 1.5;
+  }
+
+  .site-footer__actions svg path {
+    vector-effect: non-scaling-stroke;
+  }
+
+  .site-footer__sub {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-block-start: var(--space-sm);
+    padding-block-start: var(--space-sm);
+    border-block-start: 1px solid color-mix(in srgb, var(--home-paper) 18%, transparent);
+    font-size: var(--size-1);
+    color: color-mix(in srgb, var(--home-paper) 62%, transparent);
+  }
+
+  .site-footer__sub a {
+    color: inherit;
+    text-decoration-color: color-mix(in srgb, currentColor 50%, transparent);
   }
 
   .mono {
@@ -435,11 +473,6 @@ const year = new Date().getFullYear();
   }
 
   /* ── Landing variant ───────────────────────────────────────────────────────── */
-
-  :global(body.landing-body) {
-    background: var(--home-paper);
-    color: var(--home-ink);
-  }
 
   .brand-lockup {
     display: flex;
@@ -493,79 +526,6 @@ const year = new Date().getFullYear();
     color: var(--home-teal);
   }
 
-  .site-footer--landing {
-    margin-block-start: 0;
-    padding-block: var(--space-md);
-    border: 0;
-    background: var(--home-navy);
-    color: var(--home-paper);
-  }
-
-  .landing-footer__inner {
-    display: grid;
-    grid-template-columns: 1fr auto auto;
-    align-items: center;
-    gap: var(--space-xl);
-  }
-
-  .landing-footer__brand {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .landing-footer__brand .wordmark {
-    color: var(--home-paper);
-    font-size: var(--size-5);
-  }
-
-  .landing-footer__brand .wordmark:hover {
-    color: white;
-  }
-
-  .landing-footer__brand span {
-    font-size: var(--size-0);
-    color: color-mix(in srgb, var(--home-paper) 72%, transparent);
-  }
-
-  .landing-footer__nav {
-    display: flex;
-    gap: var(--space-lg);
-    margin: 0;
-    padding: 0;
-  }
-
-  .landing-footer__nav a {
-    color: var(--home-paper);
-    text-decoration: none;
-  }
-
-  .landing-footer__nav a:hover {
-    color: white;
-  }
-
-  .landing-footer__actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-  }
-
-  .landing-footer__actions a {
-    color: var(--home-paper);
-  }
-
-  .landing-footer__actions svg {
-    width: 1.25rem;
-    height: 1.25rem;
-    fill: currentColor;
-    stroke: currentColor;
-    stroke-width: 1.5;
-  }
-
-  .landing-footer__actions svg path {
-    vector-effect: non-scaling-stroke;
-  }
-
   @media (max-width: 48rem) {
     .site-header--landing .site-header__inner {
       align-items: flex-start;
@@ -576,14 +536,19 @@ const year = new Date().getFullYear();
       margin-inline-start: 0;
     }
 
-    .landing-footer__inner {
+    .site-footer__inner {
       grid-template-columns: 1fr;
       gap: var(--space-md);
     }
 
-    .landing-footer__nav {
+    .site-footer__nav {
       flex-wrap: wrap;
       gap: var(--space-sm) var(--space-lg);
+    }
+
+    .site-footer__sub {
+      flex-direction: column;
+      align-items: flex-start;
     }
   }
 

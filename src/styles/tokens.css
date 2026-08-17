@@ -19,15 +19,15 @@
    * text and 3:1 for graphics and large text.
    */
 
-  --ground: #edf0f2; /* cool paper — page background */
-  --ink: #0f1519; /* body text                   16.1:1 */
-  --rule: #c9d2d8; /* borders and dividers         1.3:1, graphics only */
-  --accent: #1d4e6f; /* chalk blue — links, focus     7.7:1 */
+  --ground: #fbfaf6; /* warm paper — page background */
+  --ink: #0b3142; /* body text                   11.5:1 */
+  --rule: #d6dfdc; /* borders and dividers         1.3:1, graphics only */
+  --accent: #1d4e6f; /* chalk blue — links, focus     8.0:1 */
 
   /* Derived neutrals. Kept few and named for role, not appearance. */
-  --ink-muted: #54626b; /* secondary text, metadata      5.5:1 */
-  --surface: #f6f8f9; /* raised cards against ground */
-  --accent-strong: #16405c; /* link hover and active         9.4:1 */
+  --ink-muted: #54626b; /* secondary text, metadata      5.3:1 */
+  --surface: #ffffff; /* raised cards against ground */
+  --accent-strong: #16405c; /* link hover and active         9.8:1 */
   --accent-wash: color-mix(in srgb, var(--accent) 8%, var(--ground));
 
   /* ── Landing page ────────────────────────────────────────────────────────────── */
