@@ -2094,3 +2094,58 @@ Reversed: the pre-moderation design of 2026-08-15 (`public.practices` born `pend
 (`/account/edit-submission/`, which survives with a different job). The `pending` and
 `proposed` status values are kept rather than dropped from their enums — the audit log and
 two backfilled feeds refer to a world in which they existed, and rows may still carry them.
+
+## 2026-08-19 — Two private.log_activity()s, and every write on the site failing
+
+The post-moderation migration reissued `private.log_activity()` to add one branch to its
+classification CASE. It reissued it with the seven-parameter signature the function had when
+it was created — and `20260818140000_activity_backfill.sql` had dropped that signature two
+migrations earlier and replaced it with an eight-parameter one carrying `p_created_at`.
+
+`create or replace function` does not replace across a signature change. It created a second
+overload. Every trigger on the site calls this function with seven arguments, the eighth
+parameter has a default, and so every one of those calls became:
+
+```
+ERROR: function private.log_activity(uuid, unknown, uuid, unknown, uuid, unknown, text)
+       is not unique
+```
+
+**Everything that writes content stopped working**: posting a report, a debate or a network
+entry, commenting, rating, confirming, flagging, citing. Reading was untouched, because
+reading is served from static files and never goes near the database — so the deploy was
+green, the site was up, and nothing about it looked wrong.
+
+Three things went wrong at once and each is worth separating.
+
+**The mistake.** Reissuing a function without reading the latest migration that touched it.
+The definition that was copied was the one in the file that *created* the function, which is
+the file you find first when you go looking for it. Two migrations later it was not the
+definition in the database. The rule is now in CLAUDE.md.
+
+**The gate that did not gate.** `test-db.yml` failed on the branch, twice, before the merge.
+It was merged anyway, and `migrate.yml` — which runs on the same push to `main` as
+`test-db.yml`, in parallel, not after it — applied the migration to production while the
+suite was going red beside it. CLAUDE.md said the suite "gates production rather than
+reporting after it"; that is true only if a red branch run stops the merge. Also recorded in
+CLAUDE.md, next to the trap itself.
+
+**Why it was invisible for a day.** The corpus is empty and the site is pre-launch, so
+nothing tried to write. The read/write split that makes the free tier viable also means a
+totally broken write path shows no symptom at all until somebody submits something. That is
+worth knowing rather than fixing: it is the same property that keeps the site readable when
+Supabase is down.
+
+The fix drops the seven-argument overload and reissues the eight-argument one with the
+branch it was supposed to get. `018_activity.test.sql` now asserts that
+`private.log_activity` and `private.log_moderation` have exactly one overload each — by
+count, not by signature, because any second one is the bug whatever shape it has.
+
+One thing was tidied at the same time rather than left. The same migration had inlined a
+copy of the moderation-to-feed mapping into `private.activity_on_moderation()`, which
+`20260818140000` had deliberately moved out into `private.log_moderation()` so that the
+trigger and `private.backfill_activity()` could not drift. Nothing was broken by that — the
+trigger is what fires — but the copy the backfill reads was the pre-moderation one, so a
+backfill run would have written notifications from a mapping two weeks out of date. The
+mapping is back in `log_moderation()`, with the dismissal's second row in it, and the trigger
+is a wrapper again.

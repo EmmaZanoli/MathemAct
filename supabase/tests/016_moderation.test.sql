@@ -107,7 +107,12 @@ values
   ('44444444-0000-0000-0000-000000000001', 'report', '22222222-0000-0000-0000-000000000002',
    '11111111-0000-0000-0000-000000000002', 'Was the hypothesis necessary or convenient?'),
   ('44444444-0000-0000-0000-000000000002', 'report', '22222222-0000-0000-0000-000000000002',
-   '11111111-0000-0000-0000-000000000003', 'A remark from the moderator, in their own name.');
+   '11111111-0000-0000-0000-000000000003', 'A remark from the moderator, in their own name.'),
+  -- Somebody else's, untouched by every decision below, so that the direct-update assertion
+  -- at the end is about a policy refusing a moderator rather than about a guard reverting
+  -- somebody's edit to their own comment.
+  ('44444444-0000-0000-0000-000000000003', 'report', '22222222-0000-0000-0000-000000000005',
+   '11111111-0000-0000-0000-000000000001', 'Does the bound hold without the smoothness assumption?');
 
 insert into public.flags (id, subject_type, subject_id, flagger_id, reason, detail)
 values
@@ -687,7 +692,7 @@ update public.reports set status = 'hidden'
  where id = '22222222-0000-0000-0000-000000000004';
 
 update public.comments set status = 'hidden'
- where id = '44444444-0000-0000-0000-000000000002';
+ where id = '44444444-0000-0000-0000-000000000003';
 
 update public.debates set status = 'hidden'
  where id = '33333333-0000-0000-0000-000000000001';
@@ -701,7 +706,7 @@ select is(
 );
 
 select is(
-  (select status::text from public.comments where id = '44444444-0000-0000-0000-000000000002'),
+  (select status::text from public.comments where id = '44444444-0000-0000-0000-000000000003'),
   'published'::text,
   'nor a comment'
 );

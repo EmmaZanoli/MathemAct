@@ -31,7 +31,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(42);
+select plan(44);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -69,6 +69,34 @@ insert into public.debates (id, author_id, statement, area, status, activated_at
 values
   ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001',
    'AI-assisted literature search should be disclosed in papers.', 'writing', 'active', now());
+
+-- ── One writer, and exactly one of it ───────────────────────────────────────────────
+-- The regression that took every content write on the site down for a day. A migration
+-- reissued private.log_activity() with the seven-parameter signature it had two migrations
+-- earlier; the eight-parameter one was already there, `create or replace` created a second
+-- overload rather than replacing anything, and every seven-argument call from every trigger
+-- became ambiguous. Nothing could be posted, commented on, rated, confirmed or flagged.
+--
+-- Asserted by count rather than by signature on purpose: any second overload is the bug,
+-- whatever shape it has.
+
+select is(
+  (select count(*)::int
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname = 'log_activity'),
+  1,
+  'there is exactly one private.log_activity(): a second overload makes every trigger call ambiguous'
+);
+
+select is(
+  (select count(*)::int
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'private' and p.proname = 'log_moderation'),
+  1,
+  'and exactly one private.log_moderation(), for the same reason'
+);
 
 -- ── The shape of the table ──────────────────────────────────────────────────────────
 -- Grants before anything else, because a missing grant and a missing policy look identical

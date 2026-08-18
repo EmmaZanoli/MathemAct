@@ -104,7 +104,9 @@ means **write the reason for the person it is about**, because that is who reads
 
 There is a second channel: `public.activity`, the feed at `/account/activity/`. It says
 *that* something was decided and links to the explanation. It never carries the reason text
-itself. Two channels because a notification nobody can act on is noise, and an explanation
+itself. One mapping turns a decision into feed rows — `private.log_moderation()`, called both
+by the trigger on `public.moderation_actions` and by `private.backfill_activity()`, so the
+two cannot drift. Two channels because a notification nobody can act on is noise, and an explanation
 nobody is told about is a file in a drawer.
 
 ## Appeals
