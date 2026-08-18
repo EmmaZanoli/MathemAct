@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": "acef3dbd-202c-47fa-806a-3c32522f315e",
+    "displayName": "Anna Zanoli",
+    "isPseudonym": false,
+    "bio": "PhD student in Number Theory at IST Austria. Creator of MathemAct.",
+    "institution": {
+      "name": "Institute of Science and Technology Austria",
+      "country": "Austria",
+      "verifiedAt": "2026-08-17T10:39:33.352Z"
+    },
+    "createdAt": "2026-08-17T10:08:00.083Z"
+  }
+]
