@@ -1924,3 +1924,45 @@ person permanently. The trigger is now a wrapper and its behaviour is unchanged.
 it: `supabase/tests/019_activity_backfill.test.sql` turns the triggers off, writes history
 underneath them, and asserts the reconstruction has the right dates, the right actors, no
 moderator's name, and no duplicates on a second run or over rows the triggers already saw.
+
+## 2026-08-18 — The activity feed pages by keyset, because its timestamps are not unique
+
+`/account/activity/` loads fifty events and offers "Show earlier activity". The choice worth
+recording is not that it paginates but *how*, because the obvious option is quietly wrong here.
+
+**`.range()` would break, and not rarely.** Offset pagination is only stable if the sort is
+total, and `public.activity.created_at` is nowhere near unique. A trigger writes every row it
+produces inside one transaction, so `now()` gives the same answer twice and a single comment
+lands two rows equal to the microsecond; `20260818140000` reconstructed whole histories the
+same way. An order with ties in it has no defined arrangement between them, so a page boundary
+falling inside a group is where a row gets shown twice or skipped — and rows *of this table*
+travel in groups by construction.
+
+So the sort is `created_at desc, id desc` and the cursor carries both, resuming with
+`created_at < c or (created_at = c and id < i)`. `20260818160000` puts the tiebreaker in
+`activity_subject_idx` so that resume is a seek rather than a walk from the top. The partial
+index on inbound rows is left alone: it serves a `count(*)` over a range and never orders.
+
+**The timestamp is passed back verbatim and must never touch `Date`.** `timestamptz` carries
+microseconds and a JS `Date` carries milliseconds, so round-tripping the cursor through one
+moves the boundary by up to 999µs and silently drops or repeats whatever is in the gap. It
+goes back exactly as PostgREST returned it; postgrest-js appends it through `URLSearchParams`,
+which encodes the `+` of the zone offset.
+
+**A pgTAP assertion pins the premise.** `018` now asserts that the two rows one comment writes
+share a `created_at` exactly, and that the index carries the tiebreaker. Without the first,
+the `id` half of the cursor reads as superstition and the next person to touch this removes it.
+
+**Ratings are collapsed across every page loaded, not per page.** A run of ratings on one
+debate does not respect a page boundary, so folding per page would show that debate as two
+events with two counts — worse than not folding at all, because it reads as two things having
+happened. The page therefore keeps the raw rows and re-renders the whole list on each append.
+The consequence is that a count further up can grow as somebody reads downward: the correct
+number arriving late, which is the cheaper of the two surprises.
+
+**A button rather than infinite scroll.** This is a record people read backwards looking for
+something, and a list that grows as you approach the end takes the scrollbar — the only honest
+indication of how much is left — and makes it lie. The button also lives outside the list, so
+re-rendering does not destroy the element focus is on; when the last page arrives it hides
+itself and focus moves to the line that replaces it, rather than being left on a hidden
+element with nowhere to go.

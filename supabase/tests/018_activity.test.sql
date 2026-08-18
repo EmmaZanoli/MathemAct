@@ -31,7 +31,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(39);
+select plan(41);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -161,6 +161,27 @@ select is(
       and not is_inbound),
   1,
   'and the commenter gets their own log entry for it'
+);
+
+-- The premise the feed's pagination rests on, pinned here so it cannot quietly stop being
+-- true. Both rows above came from one trigger inside one transaction, so now() gave the same
+-- answer twice and their created_at values are equal to the microsecond. Ordering the feed by
+-- that column alone is therefore not a total order, and a page boundary landing inside a
+-- group of equal timestamps is where a row gets shown twice or skipped. The cursor carries
+-- `id` for this reason and for no other; without this assertion that looks like superstition.
+select is(
+  (select count(distinct created_at)::int from public.activity
+    where comment_id = '44444444-0000-0000-0000-000000000001'),
+  1,
+  'the two rows one comment writes share a timestamp exactly, so the feed cursor needs the id'
+);
+
+select ok(
+  (select pg_get_indexdef(i.indexrelid)
+     from pg_index i
+     join pg_class c on c.oid = i.indexrelid
+    where c.relname = 'activity_subject_idx') like '%created_at DESC, id DESC%',
+  'and the index it pages against carries the same tiebreaker'
 );
 
 -- Commenting on your own report. The own-action row appears; the notification does not.

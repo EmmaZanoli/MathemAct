@@ -103,18 +103,49 @@ interface ActivityRow {
   actor: { display_name: string; is_pseudonym: boolean } | null;
 }
 
+/** How many events a page of the feed holds. */
+export const PAGE_SIZE = 50;
+
 /**
- * How many rows are fetched. There is no pagination, in common with every other queue on
- * this site: at the sizes this corpus will see for a long while, a hundred lines is a
- * scroll, and the alternative is a "load more" control that exists to be used twice a year.
- * The page says plainly that it shows the most recent hundred.
+ * Where the next page starts: the last row of the one before it.
+ *
+ * Both halves are needed, and the second is not a nicety. `created_at` is nowhere near
+ * unique in this table — a trigger writes every row it produces in one transaction, so a
+ * single comment lands two rows sharing a timestamp to the microsecond, and the backfill
+ * reproduced whole histories that way. An order with ties in it is not a total order, and a
+ * page boundary falling inside one is where rows get shown twice or skipped entirely. `id`
+ * breaks every tie, so the sort is deterministic and so is the boundary.
  */
-export const FEED_LIMIT = 100;
+export interface ActivityCursor {
+  readonly createdAt: string;
+  readonly id: string;
+}
+
+export interface ActivityPage {
+  readonly items: ActivityItem[];
+  /** Where to resume, or null when this was the last page. */
+  readonly cursor: ActivityCursor | null;
+}
 
 // ── Reading ───────────────────────────────────────────────────────────────────────────
 
-/** The most recent events in somebody's feed, newest first, ratings collapsed. */
-export async function loadActivity(userId: string): Promise<Result<ActivityItem[]>> {
+/**
+ * One page of somebody's feed, newest first.
+ *
+ * Keyset rather than offset, for two reasons in that order of importance. `.range()` is only
+ * stable if the sort is total, and this one is full of ties — see ActivityCursor. And an
+ * offset walks every row it skips, which a feed people page to the bottom of will notice
+ * before anything else here does.
+ *
+ * Ratings are *not* collapsed here. Folding a run of them into "5 people rated your debate"
+ * has to happen across everything loaded so far, or the same debate collapses separately on
+ * each page and reads as two events. The caller accumulates raw rows and runs
+ * collapseRatings() over the whole list; see the note on that function.
+ */
+export async function loadActivity(
+  userId: string,
+  after: ActivityCursor | null = null,
+): Promise<Result<ActivityPage>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
@@ -122,19 +153,51 @@ export async function loadActivity(userId: string): Promise<Result<ActivityItem[
     // One string literal, never assembled with `+`. The `actor:actor_id(...)` hint names
     // the foreign key column because this table has two references to profiles and
     // PostgREST cannot pick between them on its own.
-    const { data, error } = await supabase
+    let query = supabase
       .from('activity')
       .select(
         'id, kind, is_inbound, target_type, target_id, comment_id, label, created_at, actor:actor_id(display_name, is_pseudonym)',
       )
-      .eq('subject_id', userId)
+      .eq('subject_id', userId);
+
+    if (after) {
+      // "Strictly after this row in the sort order", written out because that is what a
+      // composite keyset is.
+      //
+      // The timestamp goes back exactly as PostgREST returned it and must never be
+      // round-tripped through Date: timestamptz carries microseconds and a JS Date carries
+      // milliseconds, so reformatting moves the boundary by up to 999µs and quietly drops
+      // or repeats whatever sits in that gap. postgrest-js appends this through
+      // URLSearchParams, which encodes the `+` of the zone offset, so it arrives intact.
+      query = query.or(
+        `created_at.lt.${after.createdAt},` +
+          `and(created_at.eq.${after.createdAt},id.lt.${after.id})`,
+      );
+    }
+
+    // One more row than a page, purely to learn whether there is another one. Cheaper and
+    // more honest than a count, which would answer a question nobody asked — nobody needs to
+    // be told there are 412 events, only whether they have reached the end.
+    const { data, error } = await query
       .order('created_at', { ascending: false })
-      .limit(FEED_LIMIT)
+      .order('id', { ascending: false })
+      .limit(PAGE_SIZE + 1)
       .overrideTypes<ActivityRow[], { merge: false }>();
 
     if (error) return { ok: false, message: describeError(error) };
 
-    return { ok: true, value: collapse((data ?? []).map(toItem)) };
+    const rows = data ?? [];
+    const more = rows.length > PAGE_SIZE;
+    const page = more ? rows.slice(0, PAGE_SIZE) : rows;
+    const last = page.at(-1);
+
+    return {
+      ok: true,
+      value: {
+        items: page.map(toItem),
+        cursor: more && last ? { createdAt: last.created_at, id: last.id } : null,
+      },
+    };
   } catch (error) {
     return { ok: false, message: describeError(error) };
   }
@@ -239,8 +302,15 @@ function toItem(row: ActivityRow): ActivityItem {
  *
  * Only ratings. Comments, confirmations and citations each name a person and each say
  * something different, so folding those would lose the part worth reading.
+ *
+ * **Run over every page loaded so far, never over one page.** Ratings on one debate do not
+ * respect a page boundary, so collapsing per page would show that debate as two separate
+ * events with two separate counts — worse than not collapsing at all, because it reads as
+ * two things having happened. Folding across the whole list means a count further up the
+ * page can grow as somebody reads downward. That is the correct number arriving late rather
+ * than a wrong one, and it is the cheaper of the two surprises.
  */
-function collapse(items: readonly ActivityItem[]): ActivityItem[] {
+export function collapseRatings(items: readonly ActivityItem[]): ActivityItem[] {
   const out: ActivityItem[] = [];
   const seen = new Map<string, number>();
 
