@@ -60,8 +60,10 @@ See `docs/decisions.md` for the reasoning behind non-obvious choices.
 
 ## Moderation
 
-The moderation queue is at `/moderate/`. There is no navigation link to it — it is
-documented in `docs/moderation.md`, which is where new moderators are pointed.
+Nothing is reviewed before it is published. Moderation is what happens when somebody flags
+something: a moderator decides whether it stays up and writes an explanation that both the
+author and the flagger read. The screen is at `/moderate/`. There is no navigation link to
+it — it is documented in `docs/moderation.md`, which is where new moderators are pointed.
 
 ## Reporting a bug
 

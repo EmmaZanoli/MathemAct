@@ -97,8 +97,10 @@ import { SITE } from '../lib/site';
   <h2>Flagging</h2>
 
   <p>
-    Every report and comment can be flagged from the page it appears on. If it concerns
-    a moderator, or you would rather it did not go through the site, write to
+    Every report, debate and comment can be flagged from the page it appears on. Nothing is
+    read by a moderator before it is published, so flagging is how anything gets looked at:
+    a flag is not a complaint into a void, it is what starts a decision. If it concerns a
+    moderator, or you would rather it did not go through the site, write to
     <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
   </p>
 
@@ -117,24 +119,34 @@ import { SITE } from '../lib/site';
   </p>
 
   <p>
-    Every decision is recorded — who took it, when, and why — in a log the moderators keep
-    on each other. Hiding something preserves it: the text and the name stay, its author can
-    see that it was hidden, and it can be put back.
+    <strong>Every decision comes with an explanation, and both sides read it.</strong> When a
+    moderator answers a flag they have to write down why, and that sentence is shown to the
+    person who wrote the content and to the person who flagged it, under
+    <em>moderation decisions</em> on their account pages. It never says who flagged
+    something, and it never names the moderator: the decision is the site's, not one
+    person's.
+  </p>
+
+  <p>
+    Every decision is also recorded — who took it, when, and why — in a log the moderators
+    keep on each other. Hiding something preserves it: the text and the name stay, its author
+    can see that it was hidden, and it can be put back. A hidden report can be edited by its
+    author, which is how an explanation gets answered rather than merely received.
   </p>
 
   <p>Depending on what happened, the response is one of:</p>
 
   <ul class="tombstone-list">
-    <li>Nothing, with a note to whoever flagged it explaining why.</li>
-    <li>A private word with the person who posted.</li>
-    <li>The content hidden, with the thread structure left intact.</li>
+    <li>The content stays up, with the reason written to both of you.</li>
+    <li>The content hidden, with the thread structure left intact and the reason written to both of you.</li>
     <li>The account suspended, or removed.</li>
   </ul>
 
   <p>
-    If your content is hidden or your account is suspended, you will be told what rule was
-    applied and why. You can reply, and a decision will be reconsidered if you have reason
-    to think it was wrong. Deanonymisation and harassment do not get a warning first.
+    If your content is hidden or your account is suspended, you are told what rule was
+    applied and why, in writing, on your account page. You can reply, and a decision will be
+    reconsidered if you have reason to think it was wrong. Deanonymisation and harassment do
+    not get a warning first.
   </p>
 
   <h2>Changes</h2>

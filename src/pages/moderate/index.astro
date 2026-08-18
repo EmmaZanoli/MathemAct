@@ -54,9 +54,10 @@ import { path } from '../../lib/paths';
     <header class="queue__header">
       <h1>Moderation</h1>
       <p class="queue__lead">
-        Everything waiting on a decision. Every action here is recorded with your name, the
-        time, and your reason, in a log only other moderators can read. Nothing on this
-        screen can be undone quietly.
+        Nothing waits for you before it is published. What is here is what somebody flagged,
+        and what a decision has already taken off the site. Every action is recorded with
+        your name, the time, and your explanation — and that explanation is shown to whoever
+        wrote the post and to whoever flagged it, so write it to them.
       </p>
       <p class="mono queue__tally" data-tally></p>
     </header>
@@ -78,42 +79,13 @@ import { path } from '../../lib/paths';
       )
     }
 
-    <section class="queue__section" data-section="reports">
-      <h2>Reports waiting <span class="mono" data-count></span></h2>
-      <p class="queue__note">
-        Oldest first. The account below is the whole submission — decide from it rather than
-        from the title. Text is shown as it was written; formulas are set when the site
-        builds.
-      </p>
-      <ol class="queue__list" data-list role="list"></ol>
-      <p class="queue__empty" data-empty hidden>Nothing waiting. The corpus is up to date.</p>
-    </section>
-
-    <section class="queue__section" data-section="debates">
-      <h2>Debates waiting <span class="mono" data-count></span></h2>
-      <p class="queue__note">
-        A debate promotes itself once five people have answered it. Promoting one by
-        hand says it is worth asking, not that you agree with it.
-      </p>
-      <ol class="queue__list" data-list role="list"></ol>
-      <p class="queue__empty" data-empty hidden>Nothing waiting.</p>
-    </section>
-
-    <section class="queue__section" data-section="entries">
-      <h2>Network waiting <span class="mono" data-count></span></h2>
-      <p class="queue__note">
-        Oldest first. Check that the link is real, the category is right, and the relevance
-        section is specific rather than marketing copy.
-      </p>
-      <ol class="queue__list" data-list role="list"></ol>
-      <p class="queue__empty" data-empty hidden>Nothing waiting.</p>
-    </section>
-
     <section class="queue__section" data-section="flags">
       <h2>Open flags <span class="mono" data-count></span></h2>
       <p class="queue__note">
-        Closing a flag and acting on what it named are two decisions and produce two
-        entries in the log. Do the second first.
+        Oldest first, and the whole of what was flagged is below each one — decide from that
+        rather than from what the flag says about it. Two answers: hide it, or leave it up.
+        Hiding also closes every other flag against the same post, and everyone who raised
+        one is told what you wrote.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
       <p class="queue__empty" data-empty hidden>No open flags.</p>
@@ -122,8 +94,9 @@ import { path } from '../../lib/paths';
     <section class="queue__section" data-section="hidden">
       <h2>Hidden <span class="mono" data-count></span></h2>
       <p class="queue__note">
-        Hidden content is still there and still readable by its author, who can see that it
-        was hidden. Unhiding a report or entry publishes it.
+        Hidden content is still there, still readable by its author, and — for a report or an
+        entry — editable by them while it stays hidden. Unhiding publishes it again, and
+        needs a sentence too: the author is told either way.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
       <p class="queue__empty" data-empty hidden>Nothing is hidden.</p>
@@ -148,106 +121,52 @@ import { path } from '../../lib/paths';
       built with createElement would carry no scope attribute and match none of the CSS
       below. Cloned template content does. */}
 
-  <template data-template="report">
-    <li class="item">
-      <div class="item__head">
-        <h3 class="item__title" data-title></h3>
-        <p class="mono item__meta" data-meta></p>
+  {/* The whole of a flagged report, cloned into the flag item below. It has no controls of
+      its own: a report is never decided on its own terms any more, only as the answer to
+      something somebody raised about it. */}
+  <template data-template="report-detail">
+    <dl class="fields">
+      <dt>Tools</dt>
+      <dd class="mono" data-tools></dd>
+
+      <dt>Aim</dt>
+      <dd data-aim></dd>
+
+      <dt>Method</dt>
+      <dd class="pre" data-method></dd>
+
+      <dt>Outcome</dt>
+      <dd><span class="mono" data-outcome></span> — <span data-outcome-notes></span></dd>
+
+      <dt>Verification</dt>
+      <dd class="pre" data-verification></dd>
+
+      <div data-optional hidden>
+        <dt>Caveats</dt>
+        <dd data-caveats></dd>
       </div>
 
-      <div class="item__note" data-optional hidden>
-        <p class="item__note-head">Already sent back <span class="mono" data-note-at></span></p>
-        <p data-note></p>
+      {/* Three levels of optional, and they are not the same question: the block appears
+          when there is anything at all, the disclosure when there is an excerpt, and the
+          link when there is a link. Hanging them all off one flag would hide a pasted
+          transcript because nobody had a share URL for it. */}
+      <div data-transcript-block hidden>
+        <dt>Transcript</dt>
+        <dd>
+          <details class="transcript" data-optional hidden>
+            <summary>Show the excerpt</summary>
+            <pre class="pre" data-transcript></pre>
+          </details>
+          <p class="mono" data-transcript-url data-optional hidden></p>
+        </dd>
       </div>
 
-      <dl class="fields">
-        <dt>Tools</dt>
-        <dd class="mono" data-tools></dd>
+      <dt>Tags</dt>
+      <dd class="mono" data-tags></dd>
 
-        <dt>Aim</dt>
-        <dd data-aim></dd>
-
-        <dt>Method</dt>
-        <dd class="pre" data-method></dd>
-
-        <dt>Outcome</dt>
-        <dd><span class="mono" data-outcome></span> — <span data-outcome-notes></span></dd>
-
-        <dt>Verification</dt>
-        <dd class="pre" data-verification></dd>
-
-        <div data-optional hidden>
-          <dt>Caveats</dt>
-          <dd data-caveats></dd>
-        </div>
-
-        {/* Three levels of optional, and they are not the same question: the block appears
-            when there is anything at all, the disclosure when there is an excerpt, and the
-            link when there is a link. Hanging them all off one flag would hide a pasted
-            transcript because nobody had a share URL for it. */}
-        <div data-transcript-block hidden>
-          <dt>Transcript</dt>
-          <dd>
-            <details class="transcript" data-optional hidden>
-              <summary>Show the excerpt</summary>
-              <pre class="pre" data-transcript></pre>
-            </details>
-            <p class="mono" data-transcript-url data-optional hidden></p>
-          </dd>
-        </div>
-
-        <dt>Tags</dt>
-        <dd class="mono" data-tags></dd>
-
-        <dt>So it can be counted</dt>
-        <dd class="mono" data-counting></dd>
-      </dl>
-
-      <div class="reason">
-        <label class="reason__label" data-reason-label
-          >Note to the author, or reason for hiding</label
-        >
-        <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
-        <p class="reason__hint">
-          Required to send back or to hide. A note goes to the author on their account page;
-          a hide reason is kept in the log for other moderators.
-        </p>
-      </div>
-
-      <div class="actions">
-        <button class="button button--primary" data-act="publish">Publish</button>
-        <button class="button" data-act="request_changes">Send back</button>
-        <button class="button" data-act="hide">Hide</button>
-        <button class="button button--quiet" data-act="ban">Ban this account</button>
-      </div>
-    </li>
-  </template>
-
-  <template data-template="debate">
-    <li class="item">
-      <div class="item__head">
-        <h3 class="item__title item__statement" data-title></h3>
-        <p class="mono item__meta" data-meta></p>
-      </div>
-
-      <dl class="fields">
-        <div data-optional hidden>
-          <dt>Rationale</dt>
-          <dd data-rationale></dd>
-        </div>
-      </dl>
-
-      <div class="reason">
-        <label class="reason__label" data-reason-label>Reason for hiding</label>
-        <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
-        <p class="reason__hint">Required to hide. Promoting needs none.</p>
-      </div>
-
-      <div class="actions">
-        <button class="button button--primary" data-act="promote">Promote</button>
-        <button class="button" data-act="hide">Hide</button>
-      </div>
-    </li>
+      <dt>So it can be counted</dt>
+      <dd class="mono" data-counting></dd>
+    </dl>
   </template>
 
   <template data-template="flag">
@@ -265,74 +184,30 @@ import { path } from '../../lib/paths';
         <p class="mono flag__subject-head" data-subject-meta></p>
         <p class="flag__subject-title" data-subject-title></p>
         <p class="pre" data-subject-body></p>
+        <div data-subject-detail></div>
         <p data-optional hidden><a data-subject-link>Open the page</a></p>
       </div>
 
       <p class="flag__gone" data-gone hidden>
         The flagged row is no longer readable — it has been deleted outright rather than
-        hidden. Dismissing is usually right; the log will say why.
+        hidden. Closing the flag is usually right; say so, and whoever raised it is told.
       </p>
 
       <div class="reason">
-        <label class="reason__label" data-reason-label>Reason, or note on the decision</label>
-        <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
+        <label class="reason__label" data-reason-label>Why, in a sentence</label>
+        <textarea class="reason__box" rows="3" data-reason maxlength="1000"></textarea>
         <p class="reason__hint">
-          Required to hide or to ban. Closing a flag keeps whatever you write here as the
-          note on the decision.
+          Required, and it is not written to the log alone: the person who wrote the post and
+          the person who flagged it both read exactly this. Say what rule applies, or that
+          none does.
         </p>
       </div>
 
       <div class="actions">
-        <button class="button" data-act="hide">Hide what was flagged</button>
+        <button class="button button--primary" data-act="hide">Hide it</button>
+        <button class="button" data-act="dismiss_flag">Leave it up</button>
+        <button class="button" data-act="resolve_flag">Close: already gone</button>
         <button class="button button--quiet" data-act="ban">Ban that account</button>
-        <button class="button button--primary" data-act="resolve_flag">Close: acted</button>
-        <button class="button" data-act="dismiss_flag">Close: nothing to do</button>
-      </div>
-    </li>
-  </template>
-
-  <template data-template="entry">
-    <li class="item">
-      <div class="item__head">
-        <h3 class="item__title" data-title></h3>
-        <p class="mono item__meta" data-meta></p>
-      </div>
-
-      <div class="item__note" data-optional hidden>
-        <p class="item__note-head">Already sent back <span class="mono" data-note-at></span></p>
-        <p data-note></p>
-      </div>
-
-      <dl class="fields">
-        <dt>URL</dt>
-        <dd class="mono" data-url></dd>
-
-        <dt>Category</dt>
-        <dd class="mono" data-category></dd>
-
-        <dt>Description</dt>
-        <dd data-description></dd>
-
-        <dt>Why mathematicians should care</dt>
-        <dd data-relevance></dd>
-      </dl>
-
-      <div class="reason">
-        <label class="reason__label" data-reason-label
-          >Note to the author, or reason for hiding</label
-        >
-        <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
-        <p class="reason__hint">
-          Required to send back or to hide. A note goes to the author on their account page;
-          a hide reason is kept in the log for other moderators.
-        </p>
-      </div>
-
-      <div class="actions">
-        <button class="button button--primary" data-act="publish">Publish</button>
-        <button class="button" data-act="request_changes">Send back</button>
-        <button class="button" data-act="hide">Hide</button>
-        <button class="button button--quiet" data-act="ban">Ban this account</button>
       </div>
     </li>
   </template>
@@ -345,6 +220,17 @@ import { path } from '../../lib/paths';
       </div>
 
       <p class="pre" data-body></p>
+
+      <div class="item__note" data-optional hidden>
+        <p class="item__note-head">Revised by its author <span class="mono" data-note-at></span></p>
+        <p data-note></p>
+      </div>
+
+      <div class="reason">
+        <label class="reason__label" data-reason-label>Why it can come back</label>
+        <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
+        <p class="reason__hint">Required. The author reads it.</p>
+      </div>
 
       <div class="actions">
         <button class="button" data-act="unhide">Unhide</button>
@@ -376,7 +262,6 @@ import { path } from '../../lib/paths';
 </Base>
 
 <script>
-  import { areaLabel, taskTypeLabel } from '../../lib/report-schema';
   import { longDate, verificationMonth } from '../../lib/format';
   import { query, showStatus, hideStatus } from '../../lib/forms';
   import { FLAG_REASONS } from '../../lib/comments';
@@ -461,9 +346,6 @@ import { path } from '../../lib/paths';
 
     const queues = result.value;
 
-    section('reports', queues.reports, reportItem);
-    section('debates', queues.debates, debateItem);
-    section('entries', queues.entries, entryItem);
     section('flags', queues.flags, flagItem);
     section(
       'hidden',
@@ -480,18 +362,17 @@ import { path } from '../../lib/paths';
     erasures.hidden = role !== 'admin';
     if (role === 'admin') section('erasures', queues.erasures, erasureItem);
 
-    const waiting =
-      queues.reports.length +
-      queues.debates.length +
-      queues.entries.length +
-      queues.flags.length;
+    const hidden =
+      queues.hiddenReports.length +
+      queues.hiddenDebates.length +
+      queues.hiddenComments.length +
+      queues.hiddenEntries.length;
 
     tally.textContent =
-      waiting === 0
-        ? 'Nothing waiting'
-        : `${waiting} waiting · ${queues.reports.length} reports · ` +
-          `${queues.debates.length} debates · ${queues.entries.length} entries · ` +
-          `${queues.flags.length} flags`;
+      queues.flags.length === 0
+        ? `No open flags · ${hidden} hidden`
+        : `${queues.flags.length} open ${queues.flags.length === 1 ? 'flag' : 'flags'} · ` +
+          `${hidden} hidden`;
   }
 
   function section<T>(
@@ -556,23 +437,17 @@ import { path } from '../../lib/paths';
     return parts.join(' ');
   }
 
-  function reportItem(report: QueueReport): HTMLElement {
-    const item = clone('report');
-
-    put(item, '[data-title]', report.title);
-    put(
-      item,
-      '[data-meta]',
-      [
-        name(report.author),
-        `submitted ${longDate(report.createdAt)}`,
-        areaLabel(report.area),
-        taskTypeLabel(report.taskType),
-      ].join(' · '),
-    );
-
-    put(item, '[data-note]', report.note);
-    put(item, '[data-note-at]', report.noteAt ? longDate(report.noteAt) : '');
+  /**
+   * The whole of a flagged report, as a block to drop into the flag item.
+   *
+   * This is the part of the old "reports waiting" queue worth keeping. Nothing waits to be
+   * published any more, but the reason that queue showed the entire submission has not
+   * changed: a flag saying the verification section is not verification cannot be answered
+   * from a title, and a moderator who has to open another page to read it will decide
+   * without reading it.
+   */
+  function reportDetail(report: QueueReport): HTMLElement {
+    const item = clone('report-detail');
 
     put(
       item,
@@ -619,40 +494,6 @@ import { path } from '../../lib/paths';
     );
     put(item, '[data-counting]', counting.join(' · '));
 
-    wire(item, (action) => {
-      if (action === 'ban') {
-        return report.author
-          ? { target: 'account' as Target, id: report.author.id, action: 'ban' as Action }
-          : null;
-      }
-      return { target: 'report' as Target, id: report.id, action };
-    }, report.author !== null);
-
-    return item;
-  }
-
-  function debateItem(debate: QueueDebate): HTMLElement {
-    const item = clone('debate');
-
-    put(item, '[data-title]', debate.statement);
-    put(
-      item,
-      '[data-meta]',
-      [
-        name(debate.author),
-        `proposed ${longDate(debate.createdAt)}`,
-        areaLabel(debate.area),
-        `${debate.ratingCount} answered`,
-      ].join(' · '),
-    );
-    put(item, '[data-rationale]', debate.rationale);
-
-    wire(item, (action) => ({
-      target: 'debate' as Target,
-      id: debate.id,
-      action,
-    }));
-
     return item;
   }
 
@@ -688,6 +529,10 @@ import { path } from '../../lib/paths';
       put(item, '[data-subject-title]', flag.subject.heading);
       put(item, '[data-subject-body]', flag.subject.body);
 
+      if (flag.report) {
+        query<HTMLElement>('[data-subject-detail]', item).append(reportDetail(flag.report));
+      }
+
       const link = item.querySelector<HTMLAnchorElement>('[data-subject-link]');
       const optional = link?.closest<HTMLElement>('[data-optional]');
 
@@ -697,6 +542,16 @@ import { path } from '../../lib/paths';
       }
     }
 
+    // Whether the flagged thing is still on the site decides which of the two closing
+    // buttons is honest, so the other one is removed rather than left to be refused. A
+    // control that always fails teaches people to ignore the message beside it.
+    const visible = flag.subject !== null && flag.subject.status !== 'hidden';
+    for (const button of item.querySelectorAll<HTMLButtonElement>('[data-act]')) {
+      const named = button.dataset.act;
+      if (visible && named === 'resolve_flag') button.remove();
+      if (!visible && named === 'hide') button.remove();
+    }
+
     wire(item, (action) => {
       if (action === 'ban') {
         return flag.subject?.author
@@ -704,46 +559,17 @@ import { path } from '../../lib/paths';
           : null;
       }
 
-      // The only `hide` a flag offers is a hide of what it named. There is no such thing
-      // as hiding a flag itself, which is why this reads as a redirection rather than as
-      // a special case.
+      // The only `hide` a flag offers is a hide of what it named. There is no such thing as
+      // hiding a flag itself, which is why this reads as a redirection rather than as a
+      // special case — and hiding closes this flag and every other one against the same
+      // post, in the same transaction, which is why there is no second button to press
+      // afterwards.
       if (action === 'hide') {
         return { target: flag.subjectType as Target, id: flag.subjectId, action };
       }
 
       return { target: 'flag' as Target, id: flag.id, action };
     }, Boolean(flag.subject?.author));
-
-    return item;
-  }
-
-  function entryItem(entry: QueueEntry): HTMLElement {
-    const item = clone('entry');
-
-    put(item, '[data-title]', entry.title);
-    put(
-      item,
-      '[data-meta]',
-      [name(entry.author), `submitted ${longDate(entry.createdAt)}`, entry.category].join(
-        ' · ',
-      ),
-    );
-
-    put(item, '[data-note]', entry.note);
-    put(item, '[data-note-at]', entry.noteAt ? longDate(entry.noteAt) : '');
-    put(item, '[data-url]', entry.url);
-    put(item, '[data-category]', entry.category);
-    put(item, '[data-description]', entry.description);
-    put(item, '[data-relevance]', entry.relevance);
-
-    wire(item, (action) => {
-      if (action === 'ban') {
-        return entry.author
-          ? { target: 'account' as Target, id: entry.author.id, action: 'ban' as Action }
-          : null;
-      }
-      return { target: 'entry' as Target, id: entry.id, action };
-    }, entry.author !== null);
 
     return item;
   }
@@ -787,6 +613,18 @@ import { path } from '../../lib/paths';
             ? entry.row.description
             : entry.row.body,
     );
+
+    // A report or an entry can be edited by its author while it is hidden, and a revision is
+    // the only thing that makes a hidden row worth a second look. Nothing announces it — the
+    // author has no way to send you a message — so the changed date is the whole signal.
+    const revised =
+      (entry.kind === 'report' || entry.kind === 'entry') &&
+      entry.row.updatedAt > entry.row.createdAt;
+
+    if (revised) {
+      put(item, '[data-note]', 'The text above is their revision. Nothing else has changed.');
+      put(item, '[data-note-at]', longDate(entry.row.updatedAt));
+    }
 
     wire(item, (action) => ({ target: entry.kind as Target, id: entry.row.id, action }));
 
@@ -862,7 +700,7 @@ import { path } from '../../lib/paths';
           showStatus(
             status,
             'error',
-            'That action needs a reason. One sentence is enough, and it is kept.',
+            'That decision needs an explanation. Whoever wrote the post and whoever flagged it will read it.',
           );
           reasonBox?.focus();
           return;
@@ -900,13 +738,10 @@ import { path } from '../../lib/paths';
   }
 
   const DONE: Record<Action, string> = {
-    publish: 'It is in the corpus at the next build.',
-    request_changes: 'The author can read the note on their account page.',
-    hide: 'It is out of sight and its author can see that it was hidden.',
-    unhide: 'It is readable again.',
-    promote: 'It is part of the record.',
-    resolve_flag: 'The flag is closed.',
-    dismiss_flag: 'The flag is closed with nothing done.',
+    hide: 'It is off the site, its author has your explanation, and every open flag against it is closed.',
+    unhide: 'It is readable again, and its author has been told.',
+    resolve_flag: 'The flag is closed and whoever raised it has your explanation.',
+    dismiss_flag: 'It stays up. Whoever flagged it and whoever wrote it both have your explanation.',
     ban: 'The account cannot post until this is lifted.',
     unban: 'The account can post again.',
     erase_account: 'The account is gone and its contributions stay without a name.',

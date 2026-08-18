@@ -20,7 +20,7 @@ Suggested citation:
 |---|---|
 | `manifest.json` | When this export ran, and the row count and byte size of every file |
 | `reports.json` | The corpus: published first-hand accounts, with their tools, tags and derived staleness |
-| `debates.json` | Claims the community rates, both active and still proposed |
+| `debates.json` | Claims the community rates. Everything not hidden; `proposed` appears only on rows written before 2026-08-19 |
 | `debate-ratings.json` | The distribution of answers per debate. Aggregates only |
 | `tags.json` | The tag vocabulary: the arXiv mathematics categories in use |
 | `profiles.json` | Public profile fields for contributors who have something public |
@@ -123,12 +123,12 @@ reporting alongside any median you quote.
 - **No email addresses.** None of this project's code can read one: there is no address
   column in the exposed schema, no view over the auth tables, and no function that returns
   one. It is not filtered out of the export — there is nothing to filter.
-- **No pending or hidden content.** A submission waiting for review has not been published by
-  anybody, and hidden content is content a moderator removed. Exporting either would publish
-  what nobody agreed to publish, and in the second case would republish precisely what was
-  taken down.
-- **No flags and no moderation log.** Who complained about whom, and what moderators wrote
-  to each other about it.
+- **No hidden content.** Hidden content is content a moderator took off the site after
+  somebody flagged it; exporting it would republish precisely what was taken down. The same
+  filter also excludes the handful of rows still in the retired `pending` status, from the
+  period when submissions were reviewed before publication.
+- **No flags, no moderation log, and no moderation decisions.** Who complained about whom,
+  what moderators wrote to each other about it, and what they wrote to the people involved.
 - **No erasure requests.** Who is leaving.
 - **No individual ratings.** See above.
 - **No `role` or ban status on a profile.** A public list of the moderators is an attack

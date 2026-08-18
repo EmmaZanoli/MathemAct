@@ -66,8 +66,10 @@ insert into public.reports (
    'Find prior art.', 'Asked, then checked each.', 'partial', 'Two references invented.',
    'Looked every one up.', true),
 
+  -- A leftover from the retired approval queue: unreadable by anyone but its author, which
+  -- is what a citation to it must respect.
   ('22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001',
-   'pending', 'Still in the queue', 'writing', 'exposition',
+   'pending', 'Left over from the approval queue', 'writing', 'exposition',
    'Draft a note.', 'Asked, rewrote.', 'partial', 'Half usable.', 'Checked by hand.', true),
 
   ('22222222-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001',

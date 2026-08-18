@@ -26,7 +26,9 @@ values
 
 update auth.users set email_confirmed_at = now();
 
--- A published report and a pending one, both by the writer.
+-- Two reports by the writer: one somebody has already answered, and one nobody has. That
+-- is the line the tools policies now defer to — a report is editable until a confirmation
+-- or a comment attests to a version of it, and frozen afterwards.
 insert into public.reports (
   id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
   verification, third_party_material_confirmed
@@ -36,9 +38,15 @@ insert into public.reports (
    'Compute something.', 'Computed it.', 'worked', 'It computed.',
    'Reproduced the computation in Sage.', true),
   ('44444444-0000-0000-0000-000000000002', '33333333-0000-0000-0000-000000000001',
-   'pending', 'A pending report', 'research', 'computation',
+   'hidden', 'A report a moderator has hidden', 'research', 'computation',
    'Compute something else.', 'Computed that too.', 'worked', 'It computed.',
    'Reproduced it by hand.', true);
+
+-- What freezes the first one. Written by the reader rather than the author, because a
+-- confirmation of your own report is refused elsewhere and this is the ordinary case.
+insert into public.report_confirmations (report_id, user_id, verdict)
+values ('44444444-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002',
+        'still_works');
 
 insert into public.report_tools (report_id, tool_name, tool_version, used_on) values
   ('44444444-0000-0000-0000-000000000001', 'GPT-5', '2026-05', current_date - 30),
@@ -226,7 +234,7 @@ set local role anon;
 select is(
   (select count(*)::int from public.report_tools),
   1,
-  'anon sees the tools of published reports and not of pending ones'
+  'anon sees the tools of published reports and not of hidden ones'
 );
 
 reset role;
@@ -240,7 +248,7 @@ select is(
   'their author sees both, because they can see both reports'
 );
 
--- Editing a draft means adding and removing tools; editing a published report does not.
+-- Editing means adding and removing tools, and it stops when somebody else has answered.
 insert into public.report_tools (report_id, tool_name, tool_version, used_on)
 values ('44444444-0000-0000-0000-000000000002', 'Sage', '10.3', current_date - 2);
 
@@ -248,14 +256,14 @@ select is(
   (select count(*)::int from public.report_tools
     where report_id = '44444444-0000-0000-0000-000000000002'),
   2,
-  'an author may add a tool to their own pending report'
+  'an author may add a tool to their own hidden report, which is what a hide asks them to do'
 );
 
 select throws_ok(
   $$ insert into public.report_tools (report_id, tool_name, tool_version, used_on)
      values ('44444444-0000-0000-0000-000000000001', 'Smuggled', '1', current_date) $$,
   '42501'::text, null::text,
-  'but not to one that is already published'
+  'but not to one somebody has already confirmed: their answer attests to a tool and a date'
 );
 
 reset role;

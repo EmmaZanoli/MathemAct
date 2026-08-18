@@ -1966,3 +1966,131 @@ indication of how much is left — and makes it lie. The button also lives outsi
 re-rendering does not destroy the element focus is on; when the last page arrives it hides
 itself and focus moves to the line that replaces it, rather than being left on a hidden
 element with nowhere to go.
+
+## 2026-08-19 — Post-moderation: nothing is approved, and every decision is explained to both sides
+
+Content is published when it is written. A moderator's work starts when somebody flags
+something, ends with hide or leave-up, and carries a written explanation that the author of
+the content and the person who flagged it both read.
+
+This reverses the design the site was built on, so the reasoning for the reversal is the
+whole of this entry.
+
+**Why the gate went.** Three costs, and the first is the one that decided it:
+
+- It put a volunteer between a mathematician and the corpus. The most important flow in
+  CLAUDE.md is a researcher submitting a well-structured account in under ten minutes, and
+  a queue worked "carefully and slowly" turned that ten minutes into an unknown number of
+  days. `/reports/submitted/` said "expect a few days, not minutes" in as friendly a way as
+  that can be said, and it was still an unpaid wait imposed on a sceptical audience being
+  asked to admit something with professional stigma attached.
+- It scaled with submissions rather than with problems. Two volunteers reading everything
+  caps the corpus at what two people can read. Two volunteers answering flags scales with
+  the number of things that turn out to be wrong, which is the quantity that should govern
+  the workload.
+- It read as approval. A corpus where every account had passed a moderator implies the
+  moderators vouched for the mathematics. They did not and cannot — nobody can verify a
+  first-hand account of a private session — and the positioning in CLAUDE.md, a reporting
+  layer rather than a journal, depends on nobody believing they did.
+
+**What replaced it.** `public.moderate()` keeps its shape: one audited door, one audit row
+per decision, still no moderator UPDATE policies on any content table. What changed is what
+it is a door to. `publish`, `request_changes` and `promote` now refuse by name, with a
+sentence saying the gate is gone rather than "that action does not apply" — a moderator who
+has not read the migration will press one, and a generic refusal reads as a bug.
+
+**The explanation is the new obligation, and it has two recipients.** Until now the only
+written reason lived in `public.moderation_actions`, which is readable by moderators and by
+nobody else. That policy is right and stays: the log names the moderator and is written to
+other moderators in the shorthand of people who have read the whole queue. So the same
+sentence is written twice — once into the log, and once into `public.moderation_notices`,
+addressed to a person.
+
+Both halves of the audience matter, and the second is the one systems forget:
+
+- The author, so that being moderated is something you are told rather than something you
+  discover by absence.
+- The flagger, so that flagging is not a message into a void. A flag queue that answers
+  nobody teaches a community that flagging does nothing, and this community will conclude
+  that quickly.
+
+**One row per recipient**, which is a shape decision worth recording. The alternative — one
+row per decision, with a policy asking "are you the author of the thing this points at, or
+did you flag it?" — needs a polymorphic join inside a `USING` clause, evaluated per row,
+over four content tables. One row per recipient makes the policy `recipient_id =
+auth.uid()`, which is the same one-line rule as `public.activity` and is checkable by
+reading it.
+
+A notice never names the moderator and never names the flagger. The first because a hide is
+the site's decision rather than one person's, and a name turns an appeal into a grievance.
+The second because telling an author who reported them is how a moderation system becomes a
+weapon.
+
+**A dismissal tells the author too, and that was the closest call here.** Until now nothing
+told an author that a flag against them existed — deliberately, because it invites them to
+work out by whom. The rule as asked for is that the explanation reaches both parties, and on
+reflection that is right in both directions: a decision about your post is yours to know,
+and an author who is never told is an author who cannot appeal a hide that follows a pattern.
+The mitigation is that the notice says what was decided and never who raised it, and the
+feed row (`content_kept`) says the same.
+
+**Hiding closes the flags that named it.** One decision, one press. Otherwise a moderator
+hides a comment and three flags about that comment stay open, and the three people who
+raised them are never answered. Each closure is still a real audit row with a hand and a
+time on it, so the log is unchanged in what it can reconstruct. `resolve_flag` survives for
+the case a hide cannot cover — a flag against something already hidden or deleted — and
+refuses while what it named is still on the site, because otherwise it would be a second,
+quieter way to tell a flagger something was done.
+
+**Every action now needs a reason, not just the three that took something away.** The old
+rule asked for one on `hide`, `request_changes` and `ban`. The new rule asks on everything
+except carrying out an erasure request, which is a standing request being executed rather
+than a judgement. The change is possible because there are so few actions left that a
+mandatory field no longer produces "ok" a hundred times.
+
+**Editing had to be rethought, and the rule got better rather than merely different.** A
+report used to be editable while `pending` and frozen at publication. Publishing is now
+instant, so "frozen at publication" would mean a typo was permanent one second after it was
+made. The rule is now: **editable while hidden, and until somebody else has answered it** —
+an answer being a "still works" confirmation or a comment. That is what the freeze was
+always for; "at publication" was a proxy that stopped being a good one the moment publication
+stopped being a decision. Two consequences:
+
+- A hide is answerable. The author reads the reason, edits, and the report stays hidden
+  until a moderator looks again — `status` is reverted by the guard trigger, so a save
+  cannot republish.
+- `report_tools` and `report_tags` had to move with it, and this is not cosmetic:
+  their policies gated on the parent being `pending`, and `public.submit_report()` is
+  SECURITY INVOKER, so under a "hidden only" rule every tool row on every new submission
+  would have been refused and the deferred at-least-one-tool constraint would have failed
+  the transaction. Post-moderation would have broken posting entirely, silently, in the one
+  flow this project cares most about.
+
+**Automatic promotion went with the queue it served.** A debate used to become part of the
+record at five ratings, or by a moderator promoting it. Both existed to get claims out of a
+queue. A debate is now active when it is written, `private.promote_debate()` and its
+threshold are dropped, and `/debates/` is one list instead of two — the active/proposed split
+dressed a moderation queue up as a statement about community uptake.
+
+**What this costs, recorded rather than argued away.** Something that should not be on the
+site is on the site until somebody flags it and a volunteer answers. That is the trade, and
+it is the ordinary one every open publishing system makes. Two things make it survivable
+here: the flag control is on every report, debate and comment already, and hiding is
+reversible while a wait is not. The one hazard that is not ordinary — third-party unpublished
+material in a transcript — is a flag reason of its own, is called out in
+`docs/moderation.md` as the one to act on before it is understood, and is still gated at
+submission by a confirmation the author must give and the database stores.
+
+**The activity feed keeps its rule and gains one value.** It holds events and never reason
+text; the sentence lives in the notices table. `content_kept` is the new kind, for an author
+whose post was flagged and left up — no existing value said that, and `flag_dismissed`
+belongs to the flagger. The four kinds naming publication and change requests
+(`report_published`, `report_changes_requested`, `entry_published`,
+`entry_changes_requested`) and `debate_promoted` stay in the enum and in
+`src/lib/activity.ts`: nothing writes them now, and rows carrying them are in feeds.
+
+Reversed: the pre-moderation design of 2026-08-15 (`public.practices` born `pending`,
+`20260815200200_moderate.sql`) and the change-request loop of 2026-08-17
+(`/account/edit-submission/`, which survives with a different job). The `pending` and
+`proposed` status values are kept rather than dropped from their enums — the audit log and
+two backfilled feeds refer to a world in which they existed, and rows may still carry them.

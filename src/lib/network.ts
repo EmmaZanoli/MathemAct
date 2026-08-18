@@ -120,17 +120,17 @@ const UNAVAILABLE =
 /**
  * What this account has submitted to the network, in whatever state it is in.
  *
- * The other half of "Your submissions" on the account page, alongside loadOwnReports().
- * Until this existed an entry sent back for changes was invisible: the note was written to
- * public.network_entries by the same moderation path that writes one to a report, and
- * nothing read it. The author was told a change had been asked for — by the activity feed,
- * once that existed — and had nowhere to go and read what it was.
+ * The other half of "Your submissions" on the account page, alongside loadOwnReports(). An
+ * entry is live the moment it is written, so this list matters when one has been hidden: the
+ * explanation is in public.moderation_notices and shown beside it, and the row is editable
+ * for as long as it stays hidden.
  *
  * What is still missing, and is not fixed here: there is no edit screen for an entry, so
- * acting on the note means deleting and reposting. docs/moderation.md says so.
+ * acting on the explanation means deleting and reposting. docs/moderation.md says so.
  *
- * resources_select_own already returns exactly these rows to their submitter. The explicit
- * filter is written anyway, because a filter that agrees with the policy documents it.
+ * network_entries_select_own already returns exactly these rows to their submitter. The
+ * explicit filter is written anyway, because a filter that agrees with the policy documents
+ * it — and because this table also has a moderator policy.
  */
 export async function loadOwnEntries(userId: string): Promise<Result<OwnSubmission[]>> {
   const supabase = getSupabase();
@@ -139,7 +139,7 @@ export async function loadOwnEntries(userId: string): Promise<Result<OwnSubmissi
   try {
     const { data, error } = await supabase
       .from('network_entries')
-      .select('id, title, status, created_at, moderation_note, moderation_note_at, deleted_at')
+      .select('id, title, status, created_at, deleted_at')
       .eq('submitter_id', userId)
       .order('created_at', { ascending: false });
 
@@ -153,9 +153,10 @@ export async function loadOwnEntries(userId: string): Promise<Result<OwnSubmissi
         title: row.title as string,
         status: row.status as OwnSubmission['status'],
         createdAt: row.created_at as string,
-        note: (row.moderation_note as string | null) ?? null,
-        noteAt: (row.moderation_note_at as string | null) ?? null,
         deletedAt: (row.deleted_at as string | null) ?? null,
+        // An entry has no confirmations and no comments to freeze against, so the rule is
+        // the simple half of the one on reports: editable while it is hidden.
+        editable: row.status === 'hidden' && row.deleted_at === null,
       })),
     };
   } catch {

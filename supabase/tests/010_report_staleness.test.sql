@@ -28,7 +28,7 @@ values
 update auth.users set email_confirmed_at = now();
 
 -- Five published reports, one per tombstone state plus a second stale route, and one
--- pending report that no anonymous caller may learn anything about.
+-- hidden report that no anonymous caller may learn anything about.
 insert into public.reports (
   id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
   verification, third_party_material_confirmed
@@ -36,7 +36,7 @@ insert into public.reports (
 select
   ('66666666-0000-0000-0000-00000000000' || n)::uuid,
   '55555555-0000-0000-0000-000000000001',
-  case when n = 6 then 'pending' else 'published' end::public.content_status,
+  case when n = 6 then 'hidden' else 'published' end::public.content_status,
   'Report ' || n, 'research', 'other', 'a', 'b', 'worked', 'c',
   'Checked it.', true
 from generate_series(1, 6) as g(n);
@@ -89,7 +89,7 @@ set local role anon;
 select is_empty(
   $$ select report_id from public.report_staleness
       where report_id = '66666666-0000-0000-0000-000000000006' $$,
-  'an anonymous client sees no pending report through the staleness view'
+  'an anonymous client sees no hidden report through the staleness view'
 );
 
 select is(
@@ -184,8 +184,8 @@ select is(
 
 reset role;
 
--- ── An author sees their own pending work ───────────────────────────────────────────
--- The same invoker rule that hides a pending report from anon shows it to its author,
+-- ── An author sees their own hidden work ────────────────────────────────────────────
+-- The same invoker rule that hides a hidden report from anon shows it to its author,
 -- because it is the reports policies doing the work rather than anything in the view.
 
 set local role authenticated;
@@ -194,7 +194,7 @@ set local request.jwt.claims to '{"sub":"55555555-0000-0000-0000-000000000001","
 select is(
   (select count(*)::int from public.report_staleness),
   6,
-  'the author sees their own pending report in the view, and nobody else does'
+  'the author sees their own hidden report in the view, and nobody else does'
 );
 
 reset role;

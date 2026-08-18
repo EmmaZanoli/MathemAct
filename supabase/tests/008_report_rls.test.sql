@@ -8,13 +8,18 @@
 -- Two behaviours here look like bugs and are not, so they are asserted explicitly rather
 -- than left for someone to rediscover:
 --
---   An author publishing their own report succeeds and changes nothing. The guard trigger
---   reverts `status` before row level security evaluates the new row, so the WITH CHECK
---   then passes on a row that is still pending. A silent revert, matching how
+--   An author republishing their own hidden report succeeds and changes nothing. The guard
+--   trigger reverts `status` before row level security evaluates the new row, so the WITH
+--   CHECK then passes on a row that is still hidden. A silent revert, matching how
 --   public.profiles already behaves.
 --
---   An author editing their own *published* report raises 42501. Here the guard reverts
---   the text but leaves `deleted_at` null, and no policy's WITH CHECK accepts that row.
+--   An author editing their own *answered* report raises 42501. Here no policy's USING
+--   clause admits the row for a text edit, and reports_soft_delete_own — the one that does
+--   admit it — has a WITH CHECK requiring the result to be deleted, which it is not.
+--
+-- Since post-moderation the editable state is `hidden` rather than `pending`, and nothing
+-- is born pending at all. The fixture below keeps one pending row on purpose: rows written
+-- before that change still exist, and the read policies have to keep hiding them.
 --
 -- Fixtures are created as the table owner, which the guards trust. Every assertion runs
 -- under `set local role`, because what is being tested is what a browser can do.
@@ -70,14 +75,19 @@ insert into public.reports (
    'Confirm a lemma I could not see a gap in.', 'Stated it in Lean and closed the goals.',
    'worked', 'It found a missing hypothesis.', 'Lean accepted the proof.', true, null, null),
 
+  -- Hidden, which is the one state its author may still edit. Written out rather than
+  -- defaulted, unlike the insert further down, because this row is the subject of the edit
+  -- assertions and its state is the point of them.
   ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001',
-   'pending', 'Draft an exposition of a spectral sequence', 'writing', 'exposition',
+   'hidden', 'Draft an exposition of a spectral sequence', 'writing', 'exposition',
    'Produce a readable account for a seminar.', 'Asked for a draft, then rewrote it.',
    'partial', 'Structure was usable, details were not.', 'Checked every claim by hand.',
    true, null, null),
 
+  -- A leftover from before post-moderation. Nothing writes this status now, and anon must
+  -- still see nothing of it.
   ('22222222-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001',
-   'hidden', 'A report a moderator has hidden', 'research', 'other',
+   'pending', 'A report left over from the approval queue', 'research', 'other',
    'Something.', 'Something else.', 'failed', 'It did not work.',
    'Checked against a textbook.', true, null, null),
 
@@ -92,6 +102,13 @@ insert into public.reports (
    'partial', 'Two of five references were invented.', 'Looked up every reference on MathSciNet.',
    true, null, null);
 
+-- What freezes the first one. A published report with nothing attached to it is still its
+-- author's to correct — that is the editing rule since post-moderation — so the assertion
+-- that a published report cannot be rewritten needs a report somebody has answered.
+insert into public.report_confirmations (report_id, user_id, verdict)
+values ('22222222-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000002',
+        'still_works');
+
 -- ── Reading ─────────────────────────────────────────────────────────────────────────
 
 set local role anon;
@@ -104,7 +121,7 @@ select is(
 
 select is_empty(
   $$ select id from public.reports where status <> 'published' $$,
-  'anon sees nothing pending or hidden'
+  'anon sees nothing hidden, and nothing left in the retired pending state'
 );
 
 select is_empty(
@@ -208,15 +225,18 @@ select throws_ok(
   'a member cannot post under somebody else''s name'
 );
 
--- Refused by the column grant, before any policy is consulted.
+-- Refused by the column grant, before any policy is consulted. It reads oddly now that the
+-- default *is* 'published' — but the rule it protects has not moved: what a browser may
+-- write into `status` is nothing at all, in either direction, so nobody can post something
+-- already hidden either, and the day the default changes again this stays true.
 select throws_ok(
   $$ insert into public.reports
        (author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed)
-     values ('11111111-0000-0000-0000-000000000002', 'published', 'Self-published',
+     values ('11111111-0000-0000-0000-000000000002', 'hidden', 'Born hidden',
              'research', 'other', 'a', 'b', 'worked', 'c', 'd', true) $$,
   '42501'::text, null::text,
-  'nobody can post something already published: status has no INSERT grant'
+  'nobody can name status when posting: it has no INSERT grant in either direction'
 );
 
 -- The allowed case. No `id` in the column list, because it has no INSERT grant either:
@@ -234,8 +254,8 @@ reset role;
 select is(
   (select status::text from public.reports
     where title = 'A perfectly ordinary submission'),
-  'pending'::text,
-  'a confirmed member may post, and what they post starts pending'
+  'published'::text,
+  'a confirmed member may post, and what they post is in the corpus at once'
 );
 
 -- ── Writing: editing your own ───────────────────────────────────────────────────────
@@ -252,11 +272,11 @@ reset role;
 select is(
   (select title from public.reports where id = '22222222-0000-0000-0000-000000000002'),
   'Draft an exposition of a spectral sequence, revised'::text,
-  'an author may edit their own report while it is pending'
+  'an author may edit their own report while it is hidden, which is how a hide gets answered'
 );
 
 -- Publishing your own. Succeeds, and changes nothing: the guard reverts status before row
--- level security sees the row, so the WITH CHECK passes on a row that is still pending.
+-- level security sees the row, so the WITH CHECK passes on a row that is still hidden.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000001","role":"authenticated"}';
 
@@ -267,8 +287,8 @@ reset role;
 
 select is(
   (select status::text from public.reports where id = '22222222-0000-0000-0000-000000000002'),
-  'pending'::text,
-  'an author cannot publish their own report; the guard reverts it silently'
+  'hidden'::text,
+  'an author cannot lift a hide on their own report; the guard reverts it silently'
 );
 
 -- Editing a published one. No policy accepts the resulting row, so this is an error rather
@@ -280,7 +300,7 @@ select throws_ok(
   $$ update public.reports set title = 'Rewriting history'
       where id = '22222222-0000-0000-0000-000000000001' $$,
   '42501'::text, null::text,
-  'an author cannot edit their own report once it is published'
+  'an author cannot edit their own report once somebody has confirmed or commented on it'
 );
 
 reset role;
@@ -346,8 +366,9 @@ select lives_ok(
   $$ select public.moderate(
        'report',
        (select id from public.reports where title = 'A perfectly ordinary submission'),
-       'publish') $$,
-  'a moderator may publish a pending report, through the audited path'
+       'hide',
+       'Third-party material in the transcript.') $$,
+  'a moderator may hide a report, through the audited path'
 );
 
 reset role;
@@ -355,8 +376,8 @@ reset role;
 select is(
   (select status::text from public.reports
     where title = 'A perfectly ordinary submission'),
-  'published'::text,
-  'and it is published'
+  'hidden'::text,
+  'and it is hidden'
 );
 
 set local role authenticated;

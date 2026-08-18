@@ -331,7 +331,8 @@ export const ENTRY_LIMITS = {
       return;
     }
 
-    // Redirect to the listing on success; the submitted entry will appear once moderated.
+    // Redirect to the listing on success. The entry is live already; the freshness overlay
+    // is what puts it on the page before the next build.
     window.location.href = path('/network/?submitted=1');
   });
 </script>

@@ -60,15 +60,17 @@ insert into public.network_entries (
    private.normalise_url('https://leanprover.github.io/lean4/doc/'),
    'formalisation', 'Official Lean 4 reference.', 'Lean 4 is the proof assistant most used for formalising mathematics in our community.', null, null),
 
-  -- Pending entry, submitter 1
+  -- Hidden entry, submitter 1. Hidden is the one state its submitter may still edit, which
+  -- is what makes a hide answerable rather than final.
   ('44440000-0000-0000-0000-000000000002', '33331111-0000-0000-0000-000000000001',
-   'pending', 'Draft entry', 'https://example.com/draft',
+   'hidden', 'Draft entry', 'https://example.com/draft',
    private.normalise_url('https://example.com/draft'),
    'reading', 'A draft.', 'Interesting for reasons.', null, null),
 
-  -- Hidden entry, submitter 1
+  -- A leftover from before post-moderation. Nothing writes this status now, and anon must
+  -- still see nothing of it.
   ('44440000-0000-0000-0000-000000000003', '33331111-0000-0000-0000-000000000001',
-   'hidden', 'Hidden entry', 'https://example.com/hidden',
+   'pending', 'Entry left over from the approval queue', 'https://example.com/hidden',
    private.normalise_url('https://example.com/hidden'),
    'community', 'Hidden.', 'Relevant but hidden.', null, null),
 
@@ -96,7 +98,7 @@ select is(
 
 select is_empty(
   $$ select id from public.network_entries where status <> 'published' $$,
-  'anon sees nothing pending or hidden'
+  'anon sees nothing hidden, and nothing left in the retired pending state'
 );
 
 select is_empty(
@@ -205,8 +207,8 @@ reset role;
 
 select is(
   (select status::text from public.network_entries where title = 'A perfectly ordinary submission'),
-  'pending'::text,
-  'a confirmed member may post, and what they post starts pending'
+  'published'::text,
+  'a confirmed member may post, and what they post is on the network at once'
 );
 
 select is(
@@ -229,10 +231,10 @@ reset role;
 select is(
   (select title from public.network_entries where id = '44440000-0000-0000-0000-000000000002'),
   'Lean 4 documentation, revised'::text,
-  'a submitter may edit their own pending entry'
+  'a submitter may edit their own entry while it is hidden'
 );
 
--- Self-publishing: guard reverts status, WITH CHECK passes on still-pending row.
+-- Lifting the hide yourself: guard reverts status, WITH CHECK passes on a still-hidden row.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
 
@@ -243,8 +245,8 @@ reset role;
 
 select is(
   (select status::text from public.network_entries where id = '44440000-0000-0000-0000-000000000002'),
-  'pending'::text,
-  'a submitter cannot publish their own entry; the guard reverts status silently'
+  'hidden'::text,
+  'a submitter cannot lift a hide on their own entry; the guard reverts status silently'
 );
 
 -- Editing a published entry.
@@ -301,30 +303,31 @@ select lives_ok(
   $$ select public.moderate(
        'entry',
        (select id from public.network_entries where title = 'A perfectly ordinary submission'),
-       'publish') $$,
-  'a moderator may publish a pending entry through the audited path'
+       'hide',
+       'A product page rather than something a mathematician can use.') $$,
+  'a moderator may hide an entry through the audited path'
 );
 
 reset role;
 
 select is(
   (select status::text from public.network_entries where title = 'A perfectly ordinary submission'),
-  'published'::text,
-  'and it is published'
+  'hidden'::text,
+  'and it is hidden'
 );
 
 -- Direct moderator update changes nothing.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000005","role":"authenticated"}';
 
-update public.network_entries set status = 'hidden'
+update public.network_entries set status = 'published'
  where title = 'A perfectly ordinary submission';
 
 reset role;
 
 select is(
   (select status::text from public.network_entries where title = 'A perfectly ordinary submission'),
-  'published'::text,
+  'hidden'::text,
   'a direct moderator update changes nothing: the audit log cannot be stepped around'
 );
 

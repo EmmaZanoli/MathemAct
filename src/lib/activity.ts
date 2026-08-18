@@ -13,10 +13,14 @@
  * sitting in a row going stale, and rewording a notification is a change to this file rather
  * than a migration over history.
  *
- * Two things `describe()` is careful about, both inherited from the schema:
+ * Three things `describe()` is careful about, all inherited from the schema:
  *
  *   * **A moderation outcome never names the moderator.** The row carries no actor for one,
  *     so the sentence cannot accidentally acquire a name later.
+ *   * **A moderation outcome never carries the reason either.** This table holds events; the
+ *     sentence a moderator wrote is in public.moderation_notices, addressed to the person it
+ *     is about, and src/lib/notices.ts reads it. A feed row says that something was decided
+ *     and where to read why, which is why several of them now link to /account/#decisions.
  *   * **A rating never names the rater.** public.ratings is readable only by its author,
  *     which is what keeps a debate's aggregate hidden until you have taken a position;
  *     "Somebody rated" is the most that may ever be said.
@@ -42,6 +46,7 @@ export type ActivityKind =
   | 'confirmed_report'
   | 'flagged'
   | 'cited'
+  | 'content_kept'
   | 'report_published'
   | 'report_changes_requested'
   | 'entry_published'
@@ -377,26 +382,31 @@ function who(item: ActivityItem): string {
  * trusted to contain the row — and a link to a static page that has not been built yet is a
  * 404 dressed up as a result.
  *
- * Anything of your own that may still be pending goes to "Your submissions" rather than to
- * its public address, where it is unreadable until a moderator has looked at it. That section
- * carries reports and network entries both, which is why the two entry rows below point at
- * the same place as the two report rows.
+ * Anything a moderator decided goes to the account page rather than to the thing itself.
+ * That is where the explanation is — a feed row says *that* something was decided and the
+ * sentence is in public.moderation_notices — and for a hide it is also the only page that
+ * still works, since the post is off the site.
  *
  * Null for the rows where a link would be a lie: a flag, which has no page, and an account
  * action, which is about you rather than about a thing.
  */
 function href(item: ActivityItem): string | null {
   switch (item.kind) {
-    case 'posted_report':
     case 'edited_report':
     case 'report_changes_requested':
-    case 'posted_entry':
     case 'entry_changes_requested':
       return path('/account/#your-submissions');
+
+    case 'content_hidden':
+    case 'content_unhidden':
+    case 'content_kept':
+      return path('/account/#decisions');
 
     case 'flagged':
     case 'flag_resolved':
     case 'flag_dismissed':
+      return path('/account/#decisions');
+
     case 'account_banned':
     case 'account_unbanned':
       return null;
@@ -428,9 +438,9 @@ function sentence(item: ActivityItem): string {
   switch (item.kind) {
     // ── Things you did ───────────────────────────────────────────────────────────────
     case 'posted_report':
-      return 'You posted a report. It waits for a moderator before it joins the corpus.';
+      return 'You posted a report. It is in the corpus.';
     case 'edited_report':
-      return 'You edited your submission and sent it back for review.';
+      return 'You revised a hidden report and asked for it to be looked at again.';
     case 'posted_debate':
       return 'You suggested a debate.';
     case 'posted_entry':
@@ -449,6 +459,9 @@ function sentence(item: ActivityItem): string {
       return `You referenced a ${noun(item.targetType)}.`;
 
     // ── Moderation ───────────────────────────────────────────────────────────────────
+    // The five that follow are pre-moderation history. Nothing has written them since
+    // 2026-08-18 — there is no approval step to be published by and no change request to
+    // answer — but rows carrying them are in feeds, so the sentences stay.
     case 'report_published':
       return 'A moderator published your report. It is part of the corpus now.';
     case 'report_changes_requested':
@@ -459,22 +472,29 @@ function sentence(item: ActivityItem): string {
       return 'A moderator asked for changes to your network entry.';
     case 'debate_promoted':
       return 'A moderator opened your debate for rating.';
+
     case 'content_hidden':
       return item.commentId
-        ? 'A moderator hid your comment.'
-        : `A moderator hid your ${noun(item.targetType)}.`;
+        ? 'A moderator hid your comment. The reason is with your moderation decisions.'
+        : `A moderator hid your ${noun(item.targetType)}. The reason is with your moderation decisions.`;
     case 'content_unhidden':
       return item.commentId
         ? 'A moderator restored your comment.'
         : `A moderator restored your ${noun(item.targetType)}.`;
+    case 'content_kept':
+      // The one row that tells an author a flag existed. It says what was decided and never
+      // who raised it; see the migration for why that trade was made deliberately.
+      return item.commentId
+        ? 'Somebody flagged your comment. A moderator looked and left it where it was.'
+        : `Somebody flagged your ${noun(item.targetType)}. A moderator looked and left it where it was.`;
     case 'account_banned':
       return 'Your account has been suspended. You can still read the site, but not post.';
     case 'account_unbanned':
       return 'Your account has been restored. You can post again.';
     case 'flag_resolved':
-      return 'A moderator acted on something you flagged.';
+      return 'Something you flagged was taken off the site. The reason is with your moderation decisions.';
     case 'flag_dismissed':
-      return 'A moderator looked at something you flagged and left it where it was.';
+      return 'A moderator looked at something you flagged and left it where it was. The reason is with your moderation decisions.';
 
     // ── Other people ─────────────────────────────────────────────────────────────────
     case 'content_commented':

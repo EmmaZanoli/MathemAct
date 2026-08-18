@@ -1,11 +1,15 @@
 ---
 /**
- * The debates, split into what the community has taken up and what has been suggested.
+ * Every debate, in one list.
  *
- * The split is the page's whole argument. An active debate is one enough people
- * bothered to answer that it became part of the record; a proposed one is somebody's
- * suggestion that has not yet earned that. Listing them together would imply the site
- * endorses every claim on it, and this site takes no position on any of them.
+ * It used to be two — "active" and "proposed" — and the split was the page's argument: a
+ * claim became part of the record only once five people had answered it or a moderator had
+ * promoted it. That went with pre-moderation on 2026-08-18. A debate is part of the record
+ * when it is written, and the honest reading of the old split is that it dressed a
+ * moderation queue up as a statement about community uptake.
+ *
+ * Nothing is endorsed by being listed here, and the page still says so in the paragraph
+ * below, which is where that claim always belonged.
  *
  * No aggregate anywhere on this page, not even a count of raters. A listing that showed
  * "42 raters, median 8" would tell a reader where the community landed before they had
@@ -21,8 +25,6 @@ import { areaLabel } from '../../lib/report-schema';
 import { listDebates, listDebateInteractionCounts } from '../../lib/debates';
 
 const debates = await listDebates();
-const active = debates.filter((debate) => debate.status === 'active');
-const proposed = debates.filter((debate) => debate.status === 'proposed');
 const debateInteractions = listDebateInteractionCounts();
 ---
 
@@ -84,78 +86,26 @@ const debateInteractions = listDebateInteractionCounts();
           </div>
         </>
       ) : (
-        <>
-          <section class="section">
-            <h2>Active</h2>
-            <p class="field__hint">
-              Enough people have answered these that they are part of the record.
-            </p>
-
-            {active.length === 0 ? (
-              <p class="field__hint">
-                None yet. A proposed one becomes active once enough members have answered it.
-              </p>
-            ) : (
-              <ul class="debate-list" role="list" data-debate-list="active">
-                {active.map((debate) => (
-                  <li
-                    class="debate-item"
-                    data-debate
-                    data-created={debate.createdAt}
-                    data-interactions={debateInteractions.get(debate.id) ?? 0}
-                  >
-                    <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
-                      {debate.statement}
-                    </a>
-                    <p class="card__facts debate-item__facts">
-                      <span>{areaLabel(debate.area)}</span>
-                      <span class="meta">Active since {longDate(debate.activatedAt)}</span>
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section class="section">
-            <h2>Proposed</h2>
-            <p class="field__hint">
-              Suggested by a member and open for answers. Answering one is what promotes it.
-            </p>
-
-            {/* The list is always here, even when it is empty, because it is where the
-                freshness overlay puts anything suggested since the export — and a hidden
-                empty list is a smaller thing to carry than a second insertion point. */}
-            {proposed.length === 0 && (
-              <p class="field__hint" data-none>Nothing waiting.</p>
-            )}
-
-            <ul
-              class="debate-list"
-              role="list"
-              data-debate-list="proposed"
-              data-fresh-list
-              hidden={proposed.length === 0}
+        // The one list. It is also where the freshness overlay puts anything written since
+        // the export, which is why it carries data-fresh-list as well.
+        <ul class="debate-list" role="list" data-debate-list="all" data-fresh-list>
+          {debates.map((debate) => (
+            <li
+              class="debate-item"
+              data-debate
+              data-created={debate.createdAt}
+              data-interactions={debateInteractions.get(debate.id) ?? 0}
             >
-              {proposed.map((debate) => (
-                <li
-                  class="debate-item"
-                  data-debate
-                  data-created={debate.createdAt}
-                  data-interactions={debateInteractions.get(debate.id) ?? 0}
-                >
-                  <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
-                    {debate.statement}
-                  </a>
-                  <p class="card__facts debate-item__facts">
-                    <span>{areaLabel(debate.area)}</span>
-                    <span class="meta">Proposed {longDate(debate.createdAt)}</span>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        </>
+              <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
+                {debate.statement}
+              </a>
+              <p class="card__facts debate-item__facts">
+                <span>{areaLabel(debate.area)}</span>
+                <span class="meta">Posted {longDate(debate.createdAt)}</span>
+              </p>
+            </li>
+          ))}
+        </ul>
       )
     }
 
@@ -178,9 +128,10 @@ const debateInteractions = listDebateInteractionCounts();
   /**
    * Sort and freshness overlay for the debates listing.
    *
-   * Sort runs entirely in the browser over already-rendered `<li>` elements, separately
-   * within the Active and Proposed sections so the split — which is the page's argument —
-   * is never collapsed. The URL carries the sort value so a sorted view can be linked.
+   * Sort runs entirely in the browser over already-rendered `<li>` elements. It iterates
+   * over every `[data-debate-list]` rather than the one there now, which is left as it was:
+   * the page had two lists until the active/proposed split went, and a loop that assumes one
+   * would have to be rewritten by whoever brings a second one back.
    *
    * Nothing about ratings is touched. The aggregate is never built into a page, so there is
    * no stale copy of one to refresh: a debate page fetches its distribution live, after

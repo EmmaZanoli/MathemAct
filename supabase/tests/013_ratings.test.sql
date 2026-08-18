@@ -12,7 +12,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(28);
+select plan(29);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -32,6 +32,8 @@ insert into public.debates (id, author_id, statement, area, status, activated_at
 values
   ('cccc0000-0000-0000-0000-000000000001', 'bbbb0000-0000-0000-0000-000000000001',
    'AI-assisted literature search should be disclosed in papers.', 'writing', 'active', now()),
+  -- A leftover from before post-moderation: nothing is written in this status now, and
+  -- ratings still have to attach to it, because the rows exist.
   ('cccc0000-0000-0000-0000-000000000002', 'bbbb0000-0000-0000-0000-000000000001',
    'Formalising a statement before proving it is worth the time it costs.', 'research',
    'proposed', null),
@@ -169,7 +171,7 @@ set local role anon;
 select is(
   (select count(*)::int from public.debates),
   2,
-  'anon sees proposed and active debates, and not hidden ones'
+  'anon sees every debate that is not hidden'
 );
 
 reset role;
@@ -180,9 +182,9 @@ set local request.jwt.claims to '{"sub":"bbbb0000-0000-0000-0000-000000000003","
 select throws_ok(
   $$ insert into public.debates (author_id, statement, area, status)
      values ('bbbb0000-0000-0000-0000-000000000003',
-             'This one arrives already part of the record.', 'other', 'active') $$,
+             'This one arrives already hidden, which nobody may do.', 'other', 'hidden') $$,
   '42501'::text, null::text,
-  'nobody can propose something already active: status has no INSERT grant'
+  'nobody can name status when posting a debate: it has no INSERT grant in either direction'
 );
 
 insert into public.debates (author_id, statement, area)
@@ -194,8 +196,15 @@ reset role;
 select is(
   (select status::text from public.debates
     where statement = 'Referee reports should say whether a tool was used.'),
-  'proposed'::text,
-  'a confirmed member may propose, and it starts proposed'
+  'active'::text,
+  'a confirmed member may post a debate, and it is part of the record at once'
+);
+
+select isnt(
+  (select activated_at from public.debates
+    where statement = 'Referee reports should say whether a tool was used.'),
+  null::timestamptz,
+  'with the date the CHECK ties to that status, from the column default'
 );
 
 select throws_ok(
@@ -212,39 +221,37 @@ select throws_ok(
   'and one longer than a sentence: two claims sharing a rating mean nothing'
 );
 
--- ── Promotion ───────────────────────────────────────────────────────────────────────
--- The threshold counts answers, including declines. What promotion records is that the
--- question turned out to be worth asking.
+-- ── Nothing promotes any more ───────────────────────────────────────────────────────
+-- A debate used to become part of the record once enough people had rated it, which existed
+-- to get claims out of a moderation queue without a moderator. There is no queue: a debate
+-- is active when it is written. What has to be asserted now is the absence — a trigger left
+-- behind would fire on rows a moderator had hidden and unhidden, and quietly re-promote
+-- something that had just been put back deliberately.
 
-update private.settings set value = '3'
- where key = 'debate_activation_ratings';
+select is(
+  (select count(*)::int from pg_trigger
+    where tgrelid = 'public.ratings'::regclass and not tgisinternal
+      and tgname = 'ratings_promote_debate'),
+  0,
+  'no promotion trigger is left on public.ratings'
+);
+
+select is(
+  (select count(*)::int from private.settings where key = 'debate_activation_ratings'),
+  0,
+  'and the threshold it read is gone from private.settings'
+);
 
 insert into public.ratings (debate_id, user_id, score) values
   ('cccc0000-0000-0000-0000-000000000002', 'bbbb0000-0000-0000-0000-000000000001', 9),
-  ('cccc0000-0000-0000-0000-000000000002', 'bbbb0000-0000-0000-0000-000000000002', null);
+  ('cccc0000-0000-0000-0000-000000000002', 'bbbb0000-0000-0000-0000-000000000002', null),
+  ('cccc0000-0000-0000-0000-000000000002', 'bbbb0000-0000-0000-0000-000000000003', 2);
 
 select is(
   (select status::text from public.debates
     where id = 'cccc0000-0000-0000-0000-000000000002'),
   'proposed'::text,
-  'below the threshold, a debate stays proposed'
-);
-
-insert into public.ratings (debate_id, user_id, score)
-values ('cccc0000-0000-0000-0000-000000000002', 'bbbb0000-0000-0000-0000-000000000003', 2);
-
-select is(
-  (select status::text from public.debates
-    where id = 'cccc0000-0000-0000-0000-000000000002'),
-  'active'::text,
-  'reaching it promotes, counting the person who declined to answer'
-);
-
-select isnt(
-  (select activated_at from public.debates
-    where id = 'cccc0000-0000-0000-0000-000000000002'),
-  null::timestamptz,
-  'and records when, because the constraint ties the two together'
+  'and rating a debate no longer changes its status, however many people answer'
 );
 
 -- ── The aggregate ───────────────────────────────────────────────────────────────────
