@@ -100,6 +100,14 @@ const EXPORTED = import.meta.glob<{ default: Debate[] }>('/data/debates.json', {
   eager: true,
 });
 
+const AGGREGATES = import.meta.glob<{
+  default: readonly { debateId: string; totalRaters: number }[];
+}>('/data/debate-ratings.json', { eager: true });
+
+const COMMENTS = import.meta.glob<{
+  default: readonly { parentType: string; parentId: string }[];
+}>('/data/comments.json', { eager: true });
+
 let cached: Debate[] | null = null;
 
 /**
@@ -143,6 +151,22 @@ export async function debatesByAuthor(authorId: string): Promise<Debate[]> {
   return (await readDebates()).filter(
     (debate) => debate.author?.id === authorId,
   );
+}
+
+/** Interaction count per debate id: totalRaters (from aggregate) + comment count.
+ *  Call this at build time to populate data-interactions on each debate list item. */
+export function listDebateInteractionCounts(): Map<string, number> {
+  const counts = new Map<string, number>();
+  const bump = (id: string, by = 1) => counts.set(id, (counts.get(id) ?? 0) + by);
+
+  for (const row of Object.values(AGGREGATES)[0]?.default ?? []) {
+    bump(row.debateId, row.totalRaters);
+  }
+  for (const comment of Object.values(COMMENTS)[0]?.default ?? []) {
+    if (comment.parentType === 'debate') bump(comment.parentId);
+  }
+
+  return counts;
 }
 
 // ══ Writes and the aggregate ══════════════════════════════════════════════════════════

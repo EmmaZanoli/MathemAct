@@ -20,13 +20,14 @@ import '../../styles/forms.css';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { AREAS, OUTCOME_CHOICES, TASK_TYPES } from '../../lib/report-schema';
-import { listReports, listToolNames, listUsedTags, listAllTags } from '../../lib/reports';
+import { listReports, listToolNames, listUsedTags, listAllTags, listInteractionCounts } from '../../lib/reports';
 
 const reports = await listReports();
 const tools = await listToolNames();
 const tags = await listUsedTags();
 const allTags = await listAllTags();
 const tagVocab = Object.fromEntries(allTags.map((t) => [t.code, t.label]));
+const extraInteractions = listInteractionCounts();
 
 /** Only offer a filter that some report actually has. A vocabulary of ten task types over
  *  a corpus of four is nine dead ends and one result. */
@@ -155,6 +156,7 @@ const groups = [
                 <select id="sort" data-sort>
                   <option value="recent">Most recent</option>
                   <option value="activity">Confirmation activity</option>
+                  <option value="popularity">Most popular</option>
                 </select>
               </p>
             </div>
@@ -168,7 +170,12 @@ const groups = [
 
             <div data-results>
               {reports.map((report) => (
-                <ReportCard report={report} />
+                <ReportCard
+                  report={report}
+                  interactionCount={
+                    report.staleness.confirmationCount + (extraInteractions.get(report.id) ?? 0)
+                  }
+                />
               ))}
             </div>
 
@@ -415,6 +422,14 @@ const groups = [
           if (left !== right) return right.localeCompare(left);
         }
 
+        if (by === 'popularity') {
+          // Most interactions first (confirmations + comments + citations).
+          // Reports with equal counts fall through to most recent.
+          const left = Number(a.dataset.interactions ?? 0);
+          const right = Number(b.dataset.interactions ?? 0);
+          if (left !== right) return right - left;
+        }
+
         return (b.dataset.created ?? '').localeCompare(a.dataset.created ?? '');
       });
 
@@ -470,7 +485,7 @@ const groups = [
       }
 
       const wanted = params.get('sort');
-      if (wanted === 'activity' || wanted === 'recent') sort.value = wanted;
+      if (wanted === 'activity' || wanted === 'recent' || wanted === 'popularity') sort.value = wanted;
     }
 
     /** Return the filter fieldset for `dimension`, creating it if fresh cards introduce a
@@ -636,6 +651,7 @@ const groups = [
     node.dataset.created = report.createdAt;
     node.dataset.confirmed = '';
     node.dataset.confirmations = '0';
+    node.dataset.interactions = '0';
 
     // Nothing this new has been confirmed by anyone, so the square is open and the status is
     // `unverified` — which is what the template already renders. Only the outcome colour and
