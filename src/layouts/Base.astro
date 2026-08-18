@@ -117,6 +117,18 @@ const year = new Date().getFullYear();
                 )
               }
 
+              {/* Shown only when there is something waiting, which is what makes a third
+                  control in a deliberately spare header defensible: it appears when it has
+                  something to say and is absent the rest of the time. The count is a guess
+                  read from localStorage — see src/lib/activity-hint.ts for why the header
+                  may not ask the database — so the link is the point and the number is a
+                  hint. Signed-in people reach the same page from their profile. */}
+              <li data-activity-link hidden>
+                <a href={path('/account/activity/')}>
+                  Activity <span class="nav__count" data-activity-count></span>
+                </a>
+              </li>
+
               {/* Unconditional, unlike the search box and the moderation link above: the
                   way back to your own account is the one header control that has to be in
                   the same corner on every page, landing included. Exactly one of these two
@@ -160,9 +172,10 @@ const year = new Date().getFullYear();
 
     <script>
       // Deliberately the only script on a reading page, and it imports nothing from
-      // Supabase. See src/lib/session-hint.ts and src/lib/mod-hint.ts.
+      // Supabase. See src/lib/session-hint.ts, mod-hint.ts and activity-hint.ts.
       import { readSessionHint } from '../lib/session-hint';
       import { readModHint } from '../lib/mod-hint';
+      import { readActivityHint } from '../lib/activity-hint';
 
       const hint = readSessionHint();
 
@@ -172,6 +185,22 @@ const year = new Date().getFullYear();
 
       const modLink = document.querySelector<HTMLElement>('[data-mod-link]');
       if (modLink) modLink.hidden = !readModHint();
+
+      // Both conditions, because a stored count outlives the session that produced it: a
+      // browser that has signed out must not still be advertising somebody's notifications.
+      const waiting = hint === 'in' ? readActivityHint() : 0;
+      const activityLink = document.querySelector<HTMLElement>('[data-activity-link]');
+
+      if (activityLink && waiting > 0) {
+        const count = activityLink.querySelector<HTMLElement>('[data-activity-count]');
+        if (count) {
+          count.textContent = String(waiting);
+          // The number alone is a decoration until something says what it counts. The
+          // visible word "Activity" is beside it, so this only has to carry the count.
+          count.setAttribute('aria-label', `${waiting} new`);
+        }
+        activityLink.hidden = false;
+      }
     </script>
 
     <main id="main">
@@ -358,6 +387,17 @@ const year = new Date().getFullYear();
      about you rather than about the site — so it is set apart by a rule rather than just
      by position. Dropped on narrow screens, where a vertical rule between wrapped items
      lands in the wrong place. */
+  /* The count beside "Activity". Mono, like every other number on this site, and set in
+     the accent because it is the one thing in the header asking to be noticed. Not a filled
+     circle: a badge is a shape from another kind of product, and the word next to it is
+     already carrying the meaning. */
+  .nav__count {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+  }
+
   .nav__account {
     padding-inline-start: var(--space-md);
     border-inline-start: var(--border);

@@ -1813,3 +1813,73 @@ rather than dispatched `input`, on all three submission forms: counter matches
 `CommentThread.astro` keeps its own inline counter update. It has one hard-coded counter,
 looked up inside a per-comment root rather than a form, and moving it would mean giving the
 shared helper a second shape for no gain.
+
+## 2026-08-18 — There is a notification centre, and it is an event table rather than an inbox
+
+`public.activity` and `public.activity_seen`, read at `/account/activity/`. This is the first
+thing on this site that tells anybody anything, and it reverses part of a decision taken two
+days earlier, so both halves are worth writing down.
+
+**What was rejected on 2026-08-16 and stays rejected.** "A message table is a second inbox
+nobody checks" — a table of prose somebody had to compose, for a reader to find. That is
+still the wrong shape. `reports.moderation_note` is still where a change request lives, and
+"Your submissions" is still where it is read; the feed only says *that* changes were asked
+for and links there.
+
+**What changed.** The rejected thing was messages. This stores *events* — a kind, a target, a
+timestamp, sometimes an actor — and every word a person reads is composed in
+`src/lib/activity.ts`. Nothing is written by a human, so nothing goes stale, and rewording a
+notification is an edit to one file rather than a migration over history.
+
+**Why a table rather than deriving the feed at read time.** Three of the events cannot be
+derived at all, and the third is the one that settles it:
+
+1. `public.reports` has no `published_at`. Status is the current state and carries no date,
+   so "your report was published on the 14th" is unrecoverable from the row.
+2. `public.moderation_actions` is readable by moderators and by nobody else, deliberately.
+   The moderated person cannot read their own row and must not start being able to.
+3. `public.ratings` is readable only by its author — that is what keeps a debate's aggregate
+   hidden until somebody has taken a position. A debate's author cannot count the ratings on
+   their own debate, and should not be able to.
+
+**The moderation trigger hangs off the log, not off the content tables.** One `AFTER INSERT`
+on `public.moderation_actions` covers publish, request changes, hide, unhide, promote, ban
+and both flag outcomes. The invariant is worth more than the four triggers it replaces: one
+audit row per decision, therefore one notification per decision — no logged decision goes
+unannounced and nothing announces a decision that was not logged. It also means
+`public.moderate()` was not reissued to add this feature, so it could not acquire a
+transcription error while doing so.
+
+**Three places the row deliberately says less than it could.** A moderation outcome carries
+no actor: the author is told what was decided, never by whom, because naming the moderator
+turns a hide into a grievance with an address on it and undoes, one table over, the reason
+the log is restricted. A rating carries no actor, for the same reason `public.ratings` is
+private. And there is no event at all for *being* flagged — only the flagger hears anything,
+when the flag is resolved or dismissed.
+
+**`label` is denormalised, and the rule about what may go in it is the whole of its safety.**
+It is always the heading of the report, debate or entry the event is *on* — content the
+subject either wrote or can already read. Never a comment body, never a flag's detail, never
+a moderator's reason. Copying one of those would republish, in a row nobody moderates,
+exactly the text a moderator might later hide. A flagged *comment* resolves to the heading of
+its thread rather than to itself.
+
+**`is_inbound` is a column, not a client guess.** A badge that lights up because you posted is
+a badge that is ignored within a week, so "something you did" and "something that happened to
+you" are separated in the database. `private.log_activity()` classifies every kind with a
+`CASE` that has no `ELSE`, so adding an enum value without deciding which half it is in
+raises `case_not_found` in CI rather than quietly defaulting.
+
+**The header badge is a guess, like the other two.** A live count would mean the header asking
+the database on every page, including `/reports/` and `/debates/`, which are deliberately free
+of the auth bundle. So `activity-hint.ts` joins `session-hint.ts` and `mod-hint.ts` in
+localStorage, refreshed by the pages that already hold a session — the account pages, and any
+report or debate page through `CommentThread.astro`. The link appears only when the stored
+count is above zero, which is what makes a third control in a spare header defensible: it is
+there when it has something to say. Both hints are now cleared on sign-out, which the
+moderation one was not.
+
+**Feed rows are not an audit log.** They cascade away with the account, unlike
+`public.moderation_actions`, which outlives the accounts on both ends of it. `39` pgTAP
+assertions in `supabase/tests/018_activity.test.sql`; the four that matter are the two
+missing actors, the silence toward a flagged author, and the absent INSERT grant.

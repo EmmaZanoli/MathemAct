@@ -115,7 +115,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     </p>
   </section>
 
-  <section class="section" data-submissions hidden>
+  <section class="section" id="your-submissions" data-submissions hidden>
     <h2>Your submissions</h2>
 
     <p class="field__hint">
@@ -188,6 +188,10 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     <h2>This account</h2>
 
     <ul class="tombstone-list">
+      <li>
+        <a href={path('/account/activity/')}>Your activity</a> — what you have posted, rated
+        and flagged, and what has happened to it since
+      </li>
       <li><a href={path('/account/password/')}>Change your password</a></li>
       <li><a href={path('/account/sign-out/')}>Sign out of this browser</a></li>
       <li><a href={path('/account/delete/')}>Erase this account</a></li>
@@ -196,6 +200,8 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 </Account>
 
 <script>
+  import { countUnread } from '../../lib/activity';
+  import { setActivityHint } from '../../lib/activity-hint';
   import { readAuthErrorFromUrl } from '../../lib/auth';
   import { longDate, verificationMonth } from '../../lib/format';
   import { path } from '../../lib/paths';
@@ -248,6 +254,12 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     userId = state.userId;
     void fill(state.userId);
     void fillSubmissions(state.userId);
+
+    // One head count, so that the header's Activity link is right on the next page this
+    // browser loads. This page already holds a session, so it costs a round trip and no
+    // bundle; the reading pages, which must not load Supabase at all, read the stored
+    // number instead. See src/lib/activity-hint.ts.
+    void countUnread(state.userId).then(setActivityHint);
   });
 
   void startSession();

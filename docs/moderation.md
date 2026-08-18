@@ -231,13 +231,25 @@ mid-decision.
 - **No edit screen for a pending submission.** An author who is sent back can read the note
   on their account page but cannot yet act on it — they would have to delete and repost. This
   is the next thing to build; it is what makes "send back" worth more than "hide".
-- **No notification of any kind.** Nothing tells an author their report was published,
-  sent back, or hidden. They find out by looking. Mail would go through Supabase's own
-  templates and 300 messages a day, and is a real design decision rather than a switch.
+- **No notification that leaves the site.** An author is now told in the interface: every
+  decision this screen takes writes a row to `public.activity`, which they read at
+  `/account/activity/`. What they see is the outcome and the date — never the moderator's
+  name and never the reason text, which is written to another moderator. A change request
+  still reads under "Your submissions", where the note itself is. What does not exist is
+  **mail**: nothing reaches somebody who does not come back to the site. That would go
+  through Supabase's own templates and 300 messages a day, and is a real design decision
+  rather than a switch.
+- **A network entry sent back has nowhere to go.** "Your submissions" on the account page
+  reads `public.reports` only, so an entry with a change request on it is invisible there and
+  there is no edit screen for one either. The activity feed now says the change was asked
+  for, which makes the gap visible rather than closing it: the notification is the only
+  place the author learns anything, and it links nowhere.
 - **Removing a citation is not logged.** A moderator may delete a citation whose stored
   excerpt should not be there — the one hard delete on the site — and that path predates the
   audit log and still bypasses it.
 - **No view of the log in the interface.** It is readable through PostgREST by any moderator
   and is not on the screen. It should be, next to each queue.
-- **Banning is not visible anywhere.** A banned account looks ordinary to everybody
-  including itself, until it tries to post and is refused by a policy.
+- **Banning is barely visible.** A banned account now gets one line in its activity feed
+  saying so. Everything else about it still looks ordinary — the post forms are not
+  disabled, and the refusal when it tries to post still comes from a policy rather than
+  from the interface.

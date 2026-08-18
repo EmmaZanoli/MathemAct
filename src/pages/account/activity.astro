@@ -1,0 +1,302 @@
+---
+/**
+ * Your activity: what you did here, and what happened because of it.
+ *
+ * This is the page docs/moderation.md has been promising by its absence — "No notification
+ * of any kind. Nothing tells an author their report was published, sent back, or hidden.
+ * They find out by looking." This is the looking, gathered into one place.
+ *
+ * Three decisions worth stating, because each was a fork:
+ *
+ * **One list, not two.** What you did and what others did sit in the same column, in one
+ * order, because that is what makes it a record rather than a queue — "I posted this, three
+ * people rated it, a moderator opened it" is a story and splitting it in half loses the
+ * arrows. The filter above the list is there for the day somebody wants only the second
+ * kind, and it starts on everything.
+ *
+ * **Only the second kind is ever "new".** A badge that counts your own posting is a badge
+ * that gets ignored within a week. `is_inbound` is a database column rather than a client
+ * guess for exactly this reason.
+ *
+ * **The watermark moves after the page has rendered, not before.** The markers are computed
+ * against where it was; writing first would mean nothing was ever new, which is a bug that
+ * looks like an empty feature.
+ *
+ * Like /moderate/, this page cannot be static: it is one person's private view, and the
+ * export must never contain a row of it. Unlike /moderate/, it does not hide — it is an
+ * ordinary account page behind the ordinary gate.
+ */
+import Account from '../../layouts/Account.astro';
+import { path } from '../../lib/paths';
+---
+
+<Account
+  title="Your activity"
+  description="What you have posted, rated and flagged on MathemAct, and what has happened to it since."
+  lead="Everything you have done here, and everything others have done to it, newest first."
+  gate="required"
+>
+  <div class="form-status form-status--error" data-error hidden>
+    <p data-error-text></p>
+  </div>
+
+  {/* Rendered only once there is a count to state. "0 new" is a sentence nobody needs. */}
+  <p class="activity__new-count mono" data-new-count hidden></p>
+
+  <div class="activity__filter" data-filter hidden role="group" aria-label="Filter activity">
+    <button class="pill pill--on" type="button" data-scope="all" aria-pressed="true">
+      Everything
+    </button>
+    <button class="pill" type="button" data-scope="inbound" aria-pressed="false">
+      About your posts
+    </button>
+  </div>
+
+  <ul class="activity" data-list role="list"></ul>
+
+  <div class="panel" data-empty hidden>
+    <p class="panel__heading">Nothing here yet</p>
+    <p>
+      This fills up as you use the site: what you post, what you rate, what you flag, and
+      what moderators and other people do with it afterwards.
+    </p>
+    <p class="actions">
+      <a class="button button--primary" href={path('/reports/new/')}>Post a report</a>
+    </p>
+  </div>
+
+  {/* Shown only when the list is long enough for the cap to be doing something. */}
+  <p class="field__hint" data-capped hidden>
+    Showing the most recent 100 events. Older ones are not kept out of reach — they are
+    simply not shown here, and everything you have posted is on your author page.
+  </p>
+
+  {/* Authored here rather than built in script, so the scoped styles below reach it. */}
+  <template data-item-template>
+    <li class="activity__item">
+      <p class="activity__text" data-text></p>
+      <a class="activity__label" data-label href=""></a>
+      <p class="activity__when mono">
+        <span data-when></span>
+        <span class="activity__new" data-new hidden>new</span>
+      </p>
+    </li>
+  </template>
+</Account>
+
+<script>
+  import { longDate } from '../../lib/format';
+  import { query } from '../../lib/forms';
+  import { startSession, subscribeToSession } from '../../lib/session';
+  import { setActivityHint } from '../../lib/activity-hint';
+  import { describe, loadActivity, loadSeenAt, markSeen, FEED_LIMIT } from '../../lib/activity';
+  import type { ActivityItem } from '../../lib/activity';
+
+  const errorBox = query<HTMLElement>('[data-error]');
+  const errorText = query<HTMLElement>('[data-error-text]');
+  const newCount = query<HTMLElement>('[data-new-count]');
+  const filter = query<HTMLElement>('[data-filter]');
+  const list = query<HTMLElement>('[data-list]');
+  const empty = query<HTMLElement>('[data-empty]');
+  const capped = query<HTMLElement>('[data-capped]');
+  const template = query<HTMLTemplateElement>('[data-item-template]');
+
+  let userId: string | null = null;
+
+  subscribeToSession((state) => {
+    if (state.status !== 'signed-in') return;
+    if (userId === state.userId) return;
+
+    userId = state.userId;
+    void fill(state.userId);
+  });
+
+  void startSession();
+
+  async function fill(id: string): Promise<void> {
+    // The watermark is read before the feed and written after it, so "new" means "since the
+    // last time you were on this page" rather than "since a moment ago".
+    const seenAt = await loadSeenAt(id);
+    const result = await loadActivity(id);
+
+    if (!result.ok) {
+      errorText.textContent = result.message;
+      errorBox.hidden = false;
+      return;
+    }
+
+    const items = result.value;
+
+    if (items.length === 0) {
+      empty.hidden = false;
+      // Nothing waiting, so nothing for the header to advertise on the next page.
+      setActivityHint(0);
+      return;
+    }
+
+    const since = seenAt ? new Date(seenAt).getTime() : 0;
+    const isNew = (item: ActivityItem) =>
+      item.isInbound && new Date(item.createdAt).getTime() > since;
+
+    list.replaceChildren(...items.map((item) => row(item, isNew(item))));
+
+    const waiting = items.filter(isNew).length;
+
+    if (waiting > 0) {
+      newCount.textContent =
+        waiting === 1 ? '1 new since you last looked' : `${waiting} new since you last looked`;
+      newCount.hidden = false;
+    }
+
+    filter.hidden = false;
+    capped.hidden = items.length < FEED_LIMIT;
+
+    // Rendered, so it has been seen. Both writes are deliberately after the render: the
+    // markers above are already in the DOM and do not change under the reader.
+    setActivityHint(0);
+    void markSeen(id);
+  }
+
+  function row(item: ActivityItem, fresh: boolean): HTMLElement {
+    const line = describe(item);
+    const node = template.content.cloneNode(true) as DocumentFragment;
+    const element = node.firstElementChild as HTMLElement;
+
+    element.dataset.inbound = String(item.isInbound);
+    if (fresh) element.classList.add('activity__item--new');
+
+    query<HTMLElement>('[data-text]', element).textContent = line.text;
+
+    const label = query<HTMLAnchorElement>('[data-label]', element);
+
+    if (line.label) {
+      label.textContent = line.label;
+
+      if (line.href) {
+        label.href = line.href;
+      } else {
+        // No link, but the title still belongs on screen — it is how you tell which of your
+        // three pending submissions this row is about. Swapped for a span rather than left
+        // as an anchor with no href, which is focusable in some browsers and announces
+        // itself as a link that goes nowhere.
+        const span = document.createElement('span');
+        span.className = label.className;
+        span.textContent = line.label;
+        label.replaceWith(span);
+      }
+    } else {
+      label.remove();
+    }
+
+    query<HTMLElement>('[data-when]', element).textContent = longDate(item.createdAt);
+    query<HTMLElement>('[data-new]', element).hidden = !fresh;
+
+    return element;
+  }
+
+  // The filter hides rows rather than refetching. There are at most a hundred of them and
+  // they are already here; a round trip to remove some would be slower and could disagree
+  // with what is on screen.
+  for (const button of filter.querySelectorAll<HTMLButtonElement>('[data-scope]')) {
+    button.addEventListener('click', () => {
+      const scope = button.dataset.scope ?? 'all';
+
+      for (const other of filter.querySelectorAll<HTMLButtonElement>('[data-scope]')) {
+        const on = other === button;
+        other.classList.toggle('pill--on', on);
+        other.setAttribute('aria-pressed', String(on));
+      }
+
+      for (const item of list.querySelectorAll<HTMLElement>('.activity__item')) {
+        item.hidden = scope === 'inbound' && item.dataset.inbound !== 'true';
+      }
+    });
+  }
+</script>
+
+<style>
+  .activity__new-count {
+    margin-block-end: var(--space-lg);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--accent);
+  }
+
+  .activity__filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    margin-block-end: var(--space-lg);
+  }
+
+  /* A two-state control rather than a link pair: the filter changes what is on the page
+     rather than where you are, so it is a button and says so to a screen reader through
+     aria-pressed. */
+  .pill {
+    padding: var(--space-3xs) var(--space-sm);
+    border: var(--border);
+    border-radius: 0;
+    background: none;
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+    cursor: pointer;
+  }
+
+  .pill--on {
+    border-color: var(--ink);
+    color: var(--ink);
+  }
+
+  .activity {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .activity__item + .activity__item {
+    margin-block-start: var(--space-md);
+    padding-block-start: var(--space-md);
+    border-block-start: var(--border);
+  }
+
+  /* The one place a row is marked out. A rule in the accent down the inside edge, the same
+     device the moderator's note on the account page uses for "this is the site speaking to
+     you" — which is exactly what a notification is. */
+  .activity__item--new {
+    padding-inline-start: var(--space-sm);
+    border-inline-start: var(--border-width-thick) solid var(--accent);
+  }
+
+  .activity__item--new + .activity__item--new {
+    padding-inline-start: var(--space-sm);
+  }
+
+  .activity__text {
+    text-wrap: pretty;
+  }
+
+  .activity__label {
+    display: block;
+    margin-block-start: var(--space-3xs);
+    font-family: var(--font-serif);
+    font-size: var(--size-4);
+    line-height: var(--leading-tight);
+    text-wrap: balance;
+  }
+
+  .activity__when {
+    margin-block-start: var(--space-2xs);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+  }
+
+  /* Never the only marker: the row already carries the accent rule, and the count above the
+     list says how many there are. Colour is a third cue here, not the carrier. */
+  .activity__new {
+    margin-inline-start: var(--space-2xs);
+    color: var(--accent);
+  }
+</style>
