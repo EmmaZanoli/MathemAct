@@ -100,6 +100,19 @@ const EXPORTED = import.meta.glob<{ default: Report[] }>('/data/reports.json', {
   eager: true,
 });
 
+const COMMENTS = import.meta.glob<{
+  default: readonly { parentType: string; parentId: string }[];
+}>('/data/comments.json', { eager: true });
+
+const CITATIONS = import.meta.glob<{
+  default: readonly {
+    sourceType: string;
+    sourceId: string;
+    targetType: string;
+    targetId: string;
+  }[];
+}>('/data/citations.json', { eager: true });
+
 let cached: Report[] | null = null;
 
 async function readCorpus(): Promise<Report[]> {
@@ -168,6 +181,35 @@ export async function listUsedTags(): Promise<CorpusTag[]> {
   }
 
   return [...tags.values()].sort((a, b) => a.code.localeCompare(b.code, 'en'));
+}
+
+const ALL_TAGS_DATA = import.meta.glob<{ default: { code: string; label: string }[] }>(
+  '/data/tags.json',
+  { eager: true },
+);
+
+/** All tags in the vocabulary, whether or not any report uses them. Used to provide
+ *  client-side label lookups for values that appear only in fresh cards. */
+export async function listAllTags(): Promise<CorpusTag[]> {
+  const rows = Object.values(ALL_TAGS_DATA)[0]?.default ?? [];
+  return rows.map(({ code, label }) => ({ code, label }));
+}
+
+/** Comment count + citation count per report id. Confirmations are in staleness already.
+ *  Call this at build time and add it to confirmationCount for the full interaction total. */
+export function listInteractionCounts(): Map<string, number> {
+  const counts = new Map<string, number>();
+  const bump = (id: string) => counts.set(id, (counts.get(id) ?? 0) + 1);
+
+  for (const comment of Object.values(COMMENTS)[0]?.default ?? []) {
+    if (comment.parentType === 'report') bump(comment.parentId);
+  }
+  for (const citation of Object.values(CITATIONS)[0]?.default ?? []) {
+    if (citation.sourceType === 'report') bump(citation.sourceId);
+    if (citation.targetType === 'report') bump(citation.targetId);
+  }
+
+  return counts;
 }
 
 // ══ Writes ════════════════════════════════════════════════════════════════════════════

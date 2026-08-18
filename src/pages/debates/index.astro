@@ -18,11 +18,12 @@ import { longDate } from '../../lib/format';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { areaLabel } from '../../lib/report-schema';
-import { listDebates } from '../../lib/debates';
+import { listDebates, listDebateInteractionCounts } from '../../lib/debates';
 
 const debates = await listDebates();
 const active = debates.filter((debate) => debate.status === 'active');
 const proposed = debates.filter((debate) => debate.status === 'proposed');
+const debateInteractions = listDebateInteractionCounts();
 ---
 
 <Base
@@ -53,6 +54,16 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
     <p class="corpus__action">
       <a class="button button--primary" href={path('/debates/new/')}>Suggest a debate</a>
     </p>
+
+    {debates.length > 0 && (
+      <p class="results__sort">
+        <label for="debate-sort">Sort by</label>
+        <select id="debate-sort" data-sort>
+          <option value="recent">Most recent</option>
+          <option value="popularity">Most popular</option>
+        </select>
+      </p>
+    )}
 
     {
       debates.length === 0 ? (
@@ -85,9 +96,14 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
                 None yet. A proposed one becomes active once enough members have answered it.
               </p>
             ) : (
-              <ul class="debate-list" role="list">
+              <ul class="debate-list" role="list" data-debate-list="active">
                 {active.map((debate) => (
-                  <li class="debate-item">
+                  <li
+                    class="debate-item"
+                    data-debate
+                    data-created={debate.createdAt}
+                    data-interactions={debateInteractions.get(debate.id) ?? 0}
+                  >
                     <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
                       {debate.statement}
                     </a>
@@ -117,11 +133,17 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
             <ul
               class="debate-list"
               role="list"
+              data-debate-list="proposed"
               data-fresh-list
               hidden={proposed.length === 0}
             >
               {proposed.map((debate) => (
-                <li class="debate-item">
+                <li
+                  class="debate-item"
+                  data-debate
+                  data-created={debate.createdAt}
+                  data-interactions={debateInteractions.get(debate.id) ?? 0}
+                >
                   <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
                     {debate.statement}
                   </a>
@@ -141,7 +163,7 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
         client-rendered viewer, because /debates/<id>/ is generated at build time
         from the export and does not exist yet for rows newer than the last build. */}
     <template data-fresh-debate>
-      <li class="debate-item" data-fresh>
+      <li class="debate-item" data-fresh data-debate data-created="" data-interactions="0">
         <a class="debate-item__link" data-statement></a>
         <p class="card__facts debate-item__facts">
           <span data-area></span>
@@ -154,11 +176,11 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
 
 <script>
   /**
-   * The freshness overlay.
+   * Sort and freshness overlay for the debates listing.
    *
-   * The lists on this page are as they stood at the last nightly export. One query asks for
-   * anything proposed since; whatever comes back is prepended to the proposed list and
-   * marked. Nothing here can fail visibly — see src/lib/fresh.ts.
+   * Sort runs entirely in the browser over already-rendered `<li>` elements, separately
+   * within the Active and Proposed sections so the split — which is the page's argument —
+   * is never collapsed. The URL carries the sort value so a sorted view can be linked.
    *
    * Nothing about ratings is touched. The aggregate is never built into a page, so there is
    * no stale copy of one to refresh: a debate page fetches its distribution live, after
@@ -167,6 +189,65 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
   import { debatesSince } from '../../lib/fresh';
   import { longDate } from '../../lib/format';
   import { areaLabel } from '../../lib/report-schema';
+
+  const sort = document.querySelector<HTMLSelectElement>('[data-sort]');
+
+  function order(): void {
+    if (!sort) return;
+    const by = sort.value;
+
+    for (const list of document.querySelectorAll<HTMLElement>('[data-debate-list]')) {
+      const items = [...list.querySelectorAll<HTMLElement>('[data-debate]')];
+
+      const sorted = items.sort((a, b) => {
+        if (by === 'popularity') {
+          const left = Number(a.dataset.interactions ?? 0);
+          const right = Number(b.dataset.interactions ?? 0);
+          if (left !== right) return right - left;
+        }
+        return (b.dataset.created ?? '').localeCompare(a.dataset.created ?? '');
+      });
+
+      for (const item of sorted) list.append(item);
+    }
+  }
+
+  function writeUrl(): void {
+    if (!sort) return;
+    const params = new URLSearchParams(window.location.search);
+    if (sort.value === 'recent') {
+      params.delete('sort');
+    } else {
+      params.set('sort', sort.value);
+    }
+    const query = params.toString();
+    window.history.replaceState(
+      {},
+      '',
+      query ? `${window.location.pathname}?${query}` : window.location.pathname,
+    );
+  }
+
+  function readUrl(): void {
+    if (!sort) return;
+    const wanted = new URLSearchParams(window.location.search).get('sort');
+    if (wanted === 'popularity' || wanted === 'recent') sort.value = wanted;
+  }
+
+  if (sort) {
+    sort.addEventListener('change', () => {
+      order();
+      writeUrl();
+    });
+    window.addEventListener('popstate', () => {
+      readUrl();
+      order();
+    });
+    readUrl();
+    order();
+  }
+
+  // ── Freshness overlay ─────────────────────────────────────────────────────────────────
 
   const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
   const list = document.querySelector<HTMLElement>('[data-fresh-list]');
@@ -190,6 +271,7 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
         if (area) area.textContent = areaLabel(debate.area);
         const dateEl = node.querySelector<HTMLElement>('[data-date]');
         if (dateEl) dateEl.textContent = `Proposed ${longDate(debate.createdAt)}`;
+        node.dataset.created = debate.createdAt;
 
         list.prepend(node);
       }
@@ -201,6 +283,9 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
         const element = document.querySelector<HTMLElement>(selector);
         if (element) element.hidden = true;
       }
+
+      // Re-sort to place fresh items in the right position.
+      order();
     })();
   }
 </script>

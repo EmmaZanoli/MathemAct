@@ -20,11 +20,14 @@ import '../../styles/forms.css';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { AREAS, OUTCOME_CHOICES, TASK_TYPES } from '../../lib/report-schema';
-import { listReports, listToolNames, listUsedTags } from '../../lib/reports';
+import { listReports, listToolNames, listUsedTags, listAllTags, listInteractionCounts } from '../../lib/reports';
 
 const reports = await listReports();
 const tools = await listToolNames();
 const tags = await listUsedTags();
+const allTags = await listAllTags();
+const tagVocab = Object.fromEntries(allTags.map((t) => [t.code, t.label]));
+const extraInteractions = listInteractionCounts();
 
 /** Only offer a filter that some report actually has. A vocabulary of ten task types over
  *  a corpus of four is nine dead ends and one result. */
@@ -77,7 +80,7 @@ const groups = [
   {/* The export timestamp travels to the browser on the element rather than through a
       `define:vars` script, which would have to be inline and could not import anything. The
       overlay asks the database for rows newer than this and prepends what it finds. */}
-  <div class="shell corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
+  <div class="shell corpus" data-corpus data-exported-at={exportedAt() ?? ''} data-tags-vocab={JSON.stringify(tagVocab)}>
     <header class="corpus__header">
       <h1>Reports</h1>
       <p class="corpus__lead">
@@ -153,6 +156,7 @@ const groups = [
                 <select id="sort" data-sort>
                   <option value="recent">Most recent</option>
                   <option value="activity">Confirmation activity</option>
+                  <option value="popularity">Most popular</option>
                 </select>
               </p>
             </div>
@@ -166,7 +170,12 @@ const groups = [
 
             <div data-results>
               {reports.map((report) => (
-                <ReportCard report={report} />
+                <ReportCard
+                  report={report}
+                  interactionCount={
+                    report.staleness.confirmationCount + (extraInteractions.get(report.id) ?? 0)
+                  }
+                />
               ))}
             </div>
 
@@ -230,7 +239,7 @@ const groups = [
   import type { FreshReport } from '../../lib/fresh';
   import { longDate } from '../../lib/format';
   import { path } from '../../lib/paths';
-  import { areaLabel, taskTypeLabel } from '../../lib/report-schema';
+  import { areaLabel, taskTypeLabel, outcomeLabel } from '../../lib/report-schema';
   import { OUTCOME, tombstoneName } from '../../lib/status';
 
   const filters = document.querySelector<HTMLFormElement>('[data-filters]');
@@ -413,6 +422,14 @@ const groups = [
           if (left !== right) return right.localeCompare(left);
         }
 
+        if (by === 'popularity') {
+          // Most interactions first (confirmations + comments + citations).
+          // Reports with equal counts fall through to most recent.
+          const left = Number(a.dataset.interactions ?? 0);
+          const right = Number(b.dataset.interactions ?? 0);
+          if (left !== right) return right - left;
+        }
+
         return (b.dataset.created ?? '').localeCompare(a.dataset.created ?? '');
       });
 
@@ -468,7 +485,90 @@ const groups = [
       }
 
       const wanted = params.get('sort');
-      if (wanted === 'activity' || wanted === 'recent') sort.value = wanted;
+      if (wanted === 'activity' || wanted === 'recent' || wanted === 'popularity') sort.value = wanted;
+    }
+
+    /** Return the filter fieldset for `dimension`, creating it if fresh cards introduce a
+     *  value for a dimension that no static report uses (e.g. tags on a corpus with none). */
+    function ensureGroup(dimension: Dimension): HTMLElement {
+      const existing = filters.querySelector<HTMLElement>(`[data-group="${dimension}"]`);
+      if (existing) return existing;
+
+      const LEGEND_FULL: Record<Dimension, string> = {
+        area: 'Area',
+        task: 'Task type',
+        outcome: 'Outcome',
+        tag: 'Subject area',
+        tool: 'Tool',
+      };
+
+      const fieldset = document.createElement('fieldset');
+      fieldset.className = 'filters__group';
+      fieldset.dataset.group = dimension;
+
+      const legend = document.createElement('legend');
+      legend.className = 'filters__legend';
+      legend.textContent = LEGEND_FULL[dimension];
+
+      const opts = document.createElement('div');
+      opts.className = 'filters__options';
+
+      fieldset.append(legend, opts);
+      filters.append(fieldset);
+      return fieldset;
+    }
+
+    /** Add a single filter option if nothing with that dimension+value already exists. */
+    function injectOption(
+      dimension: Dimension,
+      value: string,
+      labelOf: (v: string) => string,
+    ): void {
+      if (!value) return;
+      if (filters.querySelector(`input[name="${dimension}"][value="${CSS.escape(value)}"]`)) return;
+
+      const group = ensureGroup(dimension);
+      const optionsContainer = group.querySelector<HTMLElement>('.filters__options')!;
+
+      const label = document.createElement('label');
+      label.className = 'filters__option';
+
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = dimension;
+      input.value = value;
+
+      const text = document.createElement('span');
+      text.textContent = labelOf(value);
+
+      const tally = document.createElement('span');
+      tally.className = 'filters__tally';
+      tally.dataset.tally = `${dimension}:${value}`;
+
+      label.append(input, text, tally);
+      optionsContainer.append(label);
+    }
+
+    /** Inject filter options for any value a fresh card carries that has no checkbox yet.
+     *  Must run before apply() so paintTallies() sees the new inputs. */
+    function injectMissingOptions(freshCards: HTMLElement[]): void {
+      const tagVocab: Record<string, string> = JSON.parse(
+        document.querySelector<HTMLElement>('[data-corpus]')?.dataset.tagsVocab ?? '{}',
+      );
+
+      for (const card of freshCards) {
+        injectOption('area', card.dataset.area ?? '', areaLabel);
+        injectOption('task', card.dataset.taskType ?? '', taskTypeLabel);
+        injectOption('outcome', card.dataset.outcome ?? '', outcomeLabel);
+
+        for (const code of (card.dataset.tags ?? '').split('|').filter(Boolean)) {
+          injectOption('tag', code, (c) => tagVocab[c] ?? c);
+        }
+
+        const toolKeys = (card.dataset.tools ?? '').split('|').filter(Boolean);
+        const toolNames = (card.dataset.toolsNames ?? '').split('|');
+        toolKeys.forEach((key, i) => injectOption('tool', key, () => toolNames[i] ?? key));
+      }
     }
 
     filters.addEventListener('change', () => apply(true));
@@ -491,6 +591,7 @@ const groups = [
     // it is filtered, counted and sorted like everything else rather than pinned above the
     // listing as a separate thing.
     void overlay((added) => {
+      injectMissingOptions(added);
       cards.push(...added);
       apply(false);
     });
@@ -545,10 +646,12 @@ const groups = [
     node.dataset.tools = report.tools
       .map((tool) => tool.name.trim().toLowerCase())
       .join('|');
+    node.dataset.toolsNames = report.tools.map((tool) => tool.name.trim()).join('|');
     node.dataset.tags = report.tags.join('|');
     node.dataset.created = report.createdAt;
     node.dataset.confirmed = '';
     node.dataset.confirmations = '0';
+    node.dataset.interactions = '0';
 
     // Nothing this new has been confirmed by anyone, so the square is open and the status is
     // `unverified` — which is what the template already renders. Only the outcome colour and

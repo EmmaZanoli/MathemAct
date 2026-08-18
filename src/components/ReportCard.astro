@@ -23,9 +23,12 @@ interface Props {
   report: Report;
   /** Author pages already say whose work this is. */
   showAuthor?: boolean;
+  /** Confirmations + comments + citations. Used for popularity sort. */
+  interactionCount?: number;
 }
 
-const { report, showAuthor = true } = Astro.props;
+const { report, showAuthor = true, interactionCount } = Astro.props;
+const interactions = interactionCount ?? report.staleness.confirmationCount;
 
 // Data attributes drive the listing's filtering and sorting, which run in the browser over
 // already-rendered cards. Keeping the filterable values on the element means the filter
@@ -45,6 +48,7 @@ const tagCodes = report.tags.map((tag) => tag.code);
   data-created={report.createdAt}
   data-confirmed={report.staleness.latestConfirmationAt ?? ''}
   data-confirmations={report.staleness.confirmationCount}
+  data-interactions={interactions}
 >
   <div class="card__status">
     <StalenessNote staleness={report.staleness} outcome={report.outcome} />
