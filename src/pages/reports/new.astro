@@ -382,6 +382,7 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
     setBusy,
     setFieldError,
     showStatus,
+    syncCounters,
   } from '../../lib/forms';
   import {
     EARLIEST_TOOL_USE,
@@ -597,22 +598,6 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
 
   // ── Counters and progress ───────────────────────────────────────────────────────────
 
-  function syncCounters(): void {
-    for (const counter of form.querySelectorAll<HTMLElement>('[data-counter-for]')) {
-      const field = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        `#${CSS.escape(counter.dataset.counterFor!)}`,
-      );
-      if (!field) continue;
-
-      const max = Number(counter.dataset.max);
-      const used = field.value.length;
-
-      counter.querySelector('[data-counter-value]')!.textContent = String(used);
-      if (used > max * 0.9) counter.setAttribute('data-near', '');
-      else counter.removeAttribute('data-near');
-    }
-  }
-
   /** Whether a section has an answer. Deliberately generous — this drives a progress
    *  indicator, not the submission, and a bar that only moved on a fully valid section
    *  would sit at zero while somebody typed. */
@@ -648,7 +633,7 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
   }
 
   function refresh(): void {
-    syncCounters();
+    syncCounters(form);
     syncDisclosure();
 
     let done = 0;

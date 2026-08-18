@@ -173,7 +173,7 @@ export const ENTRY_LIMITS = {
   import { getSupabase } from '../../lib/supabase';
   import { loadProfile, mayPost } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
-  import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
+  import { hideStatus, query, setBusy, showStatus, wireCounters } from '../../lib/forms';
   import { normaliseUrl } from '../../lib/network';
   import { path } from '../../lib/paths';
 
@@ -191,6 +191,8 @@ export const ENTRY_LIMITS = {
   const duplicateLink   = document.querySelector<HTMLAnchorElement>('[data-duplicate-link]');
 
   let userId: string | null = null;
+
+  wireCounters(form);
 
   subscribeToSession((state) => {
     if (state.status === 'loading') return;

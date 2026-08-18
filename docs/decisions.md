@@ -1778,3 +1778,38 @@ on a secret it does not use, would have failed it if that secret were ever rotat
 its message said "cannot verify" about a verification it was not doing. A stale comment in
 `embed.py` about a "direct connection" bypassing RLS came from the same abandoned design and
 is corrected.
+
+## 2026-08-18 — A `counter` prop that counted nothing on two of the four forms
+
+`/debates/new/` and `/network/new/` passed `counter` to five `Field.astro` controls between
+them and the number never moved off `0`.
+
+The prop is honest about what it does, which is the trap: it renders the counter element and
+the cap, and that is all it can do. Astro components used this way have no script of their
+own, so the markup is inert until the page wires it. `/reports/new/` and the change-request
+form each had their own `syncCounters()` — the same fifteen lines twice — and the two later
+forms were written by copying the *markup*, which is the half that looks finished. Nothing
+warns you: the counter renders, sits at `0 / 200`, and reads as a component that is still
+loading rather than one that was never connected.
+
+It is now `syncCounters()` and `wireCounters()` in `src/lib/forms.ts`, alongside the rest of
+the form DOM work that is done once so it cannot be done differently four times. All four
+forms use it; the report form keeps calling `syncCounters` from its own `refresh()`, because
+that recomputes the progress indicator on the same keystroke and a second pair of listeners
+would be doing the same work twice.
+
+Two things the shared version does that neither copy did. It syncs **once on load**, which
+matters for the change-request form — rendered with a report already in it — and for a
+browser restoring a half-written form on back-navigation, neither of which fires an `input`
+event. And it listens for **`reset`, deferred by a tick**: the event fires *before* the
+controls are cleared, so counting at that moment just re-reads the values that are about to
+go. `/debates/new/` calls `form.reset()` after a successful proposal, so without that the
+counters would have kept the withdrawn claim's length.
+
+Verified in headless Chrome over CDP against the built site, typing with real key events
+rather than dispatched `input`, on all three submission forms: counter matches
+`field.value.length` on each.
+
+`CommentThread.astro` keeps its own inline counter update. It has one hard-coded counter,
+looked up inside a per-comment root rather than a form, and moving it would mean giving the
+shared helper a second shape for no gain.

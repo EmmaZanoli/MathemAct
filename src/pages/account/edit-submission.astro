@@ -347,6 +347,7 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
     setBusy,
     setFieldError,
     showStatus,
+    syncCounters,
   } from '../../lib/forms';
   import {
     EARLIEST_TOOL_USE,
@@ -482,7 +483,7 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
     void fillTags();
 
     syncDisclosure();
-    syncCounters();
+    syncCounters(form);
 
     wrapper.hidden = false;
   }
@@ -523,7 +524,7 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
       } else {
         row.remove();
       }
-      syncCounters();
+      syncCounters(form);
     });
 
     toolList.append(row);
@@ -619,30 +620,14 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
     }
   }
 
-  // ── Character counters ──────────────────────────────────────────────────────────────
-
-  function syncCounters(): void {
-    for (const counter of form.querySelectorAll<HTMLElement>('[data-counter-for]')) {
-      const field = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-        `#${CSS.escape(counter.dataset.counterFor!)}`,
-      );
-      if (!field) continue;
-
-      const max = Number(counter.dataset.max);
-      const used = field.value.length;
-
-      counter.querySelector('[data-counter-value]')!.textContent = String(used);
-      if (used > max * 0.9) counter.setAttribute('data-near', '');
-      else counter.removeAttribute('data-near');
-    }
-  }
+  // ── Keeping the counters and the disclosure question current ────────────────────────
 
   form.addEventListener('input', () => {
-    syncCounters();
+    syncCounters(form);
     syncDisclosure();
   });
   form.addEventListener('change', () => {
-    syncCounters();
+    syncCounters(form);
     syncDisclosure();
   });
 

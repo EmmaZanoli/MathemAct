@@ -204,6 +204,7 @@ import { AREAS } from '../../lib/report-schema';
     setBusy,
     setFieldError,
     showStatus,
+    wireCounters,
   } from '../../lib/forms';
   import { validateRequiredText, validateOptionalText } from '../../lib/validation';
   import type { Area } from '../../lib/report-schema';
@@ -218,6 +219,8 @@ import { AREAS } from '../../lib/report-schema';
   const bearing = query<HTMLInputElement>('#bearing', form);
 
   let userId: string | null = null;
+
+  wireCounters(form);
 
   // ── The carried passage ─────────────────────────────────────────────────────────────
   // Read once, on load, rather than at submission time. Reading it later would attach a

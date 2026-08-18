@@ -139,3 +139,50 @@ export function validateFields(
 
   return valid;
 }
+
+/**
+ * Update every character counter in `root` from the field it names.
+ *
+ * The counter markup comes from Field.astro's `counter` prop, which renders the element
+ * and the cap but cannot animate it — a component has no script of its own here. So the
+ * markup is inert until something calls this, and a page that renders a counter and never
+ * wires it ships a field that reads `0 / 200` however much is typed into it. That shipped
+ * on /debates/new/ and /network/new/: the prop looked like the whole feature.
+ */
+export function syncCounters(root: ParentNode = document): void {
+  for (const counter of root.querySelectorAll<HTMLElement>('[data-counter-for]')) {
+    const field = root.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      `#${CSS.escape(counter.dataset.counterFor!)}`,
+    );
+    if (!field) continue;
+
+    const max = Number(counter.dataset.max);
+    const used = field.value.length;
+
+    counter.querySelector('[data-counter-value]')!.textContent = String(used);
+    if (used > max * 0.9) counter.setAttribute('data-near', '');
+    else counter.removeAttribute('data-near');
+  }
+}
+
+/**
+ * Wire every counter in a form and keep it current: one initial sync, then on input and
+ * on change.
+ *
+ * The initial sync matters for a form rendered with values in it, and for the browser
+ * restoring what somebody had typed before navigating away — neither fires an input event.
+ * `reset` is deferred, because the event fires *before* the controls are cleared and
+ * counting them at that point just re-reads the values that are about to go.
+ *
+ * A form that already drives counters from a wider refresh — the report form recomputes a
+ * progress indicator on the same keystroke — should call `syncCounters` from there instead
+ * of adding a second pair of listeners.
+ */
+export function wireCounters(form: HTMLFormElement): void {
+  const sync = (): void => syncCounters(form);
+
+  sync();
+  form.addEventListener('input', sync);
+  form.addEventListener('change', sync);
+  form.addEventListener('reset', () => window.setTimeout(sync, 0));
+}
