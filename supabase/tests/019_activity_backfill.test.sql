@@ -22,7 +22,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(11);
+select plan(12);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -64,9 +64,16 @@ values
   ('11111111-0000-0000-0000-000000000003', 'publish', 'report',
    '22222222-0000-0000-0000-000000000001', '2026-07-01T16:00:00Z');
 
-alter table public.reports            enable trigger reports_activity_insert;
-alter table public.comments           enable trigger comments_activity_insert;
-alter table public.moderation_actions enable trigger moderation_actions_activity_insert;
+-- The triggers are deliberately never switched back on. `ALTER TABLE ... ENABLE TRIGGER`
+-- refuses while the table has a pending trigger event, and inserting a report always leaves
+-- one: reports_require_a_tool is a *deferred* constraint trigger, so it sits queued until
+-- commit. Flushing it would mean SET CONSTRAINTS ALL IMMEDIATE, which this repo has already
+-- been bitten by once — it survives ROLLBACK TO SAVEPOINT and changes the mode for the rest
+-- of the file.
+--
+-- Nothing needs them back. The disable is transactional and the rollback at the bottom undoes
+-- it, and the one assertion that needs a live trigger uses a debate, whose trigger was never
+-- touched.
 
 select is(
   (select count(*)::int from public.activity),
@@ -141,29 +148,37 @@ select is(
 
 -- ── Over something the triggers already saw ─────────────────────────────────────────
 -- The case this has to survive in production: the migration lands after the triggers have
--- been live, so most of what it walks is already there.
+-- been live, so most of what the backfill walks is already there.
+--
+-- A debate rather than a report, because debates_activity_insert was never disabled above.
+-- It writes its own feed row on insert, exactly as it would in production, and the backfill
+-- then walks straight over it.
 
-insert into public.reports (
-  id, author_id, status, title, area, task_type, aim, method, outcome, outcome_notes,
-  verification, third_party_material_confirmed
-) values
-  ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001',
-   'pending', 'Posted while the triggers were live', 'writing', 'exposition',
-   'Draft a note.', 'Asked, then rewrote.', 'partial', 'Half usable.', 'Checked by hand.',
-   true);
+insert into public.debates (id, author_id, statement, area, status)
+values
+  ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001',
+   'Posted while the triggers were live.', 'writing', 'proposed');
+
+select is(
+  (select count(*)::int from public.activity
+    where target_id = '33333333-0000-0000-0000-000000000001'
+      and kind = 'posted_debate'),
+  1,
+  'the live trigger wrote its row, as it does in production'
+);
 
 select is(
   private.backfill_activity(),
   0,
-  'a report the triggers already saw is not reconstructed on top of itself'
+  'and the backfill walks over it without reconstructing it on top of itself'
 );
 
 select is(
   (select count(*)::int from public.activity
-    where target_id = '22222222-0000-0000-0000-000000000002'
-      and kind = 'posted_report'),
+    where target_id = '33333333-0000-0000-0000-000000000001'
+      and kind = 'posted_debate'),
   1,
-  'and its feed row is still a single row'
+  'leaving one row where there was one row'
 );
 
 select * from finish();

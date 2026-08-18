@@ -403,17 +403,33 @@ reset role;
 -- would matter: one writes any row it is asked to, the other decides who hears about a
 -- moderation decision.
 
+-- Asked by name over pg_proc rather than by signature. A signature written out in a test is
+-- a second place the argument list lives: 20260818140000 added a parameter to log_activity()
+-- and this assertion started erroring on a function that "does not exist", which reads as the
+-- function having been deleted rather than as the test being out of date. By name it also
+-- covers every overload, which is what the claim actually is.
 select ok(
-  not has_function_privilege(
-    'authenticated',
-    'private.log_activity(uuid, public.activity_kind, uuid, public.moderation_target, uuid, uuid, text)',
-    'EXECUTE'),
-  'the one writer of the feed is not reachable from a browser'
+  not exists (
+    select 1
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'private'
+       and p.proname = 'log_activity'
+       and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+  ),
+  'the one writer of the feed is not reachable from a browser, in any overload'
 );
 
 select ok(
-  not has_function_privilege('authenticated', 'private.activity_on_moderation()', 'EXECUTE'),
-  'and neither is the trigger that turns a decision into a notification'
+  not exists (
+    select 1
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'private'
+       and p.proname in ('activity_on_moderation', 'log_moderation', 'backfill_activity')
+       and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+  ),
+  'and neither is anything that turns a decision into a notification, or rebuilds the feed'
 );
 
 -- ── Erasure ─────────────────────────────────────────────────────────────────────────
