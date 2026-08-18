@@ -80,8 +80,9 @@ def main() -> None:
 
     reports: list[dict] = json.loads(REPORTS_FILE.read_text(encoding="utf-8"))
 
-    # Direct connection bypasses RLS; the export already filters to published rows.
-    # Guard here as well: only embed reports that carry content.
+    # The export contains published rows only, so there is nothing here to filter for
+    # visibility — this script reads a file and never opens a connection. Guard anyway:
+    # only embed reports that carry content.
     published = [
         p for p in reports
         if p.get("aim") and not p.get("deletedAt")

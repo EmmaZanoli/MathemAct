@@ -1745,3 +1745,36 @@ class and comes out as `katex-display`.
 
 Worth knowing because it is a contributor-facing default, not a one-page mistake: anybody
 pasting `$$…$$` from a paper onto one line gets cramped inline math and no error.
+
+## 2026-08-18 — The embed job's two bugs: a missing file, and detection that never detected
+
+`embed.yml` had failed on all four of its runs, from the day it was added. The cause was one
+line: `git add data/embeddings.json`, on a corpus with nothing in it. `embed.py` prints
+"No published reports with content — nothing to embed" and returns 0 without writing a file,
+which is correct, and `git add` on a path that does not exist exits **128** and fails the
+step. The script was never the problem, which is why the failure survived four runs: the log
+reads as a successful embed followed by an inexplicable git error.
+
+A missing file is now handled as what it is — nothing was embedded, so `changed=false` and
+the job finishes clean.
+
+Fixing that exposed the step's other half. The intent, per its own comment, was to commit
+only when vectors changed, by diffing and dropping lines containing `generatedAt`. That
+cannot work. `embed.py` writes the whole file with `json.dumps` and no indent, so it is a
+**single line**: any change rewrites that one line, and both versions of it contain
+`generatedAt`, so the filter drops the content and leaves the diff's own `---`/`+++` headers,
+which match `^[+-]`. Verified in a scratch repo — a timestamp-only change reported
+`changed=true`. So once the corpus was non-empty, every weekly run would have committed an
+identical file and triggered a deploy for a moved timestamp.
+
+Detection now compares the staged file against the committed one with `generatedAt` removed,
+in Python rather than line-wise, because a one-line JSON file cannot be filtered by line.
+Tested against five cases before committing: missing file, timestamp-only, changed vector,
+new file with none in HEAD, and byte-identical.
+
+**The `SUPABASE_DB_URL` gate is gone.** `embed.py` reads `data/reports.json` and never opens
+a connection — there is no `psycopg`, no HTTP client, nothing. The step made the job depend
+on a secret it does not use, would have failed it if that secret were ever rotated away, and
+its message said "cannot verify" about a verification it was not doing. A stale comment in
+`embed.py` about a "direct connection" bypassing RLS came from the same abandoned design and
+is corrected.

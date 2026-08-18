@@ -6,9 +6,9 @@
 # Schedule: Monday 04:17 UTC, well after the nightly export (03:17 UTC) so reports.json
 # is already fresh. Also dispatchable manually and on push to any embed.py change.
 #
-# Commit detection: stage data/embeddings.json, diff --cached excluding the generatedAt
-# timestamp (which changes every run) — commit only when report vectors actually changed.
-# Then ask deploy.yml to rebuild, same pattern as export.yml.
+# Commit detection: compare the staged file with the committed one, both with generatedAt
+# removed, and commit only when the vectors actually changed. A missing file means nothing
+# was embedded and is not an error. Then ask deploy.yml to rebuild, as export.yml does.
 name: Embed
 
 on:
@@ -44,13 +44,6 @@ jobs:
           # Full history not needed; fetch the working tree only.
           fetch-depth: 1
 
-      - name: Verify export credentials
-        run: |
-          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
-            echo "::error::SUPABASE_DB_URL is not set — cannot verify. Set it in repository secrets."
-            exit 1
-          fi
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -77,16 +70,39 @@ jobs:
       - name: Detect content change
         id: changed
         run: |
+          # A missing file is a normal outcome, not a failure: embed.py writes nothing when
+          # there is nothing to embed, which is the state an empty corpus is in. `git add`
+          # on a path that does not exist exits 128, and that is what took down every run
+          # of this workflow from the day it was added.
+          if [ ! -f data/embeddings.json ]; then
+            echo "No embeddings file: nothing was embedded, so there is nothing to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           git add data/embeddings.json
 
-          # diff --cached but ignore lines containing "generatedAt" — the timestamp
-          # changes on every run even when the report vectors are identical.
-          if git diff --cached --unified=0 -- data/embeddings.json \
-               | grep -v '"generatedAt"' \
-               | grep -q '^[+-]'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
+          # generatedAt moves on every run, so both versions are compared with it removed.
+          # This cannot be done line-wise, which is what it used to attempt: embed.py writes
+          # the file as a single line of JSON, so any change rewrites that whole line, and a
+          # diff's own ---/+++ headers match ^[+-] whatever the filter drops. The old check
+          # reported a change on every run, which would have meant a weekly commit and a
+          # rebuild for nothing but a moved timestamp.
+          strip() {
+            python3 -c 'import json,sys; d=json.load(sys.stdin); d.pop("generatedAt", None); print(json.dumps(d, sort_keys=True))'
+          }
+
+          new=$(strip < data/embeddings.json)
+          old=""
+          if git cat-file -e HEAD:data/embeddings.json 2>/dev/null; then
+            old=$(git show HEAD:data/embeddings.json | strip)
+          fi
+
+          if [ "$new" = "$old" ]; then
+            echo "Vectors unchanged; only the timestamp would have moved."
             echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Commit embeddings
