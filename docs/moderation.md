@@ -149,6 +149,13 @@ allowed update may touch. `report_tools` and `report_tags` defer to the same con
 which is what lets `public.submit_report()` insert a report's tools in the same transaction
 as the report.
 
+"Somebody else has answered it" is the column `reports.answered_at`, stamped by a trigger the
+first time a confirmation or a comment arrives from anyone but the author. It is a column
+rather than a subquery because a policy on `public.reports` that reads `public.comments`
+recurses through the comment policy that reads `public.reports` — see `docs/decisions.md`.
+Confirming or commenting on your own report does not freeze it; nothing about your own answer
+attests to a version for anybody else.
+
 | Situation | What happens |
 |---|---|
 | A typo, spotted immediately | Edit it from "Your submissions" on the account page. |

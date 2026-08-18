@@ -351,9 +351,11 @@ export interface OwnSubmission {
    * Whether the author can still change the text.
    *
    * For a report: while it is hidden, and until somebody else has confirmed or commented on
-   * it. Computed here from two extra queries rather than guessed from the status, because
-   * the rule is about other people's answers and nothing on the row records them. The
-   * policy is the truth; this decides whether to offer a link to a screen that would refuse.
+   * it. `reports.answered_at` records that second half — it started life as two `not exists`
+   * subqueries in the policy and had to become a column, because a policy on public.reports
+   * that reads public.comments recurses through the comment policy that reads
+   * public.reports. The policy is still the truth; this decides whether to offer a link to a
+   * screen that would refuse.
    */
   readonly editable: boolean;
 }
@@ -379,18 +381,15 @@ export async function loadOwnReports(userId: string): Promise<Result<OwnSubmissi
   try {
     const { data, error } = await supabase
       .from('reports')
-      .select('id, title, status, created_at, deleted_at')
+      .select('id, title, status, created_at, deleted_at, answered_at')
       .eq('author_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) return { ok: false, message: describe(error) };
 
-    const rows = data ?? [];
-    const answered = await respondedTo(rows.map((row) => row.id as string));
-
     return {
       ok: true,
-      value: rows.map((row) => ({
+      value: (data ?? []).map((row) => ({
         kind: 'report' as const,
         id: row.id as string,
         title: row.title as string,
@@ -399,46 +398,12 @@ export async function loadOwnReports(userId: string): Promise<Result<OwnSubmissi
         deletedAt: (row.deleted_at as string | null) ?? null,
         editable:
           row.deleted_at === null &&
-          (row.status === 'hidden' || !answered.has(row.id as string)),
+          (row.status === 'hidden' || row.answered_at === null),
       })),
     };
   } catch (error) {
     return { ok: false, message: describe(error) };
   }
-}
-
-/**
- * Which of these reports somebody else has already answered.
- *
- * A confirmation or a comment. Two queries because they are two tables and a comment has no
- * foreign key to a report — `parent_type` plus `parent_id` is polymorphic, which is what
- * lets one thread component serve reports and debates alike, and the price is that this
- * cannot be an embed.
- *
- * A failure returns the empty set, which reports everything as still editable. That is the
- * right way to be wrong: the offered link leads to a screen whose save the database refuses
- * with a sentence, where the opposite error would silently withhold the only way an author
- * has of fixing a typo.
- */
-async function respondedTo(ids: readonly string[]): Promise<Set<string>> {
-  const answered = new Set<string>();
-
-  const supabase = getSupabase();
-  if (!supabase || ids.length === 0) return answered;
-
-  const [confirmations, comments] = await Promise.all([
-    supabase.from('report_confirmations').select('report_id').in('report_id', ids),
-    supabase
-      .from('comments')
-      .select('parent_id')
-      .eq('parent_type', 'report')
-      .in('parent_id', ids),
-  ]);
-
-  for (const row of confirmations.data ?? []) answered.add(row.report_id as string);
-  for (const row of comments.data ?? []) answered.add(row.parent_id as string);
-
-  return answered;
 }
 
 // ── Editing what is still editable ────────────────────────────────────────────────────

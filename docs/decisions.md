@@ -2149,3 +2149,45 @@ trigger is what fires — but the copy the backfill reads was the pre-moderation
 backfill run would have written notifications from a mapping two weeks out of date. The
 mapping is back in `log_moderation()`, with the dismissal's second row in it, and the trigger
 is a wrapper again.
+
+## 2026-08-19 — "Has anybody answered this?" is a column, because as a subquery it recurses
+
+The editing rule from the post-moderation change — a report is editable while it is hidden,
+and until somebody else has confirmed or commented on it — was written as two `not exists`
+subqueries inside `reports_update_own_editable`. It raised on the first update anybody tried:
+
+```
+ERROR: infinite recursion detected in policy for relation "reports"
+```
+
+A policy **on** `public.reports` that reads `public.comments` calls the comment policy, which
+reads `public.reports` to check the parent is published, which calls the reports policy.
+`report_confirmations_select_with_parent` closes the same loop. Each of those policies is
+correct on its own; the cycle only exists when something asks the question from inside the
+table both of them point at.
+
+The rule stays and the answer moves. `public.reports.answered_at` is stamped by a trigger the
+first time a confirmation or a comment arrives from **somebody other than the author**, and
+every policy that needs the rule now reads `status = 'hidden' or answered_at is null`.
+
+Three things this is better at than the subqueries would have been even if they had worked:
+
+- One indexable comparison per row instead of two correlated scans, on a table whose UPDATE
+  policy is evaluated on every author edit.
+- The same phrase in the policy, in the guard trigger, and in the four policies on
+  `report_tools` and `report_tags` — one rule written five times rather than a ten-line
+  predicate written five times.
+- The browser stops asking. `loadOwnReports()` had to run two extra queries to decide whether
+  to offer an author the edit link; it now reads a column it was already selecting the row
+  for.
+
+The trigger is `SECURITY DEFINER` for the same reason `private.log_activity()` is: somebody
+posting a comment has no privilege on the report they are commenting on, and must not need
+one to leave a mark on it. `answered_at` has no INSERT or UPDATE column grant, and the guard
+trigger reverts it as well.
+
+Rejected: a `SECURITY DEFINER` helper function in `public` returning the same boolean, which
+is the usual way out of recursive RLS. It works, and it would have added a seventh
+`security_definer_function_executable` warning to the six accepted in CLAUDE.md — where the
+note says a seventh means something new. A column is cheaper at read time and needs no
+exception written next to it.

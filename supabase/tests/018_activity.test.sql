@@ -397,10 +397,15 @@ select is(
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
+-- Dismissed rather than resolved: what this flag named is still on the site, and
+-- resolve_flag refuses that by design — upholding a flag against visible content is a hide,
+-- which closes the flag by itself. Both answers reach the flagger; this is the one that does
+-- not move the content.
 select lives_ok(
   $$ select public.moderate('flag', '55555555-0000-0000-0000-000000000001',
-                            'resolve_flag') $$,
-  'a moderator closes the flag'
+                            'dismiss_flag',
+                            'Being wrong is not a reason to remove an account of what somebody did.') $$,
+  'a moderator answers the flag'
 );
 
 reset role;
@@ -408,9 +413,9 @@ reset role;
 select is(
   (select count(*)::int from public.activity
     where subject_id = '11111111-0000-0000-0000-000000000002'
-      and kind = 'flag_resolved'),
+      and kind = 'flag_dismissed'),
   1,
-  'closing a flag answers the person who raised it'
+  'answering a flag tells the person who raised it'
 );
 
 -- ── Who may read it ─────────────────────────────────────────────────────────────────
