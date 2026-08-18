@@ -139,6 +139,7 @@ import { path } from '../../lib/paths';
       item.isInbound && new Date(item.createdAt).getTime() > since;
 
     list.replaceChildren(...items.map((item) => row(item, isNew(item))));
+    markLead();
 
     const waiting = items.filter(isNew).length;
 
@@ -210,7 +211,19 @@ import { path } from '../../lib/paths';
       for (const item of list.querySelectorAll<HTMLElement>('.activity__item')) {
         item.hidden = scope === 'inbound' && item.dataset.inbound !== 'true';
       }
+
+      markLead();
     });
+  }
+
+  /** Mark the first row still on screen, so the separator above it is not drawn. */
+  function markLead(): void {
+    let first = true;
+
+    for (const item of list.querySelectorAll<HTMLElement>('.activity__item')) {
+      item.classList.toggle('activity__item--lead', first && !item.hidden);
+      if (!item.hidden) first = false;
+    }
   }
 </script>
 
@@ -255,10 +268,21 @@ import { path } from '../../lib/paths';
     list-style: none;
   }
 
-  .activity__item + .activity__item {
+  /* Every row carries its own separator and the first visible one drops it, rather than the
+     `+` selector this wanted to be. The filter hides rows with [hidden], and an adjacent
+     sibling combinator does not skip a hidden element: with `+`, hiding the first row leaves
+     its separator drawn above the second, which is a rule attached to nothing. `--lead` is
+     set in script whenever the filter changes, which is the only moment it can be known. */
+  .activity__item {
     margin-block-start: var(--space-md);
     padding-block-start: var(--space-md);
     border-block-start: var(--border);
+  }
+
+  .activity__item--lead {
+    margin-block-start: 0;
+    padding-block-start: 0;
+    border-block-start: 0;
   }
 
   /* The one place a row is marked out. A rule in the accent down the inside edge, the same
@@ -267,10 +291,6 @@ import { path } from '../../lib/paths';
   .activity__item--new {
     padding-inline-start: var(--space-sm);
     border-inline-start: var(--border-width-thick) solid var(--accent);
-  }
-
-  .activity__item--new + .activity__item--new {
-    padding-inline-start: var(--space-sm);
   }
 
   .activity__text {
