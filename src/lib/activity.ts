@@ -307,21 +307,22 @@ function who(item: ActivityItem): string {
  * trusted to contain the row — and a link to a static page that has not been built yet is a
  * 404 dressed up as a result.
  *
- * Null for the rows where a link would be a lie: a flag, which has no page; an account
- * action, which is about you rather than about a thing; and anything of your own that may
- * still be pending, which is unreadable at its public address and belongs under "Your
- * submissions" instead.
+ * Anything of your own that may still be pending goes to "Your submissions" rather than to
+ * its public address, where it is unreadable until a moderator has looked at it. That section
+ * carries reports and network entries both, which is why the two entry rows below point at
+ * the same place as the two report rows.
+ *
+ * Null for the rows where a link would be a lie: a flag, which has no page, and an account
+ * action, which is about you rather than about a thing.
  */
 function href(item: ActivityItem): string | null {
   switch (item.kind) {
     case 'posted_report':
     case 'edited_report':
     case 'report_changes_requested':
-      return path('/account/#your-submissions');
-
     case 'posted_entry':
     case 'entry_changes_requested':
-      return null;
+      return path('/account/#your-submissions');
 
     case 'flagged':
     case 'flag_resolved':

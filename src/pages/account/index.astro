@@ -119,9 +119,9 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     <h2>Your submissions</h2>
 
     <p class="field__hint">
-      Everything you have posted, in whatever state it is in. A submission waits for a
-      moderator before it joins the corpus; if one has been sent back, what to change is
-      here.
+      Every report and network entry you have submitted, in whatever state it is in. A
+      submission waits for a moderator before it joins the corpus; if one has been sent
+      back, what to change is here.
     </p>
 
     <ul class="submissions" data-submission-list role="list"></ul>
@@ -139,6 +139,10 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
       </div>
       <p class="actions" data-edit-block hidden>
         <a class="button button--secondary" data-edit-link href="">Edit and resubmit</a>
+      </p>
+      <p class="field__hint" data-no-edit hidden>
+        There is no edit screen for a network entry yet. To act on this, delete the entry
+        and submit it again with the change made.
       </p>
     </li>
   </template>
@@ -205,8 +209,9 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   import { readAuthErrorFromUrl } from '../../lib/auth';
   import { longDate, verificationMonth } from '../../lib/format';
   import { path } from '../../lib/paths';
-  import { loadOwnSubmissions } from '../../lib/reports';
+  import { loadOwnReports } from '../../lib/reports';
   import type { OwnSubmission } from '../../lib/reports';
+  import { loadOwnEntries } from '../../lib/network';
   import { loadProfile, saveProfile } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import {
@@ -294,7 +299,18 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   }
 
   /**
-   * Your own reports, and any change a moderator has asked for.
+   * Everything you have submitted — reports and network entries — and any change a moderator
+   * has asked for.
+   *
+   * Two queries rather than one, because they are two tables and each is owned by the module
+   * that owns it. They are merged here and sorted by date, so the section reads as "what I
+   * have posted" rather than as two lists that happen to be adjacent; the kind is on each
+   * row, which is what a person needs to know to act on it.
+   *
+   * Both are awaited together and a failure of either is survivable: whichever came back is
+   * shown. The reason is the one this section exists for — a moderator's note has no other
+   * route to its author — so showing half of them beats showing none, and a note is more
+   * likely to be unread than misread.
    *
    * The section stays hidden when there is nothing in it. Somebody who has not posted yet
    * does not need an empty box telling them so — the invitation to post is already above
@@ -302,32 +318,46 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
    * whose main business is the profile form.
    */
   async function fillSubmissions(id: string): Promise<void> {
-    const result = await loadOwnSubmissions(id);
-    if (!result.ok || result.value.length === 0) return;
+    const [reports, entries] = await Promise.all([loadOwnReports(id), loadOwnEntries(id)]);
+
+    const submissions = [
+      ...(reports.ok ? reports.value : []),
+      ...(entries.ok ? entries.value : []),
+    ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    if (submissions.length === 0) return;
 
     const section = query<HTMLElement>('[data-submissions]');
     const list = query<HTMLElement>('[data-submission-list]');
     const template = query<HTMLTemplateElement>('[data-submission-template]');
 
     list.replaceChildren(
-      ...result.value.map((submission) => {
+      ...submissions.map((submission) => {
         const item = template.content.cloneNode(true) as DocumentFragment;
         const row = item.firstElementChild as HTMLElement;
 
         query<HTMLElement>('[data-title]', row).textContent = submission.title;
         query<HTMLElement>('[data-meta]', row).textContent =
+          `${submission.kind === 'entry' ? 'Network entry' : 'Report'} · ` +
           `${stateOf(submission)} · posted ${longDate(submission.createdAt)}`;
 
         if (submission.note) {
           query<HTMLElement>('[data-note-block]', row).hidden = false;
           query<HTMLElement>('[data-note]', row).textContent = submission.note;
 
-          // "Sent back" means pending + has a note. Show the edit link.
+          // "Sent back" means pending + has a note. Show the edit link — for a report,
+          // which has an edit screen. An entry has none yet, so rather than offer a button
+          // that goes nowhere the row says what the author has to do instead. That is the
+          // honest shape of a half-built path, and it is listed in docs/moderation.md.
           if (submission.status === 'pending' && !submission.deletedAt) {
-            const editBlock = query<HTMLElement>('[data-edit-block]', row);
-            editBlock.hidden = false;
-            query<HTMLAnchorElement>('[data-edit-link]', row).href =
-              path(`/account/edit-submission/?id=${submission.id}`);
+            if (submission.kind === 'report') {
+              const editBlock = query<HTMLElement>('[data-edit-block]', row);
+              editBlock.hidden = false;
+              query<HTMLAnchorElement>('[data-edit-link]', row).href =
+                path(`/account/edit-submission/?id=${submission.id}`);
+            } else {
+              query<HTMLElement>('[data-no-edit]', row).hidden = false;
+            }
           }
         }
 

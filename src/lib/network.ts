@@ -1,11 +1,18 @@
 /**
- * Entry data access — build-time reads from data/network.json.
+ * Entry data access — build-time reads from data/network.json, and one browser read.
  *
- * All reads happen at build time from the nightly export. Nothing here talks to Supabase
- * at build time; that is what readCorpus() is for. The PostgREST client is only loaded
- * on pages that need live writes (the submission form).
+ * The corpus reads happen at build time from the nightly export. Nothing in that half talks
+ * to Supabase, and the client is only loaded on pages that need live writes.
+ *
+ * The exception at the bottom, loadOwnEntries(), is a browser read for the same reason
+ * loadOwnReports() is one: a pending submission is a row the static export must never
+ * contain, so the only way its author can see what state it is in is to ask. Importing
+ * getSupabase() here does not pull the client onto /network/, which reads this module from
+ * frontmatter — that runs at build time and is never bundled for a browser.
  */
 import rawJson from '../../data/network.json';
+import { getSupabase } from './supabase';
+import type { OwnSubmission, Result } from './reports';
 
 export type NetworkCategory =
   | 'research_tool'
@@ -103,4 +110,55 @@ export function normaliseUrl(url: string): string {
     .join('&');
 
   return params ? `${pathPart}?${params}` : pathPart;
+}
+
+// ── Your own entries ──────────────────────────────────────────────────────────────────
+
+const UNAVAILABLE =
+  'Your submitted entries cannot be loaded right now. Try again in a few minutes; nothing has been lost.';
+
+/**
+ * What this account has submitted to the network, in whatever state it is in.
+ *
+ * The other half of "Your submissions" on the account page, alongside loadOwnReports().
+ * Until this existed an entry sent back for changes was invisible: the note was written to
+ * public.network_entries by the same moderation path that writes one to a report, and
+ * nothing read it. The author was told a change had been asked for — by the activity feed,
+ * once that existed — and had nowhere to go and read what it was.
+ *
+ * What is still missing, and is not fixed here: there is no edit screen for an entry, so
+ * acting on the note means deleting and reposting. docs/moderation.md says so.
+ *
+ * resources_select_own already returns exactly these rows to their submitter. The explicit
+ * filter is written anyway, because a filter that agrees with the policy documents it.
+ */
+export async function loadOwnEntries(userId: string): Promise<Result<OwnSubmission[]>> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('network_entries')
+      .select('id, title, status, created_at, moderation_note, moderation_note_at, deleted_at')
+      .eq('submitter_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) return { ok: false, message: UNAVAILABLE };
+
+    return {
+      ok: true,
+      value: (data ?? []).map((row) => ({
+        kind: 'entry' as const,
+        id: row.id as string,
+        title: row.title as string,
+        status: row.status as OwnSubmission['status'],
+        createdAt: row.created_at as string,
+        note: (row.moderation_note as string | null) ?? null,
+        noteAt: (row.moderation_note_at as string | null) ?? null,
+        deletedAt: (row.deleted_at as string | null) ?? null,
+      })),
+    };
+  } catch {
+    return { ok: false, message: UNAVAILABLE };
+  }
 }

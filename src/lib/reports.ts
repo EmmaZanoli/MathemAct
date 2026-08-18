@@ -285,7 +285,21 @@ export async function submitReport(submission: Submission): Promise<Result<strin
 
 // ── Your own submissions ──────────────────────────────────────────────────────────────
 
+/**
+ * One row of "Your submissions", from whichever table it came out of.
+ *
+ * Declared here rather than in a file of its own because this is where the concept started
+ * and where most of it still lives, and imported as a type by src/lib/network.ts, which
+ * fills the same shape from public.network_entries. Two tables, two queries, each owned by
+ * the module that owns its table, one list on the page — the alternative was reports.ts
+ * querying somebody else's table, which is the kind of shortcut that makes an export step
+ * hard to move later.
+ *
+ * `kind` is what the page needs to say "network entry" rather than "report", and to decide
+ * whether there is an edit screen to offer. There is one for a report and not for an entry.
+ */
 export interface OwnSubmission {
+  readonly kind: 'report' | 'entry';
   readonly id: string;
   readonly title: string;
   readonly status: 'pending' | 'published' | 'hidden';
@@ -297,7 +311,7 @@ export interface OwnSubmission {
 }
 
 /**
- * What this account has submitted, in whatever state it is in.
+ * What this account has posted as a report, in whatever state it is in.
  *
  * This exists because "request changes" has to reach a person. There is no address any of
  * our code may read and no server to send mail from, so a moderator's note is written onto
@@ -308,7 +322,7 @@ export interface OwnSubmission {
  * to their author and nothing else. The query is written with an explicit author filter
  * anyway, because a filter that agrees with the policy documents it.
  */
-export async function loadOwnSubmissions(userId: string): Promise<Result<OwnSubmission[]>> {
+export async function loadOwnReports(userId: string): Promise<Result<OwnSubmission[]>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
@@ -324,6 +338,7 @@ export async function loadOwnSubmissions(userId: string): Promise<Result<OwnSubm
     return {
       ok: true,
       value: (data ?? []).map((row) => ({
+        kind: 'report' as const,
         id: row.id as string,
         title: row.title as string,
         status: row.status as OwnSubmission['status'],
