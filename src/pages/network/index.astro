@@ -146,7 +146,7 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     <template data-fresh-entry>
       <li class="entry-card" data-fresh>
         <p class="card__fresh">
-          <span class="mono">new since the last build</span>
+          <span class="mono">Published <span data-date></span></span>
         </p>
         <div class="entry-card__head">
           <a class="entry-card__title" data-title rel="noopener noreferrer" target="_blank"></a>
@@ -235,6 +235,7 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     if (!since || !template) return;
 
     const { networkSince } = await import('../../lib/fresh');
+    const { longDate } = await import('../../lib/format');
     const { categoryLabel } = await import('../../lib/network');
 
     const fresh = await networkSince(since);
@@ -284,6 +285,9 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 
       const catEl = node.querySelector<HTMLElement>('[data-category-label]');
       if (catEl) catEl.textContent = categoryLabel(entry.category as Parameters<typeof categoryLabel>[0]);
+
+      const dateEl = node.querySelector<HTMLElement>('[data-date]');
+      if (dateEl) dateEl.textContent = longDate(entry.createdAt);
 
       targetList.prepend(node);
     }

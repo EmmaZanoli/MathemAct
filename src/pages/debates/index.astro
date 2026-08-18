@@ -145,7 +145,7 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
         <a class="debate-item__link" data-statement></a>
         <p class="card__facts debate-item__facts">
           <span data-area></span>
-          <span class="meta" data-fresh-mark>New since the last build</span>
+          <span class="meta" data-date></span>
         </p>
       </li>
     </template>
@@ -165,6 +165,7 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
    * the reader has answered, and this listing shows no aggregate at all by design.
    */
   import { debatesSince } from '../../lib/fresh';
+  import { longDate } from '../../lib/format';
   import { areaLabel } from '../../lib/report-schema';
 
   const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
@@ -187,6 +188,8 @@ const proposed = debates.filter((debate) => debate.status === 'proposed');
           statement.href = `view/?id=${debate.id}`;
         }
         if (area) area.textContent = areaLabel(debate.area);
+        const dateEl = node.querySelector<HTMLElement>('[data-date]');
+        if (dateEl) dateEl.textContent = `Proposed ${longDate(debate.createdAt)}`;
 
         list.prepend(node);
       }

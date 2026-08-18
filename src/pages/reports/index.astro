@@ -200,8 +200,7 @@ const groups = [
         </div>
 
         <p class="card__fresh">
-          <span class="mono">new since the last build</span>
-          <span>— static page follows at the next one</span>
+          <span class="mono">Published <span data-date></span></span>
         </p>
 
         <h3 class="card__title"><a data-title></a></h3>
@@ -229,6 +228,7 @@ const groups = [
    */
   import { reportsSince } from '../../lib/fresh';
   import type { FreshReport } from '../../lib/fresh';
+  import { longDate } from '../../lib/format';
   import { path } from '../../lib/paths';
   import { areaLabel, taskTypeLabel } from '../../lib/report-schema';
   import { OUTCOME, tombstoneName } from '../../lib/status';
@@ -566,6 +566,7 @@ const groups = [
       titleLink.textContent = report.title;
       titleLink.href = `view/?id=${report.id}`;
     }
+    put(node, '[data-date]', longDate(report.createdAt));
     put(node, '[data-aim]', report.aim);
     put(node, '[data-area]', areaLabel(report.area));
     put(node, '[data-task]', taskTypeLabel(report.taskType));
