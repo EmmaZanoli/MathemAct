@@ -40,8 +40,8 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
     <p class="panel__heading">Confirm your email address first</p>
     <p>
       Posting needs a confirmed address. It is what the institutional badge is derived from,
-      and it is the only thing standing between the moderation queue and anyone with a
-      script.
+      and — since a report is published the moment it is written — it is the only thing
+      standing between the corpus and anyone with a script.
     </p>
     <p class="actions">
       <a class="button button--primary" href={path('/account/confirm/')}>
@@ -355,15 +355,17 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
       </FormSection>
 
       <div class="draft">
-        <button class="button button--primary" type="submit">Submit for review</button>
+        <button class="button button--primary" type="submit">Publish</button>
         <button class="button button--quiet" type="button" data-discard>Discard draft</button>
         <span class="draft__state" data-draft-state></span>
       </div>
 
       <p class="field__hint">
-        Submissions are read by a volunteer moderator before they appear. Everything
-        published here is licensed <a href={LICENCE.url} rel="license">{LICENCE.name}</a>;
-        you keep copyright and are credited.
+        This publishes straight away — nobody reads it first. If a reader thinks something
+        is wrong with it they can flag it, and a moderator will decide, in writing, to you.
+        Everything published here is licensed
+        <a href={LICENCE.url} rel="license">{LICENCE.name}</a>; you keep copyright and are
+        credited.
       </p>
     </form>
   </div>

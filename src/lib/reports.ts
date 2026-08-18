@@ -344,25 +344,33 @@ export interface OwnSubmission {
   readonly kind: 'report' | 'entry';
   readonly id: string;
   readonly title: string;
-  readonly status: 'pending' | 'published' | 'hidden';
+  readonly status: 'published' | 'hidden';
   readonly createdAt: string;
-  /** A moderator has read this and asked for something to change. */
-  readonly note: string | null;
-  readonly noteAt: string | null;
   readonly deletedAt: string | null;
+  /**
+   * Whether the author can still change the text.
+   *
+   * For a report: while it is hidden, and until somebody else has confirmed or commented on
+   * it. Computed here from two extra queries rather than guessed from the status, because
+   * the rule is about other people's answers and nothing on the row records them. The
+   * policy is the truth; this decides whether to offer a link to a screen that would refuse.
+   */
+  readonly editable: boolean;
 }
 
 /**
  * What this account has posted as a report, in whatever state it is in.
  *
- * This exists because "request changes" has to reach a person. There is no address any of
- * our code may read and no server to send mail from, so a moderator's note is written onto
- * the report it is about and the author reads it here — which is also the only place they
- * can see that something was hidden, rather than discovering it by its absence.
+ * Nothing here waits for anybody: a report is in the corpus the moment it is written. What
+ * this list is for is the other end — seeing that something was hidden, rather than
+ * discovering it by its absence, and reaching the edit screen that a hide makes available.
+ * The reason it was hidden is not on these rows; it is in public.moderation_notices, which
+ * src/lib/notices.ts reads and the account page shows beside them.
  *
  * No policy is being worked around: reports_select_own already returns exactly these rows
  * to their author and nothing else. The query is written with an explicit author filter
- * anyway, because a filter that agrees with the policy documents it.
+ * anyway, because a filter that agrees with the policy documents it — and because this table
+ * also has a moderator policy, so an unfiltered query would return the whole corpus to one.
  */
 export async function loadOwnReports(userId: string): Promise<Result<OwnSubmission[]>> {
   const supabase = getSupabase();
@@ -371,23 +379,27 @@ export async function loadOwnReports(userId: string): Promise<Result<OwnSubmissi
   try {
     const { data, error } = await supabase
       .from('reports')
-      .select('id, title, status, created_at, moderation_note, moderation_note_at, deleted_at')
+      .select('id, title, status, created_at, deleted_at')
       .eq('author_id', userId)
       .order('created_at', { ascending: false });
 
     if (error) return { ok: false, message: describe(error) };
 
+    const rows = data ?? [];
+    const answered = await respondedTo(rows.map((row) => row.id as string));
+
     return {
       ok: true,
-      value: (data ?? []).map((row) => ({
+      value: rows.map((row) => ({
         kind: 'report' as const,
         id: row.id as string,
         title: row.title as string,
         status: row.status as OwnSubmission['status'],
         createdAt: row.created_at as string,
-        note: (row.moderation_note as string | null) ?? null,
-        noteAt: (row.moderation_note_at as string | null) ?? null,
         deletedAt: (row.deleted_at as string | null) ?? null,
+        editable:
+          row.deleted_at === null &&
+          (row.status === 'hidden' || !answered.has(row.id as string)),
       })),
     };
   } catch (error) {
@@ -395,10 +407,49 @@ export async function loadOwnReports(userId: string): Promise<Result<OwnSubmissi
   }
 }
 
-// ── Editing a pending submission ──────────────────────────────────────────────────────
+/**
+ * Which of these reports somebody else has already answered.
+ *
+ * A confirmation or a comment. Two queries because they are two tables and a comment has no
+ * foreign key to a report — `parent_type` plus `parent_id` is polymorphic, which is what
+ * lets one thread component serve reports and debates alike, and the price is that this
+ * cannot be an embed.
+ *
+ * A failure returns the empty set, which reports everything as still editable. That is the
+ * right way to be wrong: the offered link leads to a screen whose save the database refuses
+ * with a sentence, where the opposite error would silently withhold the only way an author
+ * has of fixing a typo.
+ */
+async function respondedTo(ids: readonly string[]): Promise<Set<string>> {
+  const answered = new Set<string>();
+
+  const supabase = getSupabase();
+  if (!supabase || ids.length === 0) return answered;
+
+  const [confirmations, comments] = await Promise.all([
+    supabase.from('report_confirmations').select('report_id').in('report_id', ids),
+    supabase
+      .from('comments')
+      .select('parent_id')
+      .eq('parent_type', 'report')
+      .in('parent_id', ids),
+  ]);
+
+  for (const row of confirmations.data ?? []) answered.add(row.report_id as string);
+  for (const row of comments.data ?? []) answered.add(row.parent_id as string);
+
+  return answered;
+}
+
+// ── Editing what is still editable ────────────────────────────────────────────────────
+//
+// A report's text can change while it is hidden, and until somebody else has confirmed or
+// commented on it. Both halves matter: a hidden report is what an author has been asked in
+// writing to fix, and an unanswered one is a fresh submission with a typo in it. Once an
+// answer exists the text fixes itself, because that answer attests to a version.
 
 /** Full report data needed to pre-fill the edit form. */
-export interface PendingReportForEdit {
+export interface EditableReportForEdit {
   readonly id: string;
   readonly title: string;
   readonly area: Area;
@@ -416,8 +467,6 @@ export interface PendingReportForEdit {
   readonly wasPublished: boolean | null;
   readonly wasDisclosed: boolean | null;
   readonly authorConfidence: number | null;
-  readonly moderationNote: string | null;
-  readonly moderationNoteAt: string | null;
   readonly tools: readonly { id: string; name: string; version: string; usedOn: string }[];
   readonly tagCodes: readonly string[];
 }
@@ -437,7 +486,7 @@ export interface PendingReportForEdit {
  * row. Reformatting the select onto one line would also work and would be worse: it would
  * fix this by accident, and the next person to wrap the line would break it again.
  */
-interface PendingReportRow {
+interface EditableReportRow {
   id: string;
   title: string;
   area: Area;
@@ -455,22 +504,27 @@ interface PendingReportRow {
   was_published: boolean | null;
   was_disclosed: boolean | null;
   author_confidence: number | null;
-  moderation_note: string | null;
-  moderation_note_at: string | null;
   report_tools: { id: string; tool_name: string; tool_version: string; used_on: string }[];
   report_tags: { tags: { code: string } | null }[];
 }
 
 /**
- * The full content of one pending report, owned by the caller.
+ * The full content of one editable report, owned by the caller.
  *
- * Used to pre-fill the edit form. The explicit author_id and status filters agree with the
- * reports_select_own and reports_update_own_pending policies, which are the true guards.
+ * Used to pre-fill the edit form. The author filter agrees with reports_select_own; there is
+ * deliberately no status filter, because "editable" is a question about other people's
+ * answers rather than about this row, and reports_update_own_editable is the guard that
+ * settles it when the form is saved.
+ *
+ * Why the reason a moderator gave is not selected here: it is not on this row any more. The
+ * explanation lives in public.moderation_notices, addressed to this author, and the edit
+ * page reads it through src/lib/notices.ts — one place that knows what a decision said,
+ * rather than a copy on every table a decision can be about.
  */
-export async function loadPendingReport(
+export async function loadEditableReport(
   reportId: string,
   userId: string,
-): Promise<Result<PendingReportForEdit>> {
+): Promise<Result<EditableReportForEdit>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
@@ -481,18 +535,16 @@ export async function loadPendingReport(
         'id, title, area, task_type, aim, method, outcome, outcome_notes, verification,' +
         'transcript_excerpt, transcript_url, caveats, third_party_material_confirmed,' +
         'time_spent_minutes, was_published, was_disclosed, author_confidence,' +
-        'moderation_note, moderation_note_at,' +
         'report_tools(id, tool_name, tool_version, used_on),' +
         'report_tags(tags(code))',
       )
       .eq('id', reportId)
       .eq('author_id', userId)
-      .eq('status', 'pending')
-      .single<PendingReportRow>();
+      .single<EditableReportRow>();
 
     if (error) {
       if (error.code === 'PGRST116') {
-        return { ok: false, message: 'This submission was not found, or it is no longer pending.' };
+        return { ok: false, message: 'This submission was not found.' };
       }
       return { ok: false, message: describe(error) };
     }
@@ -523,8 +575,6 @@ export async function loadPendingReport(
         wasPublished: data.was_published,
         wasDisclosed: data.was_disclosed,
         authorConfidence: data.author_confidence,
-        moderationNote: data.moderation_note,
-        moderationNoteAt: data.moderation_note_at,
         tools: tools.map((tool) => ({
           id: tool.id,
           name: tool.tool_name,
@@ -540,10 +590,15 @@ export async function loadPendingReport(
 }
 
 /**
- * Replace a pending report's content in one transaction.
+ * Replace a hidden report's content in one transaction.
  *
  * Calls the resubmit_report RPC, which is the only way to replace the tool set atomically
  * while satisfying the deferred at-least-one-tool constraint. Same reasoning as submitReport.
+ *
+ * It does not unhide anything, and cannot: `status` is reverted by the guard trigger and
+ * there is no policy that would let an author set it. Saving revises the text and leaves the
+ * report hidden until a moderator looks again — which is the honest shape of the exchange,
+ * since a save that republished would be self-approval with extra steps.
  */
 export async function resubmitReport(
   reportId: string,

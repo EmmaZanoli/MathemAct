@@ -1,16 +1,30 @@
 ---
 /**
- * Edit a pending report submission that a moderator has sent back for changes.
+ * Edit a report, while it is still yours to edit.
  *
- * The page is reached from the "Your submissions" section of /account/ when a submission's
- * state is "sent back for changes". It pre-fills every form field from the existing report,
- * shows the moderator's note at the top so the author knows what to address, and on submit
- * calls resubmit_report — an RPC that replaces all content, tools, and tags in one
- * transaction (necessary because the deferred at-least-one-tool constraint would fire between
- * a DELETE and a subsequent INSERT if they were separate PostgREST requests).
+ * Two states reach this page and they read differently, which is why the explanation panel
+ * is conditional rather than always present:
+ *
+ *   * **It was hidden after a flag.** The moderator's sentence is at the top, and saving is
+ *     how it gets answered. Saving does not republish, and cannot: `status` is reverted by
+ *     the guard trigger and no policy would let an author set it. It stays hidden until a
+ *     moderator unhides it, because a save that republished would be self-approval with
+ *     extra steps.
+ *   * **Nobody has answered it yet.** A report is published the moment it is written, so
+ *     without this there would be no way to fix a typo at all. The window closes the first
+ *     time somebody confirms it still works or comments on it — their answer attests to a
+ *     version, and rewriting it afterwards would leave them pointing at text nobody can
+ *     read.
+ *
+ * The page is reached from "Your submissions" on /account/. It pre-fills every field from
+ * the existing report and on submit calls resubmit_report — an RPC that replaces all
+ * content, tools, and tags in one transaction (necessary because the deferred
+ * at-least-one-tool constraint would fire between a DELETE and a subsequent INSERT if they
+ * were separate PostgREST requests). The database decides whether a save is allowed; this
+ * page decides only what to show.
  *
  * Deliberately no draft system. The submission already exists in the database — editing and
- * resubmitting is one deliberate action, not something that should accumulate in localStorage
+ * resending is one deliberate action, not something that should accumulate in localStorage
  * and produce a "a draft from three weeks ago has been restored" banner on the next login.
  */
 import Account from '../../layouts/Account.astro';
@@ -28,8 +42,8 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
 
 <Account
   title="Edit your submission"
-  description="Address the changes requested and resubmit for review."
-  lead="Read the note below, make the changes, and save when you are done. The submission stays pending until a moderator publishes it."
+  description="Correct a report you posted, or answer the reason it was hidden."
+  lead="Make the changes and save. A report stays editable until somebody else has answered it — and a hidden one stays editable, and hidden, until a moderator has looked again."
   gate="required"
 >
   <div data-loading>
@@ -45,9 +59,12 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
   </div>
 
   <div data-form-wrapper hidden>
-    {/* The moderator's note — the reason the author is here. Shown when present. */}
+    {/* The explanation — the reason the author is here. It is read from
+        public.moderation_notices rather than from the report, because a decision is about a
+        person and is stored addressed to one. Shown when present: an older report hidden
+        before notices existed has none, and a missing sentence must not hide the form. */}
     <div class="mod-note" data-note-panel hidden>
-      <p class="mod-note__head">Changes asked for</p>
+      <p class="mod-note__head">Why it was hidden</p>
       <p class="mod-note__body" data-moderation-note></p>
     </div>
 
@@ -319,12 +336,13 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
       </FormSection>
 
       <div class="draft">
-        <button class="button button--primary" type="submit">Save and resubmit for review</button>
+        <button class="button button--primary" type="submit">Save changes</button>
         <a class="button button--quiet" href={path('/account/')}>Cancel</a>
       </div>
 
       <p class="field__hint">
-        Saving resubmits for moderation. Everything published here is licensed
+        Saving replaces the report. A hidden one stays hidden until a moderator looks again.
+        Everything published here is licensed
         <a href={LICENCE.url} rel="license">{LICENCE.name}</a>; you keep copyright and are credited.
       </p>
     </form>
@@ -333,11 +351,12 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
 
 <script>
   import {
-    loadPendingReport,
+    loadEditableReport,
     loadTags,
     resubmitReport,
     type SubmissionTool,
   } from '../../lib/reports';
+  import { loadNotices } from '../../lib/notices';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { path } from '../../lib/paths';
   import {
@@ -410,7 +429,7 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
       return;
     }
 
-    const result = await loadPendingReport(reportId, id);
+    const result = await loadEditableReport(reportId, id);
 
     loading.hidden = true;
 
@@ -421,12 +440,23 @@ import { AREAS, FIELD_COPY, REPORT_LIMITS, TASK_TYPES } from '../../lib/report-s
 
     const report = result.value;
 
-    // Show the moderator's note if present.
-    if (report.moderationNote) {
-      const notePanel = query<HTMLElement>('[data-note-panel]');
-      notePanel.hidden = false;
-      query<HTMLElement>('[data-moderation-note]').textContent = report.moderationNote;
-    }
+    // The reason, from the decision addressed to this author. Newest first out of the query,
+    // so the first match is the one that still applies. Loaded after the report rather than
+    // beside it: if this fails the form still opens, and a form that opens without the
+    // sentence is better than a sentence with no form.
+    void loadNotices().then((notices) => {
+      if (!notices.ok) return;
+
+      const notice = notices.value.find(
+        (row) =>
+          row.subjectId === reportId && row.role === 'author' && row.outcome === 'hidden',
+      );
+
+      if (!notice) return;
+
+      query<HTMLElement>('[data-note-panel]').hidden = false;
+      query<HTMLElement>('[data-moderation-note]').textContent = notice.explanation;
+    });
 
     // Pre-fill text fields.
     setValue('title', report.title);

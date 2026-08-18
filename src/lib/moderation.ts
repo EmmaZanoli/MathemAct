@@ -1,13 +1,20 @@
 /**
- * The moderation queue: what is waiting, and the one function that acts on it.
+ * The moderation queue: what has been flagged, what is hidden, and the one function that
+ * acts on either.
+ *
+ * **There is no approval queue.** Since the move to post-moderation nothing waits to be
+ * published — a report, a debate and a network entry are all live the moment they are
+ * written — so what a moderator opens this screen for is a flag somebody raised. The two
+ * lists below are that queue and its consequences: open flags, and everything currently
+ * hidden so that a decision can be reversed.
  *
  * Everything here runs in a browser. That is unlike the rest of src/lib/, where reads happen
  * at build time and only writes reach the database — and it is forced rather than chosen. A
- * queue is made of exactly the rows the static export does not contain: pending submissions,
- * hidden content, open flags, standing erasure requests. None of them may be built into a
- * public file, and none of them is visible to the anonymous key the build uses. So the
- * moderation screen is the one page on this site that genuinely needs a live session, and it
- * is the only reading page that loads the Supabase client.
+ * queue is made of exactly the rows the static export does not contain: open flags, hidden
+ * content, standing erasure requests. None of them may be built into a public file, and none
+ * of them is visible to the anonymous key the build uses. So the moderation screen is the one
+ * page on this site that genuinely needs a live session, and it is the only reading page that
+ * loads the Supabase client.
  *
  * Two rules shape every query below.
  *
@@ -89,7 +96,7 @@ export interface QueueTool {
 
 export interface QueueReport {
   readonly id: string;
-  readonly status: 'pending' | 'published' | 'hidden';
+  readonly status: 'published' | 'hidden';
   readonly title: string;
   readonly area: Area;
   readonly taskType: TaskType;
@@ -107,17 +114,17 @@ export interface QueueReport {
   readonly wasDisclosed: boolean | null;
   readonly authorConfidence: number | null;
   readonly createdAt: string;
+  /** Later than createdAt exactly when the author has revised it, which they may do only
+   *  while it is hidden. That is the signal to look at it again. */
+  readonly updatedAt: string;
   readonly author: QueueAuthor | null;
   readonly tools: readonly QueueTool[];
   readonly tags: readonly string[];
-  /** The current change request, if this has already been sent back once. */
-  readonly note: string | null;
-  readonly noteAt: string | null;
 }
 
 export interface QueueDebate {
   readonly id: string;
-  readonly status: 'proposed' | 'active' | 'hidden';
+  readonly status: 'active' | 'hidden';
   readonly statement: string;
   readonly rationale: string | null;
   readonly area: Area;
@@ -138,16 +145,15 @@ export interface QueueComment {
 
 export interface QueueEntry {
   readonly id: string;
-  readonly status: 'pending' | 'published' | 'hidden';
+  readonly status: 'published' | 'hidden';
   readonly title: string;
   readonly url: string;
   readonly category: string;
   readonly description: string;
   readonly relevance: string;
   readonly createdAt: string;
+  readonly updatedAt: string;
   readonly author: QueueAuthor | null;
-  readonly note: string | null;
-  readonly noteAt: string | null;
 }
 
 export interface QueueFlag {
@@ -167,6 +173,11 @@ export interface QueueFlag {
     readonly status: string;
     readonly author: QueueAuthor | null;
   } | null;
+  /** The whole submission, when a report was flagged. A moderator deciding from a title is
+   *  not deciding, and the verification section — the field that makes this corpus worth
+   *  having — is the one most often at issue. Null for every other kind, whose subject
+   *  block above already carries the whole of it. */
+  readonly report: QueueReport | null;
 }
 
 export interface QueueErasure {
@@ -181,9 +192,6 @@ export interface QueueErasure {
 }
 
 export interface Queues {
-  readonly reports: readonly QueueReport[];
-  readonly debates: readonly QueueDebate[];
-  readonly entries: readonly QueueEntry[];
   readonly flags: readonly QueueFlag[];
   readonly hiddenReports: readonly QueueReport[];
   readonly hiddenDebates: readonly QueueDebate[];
@@ -201,8 +209,7 @@ const AUTHOR_COLUMNS =
 const REPORT_COLUMNS = [
   'id,status,title,area,task_type,aim,method,outcome,outcome_notes,verification',
   'transcript_excerpt,transcript_url,caveats,third_party_material_confirmed',
-  'time_spent_minutes,was_published,was_disclosed,author_confidence,created_at',
-  'moderation_note,moderation_note_at',
+  'time_spent_minutes,was_published,was_disclosed,author_confidence,created_at,updated_at',
   `author:profiles!reports_author_id_fkey(${AUTHOR_COLUMNS})`,
   'report_tools(tool_name,tool_version,used_on)',
   'report_tags(tags(code))',
@@ -219,8 +226,7 @@ const COMMENT_COLUMNS = [
 ].join(',');
 
 const NETWORK_COLUMNS = [
-  'id,status,title,url,category,description,relevance,created_at',
-  'moderation_note,moderation_note_at',
+  'id,status,title,url,category,description,relevance,created_at,updated_at',
   `author:profiles!network_entries_submitter_id_fkey(${AUTHOR_COLUMNS})`,
 ].join(',');
 
@@ -268,6 +274,7 @@ function toReport(row: any): QueueReport {
     wasDisclosed: row.was_disclosed,
     authorConfidence: row.author_confidence,
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
     author: toAuthor(row.author),
     tools: (row.report_tools ?? []).map((tool: any) => ({
       name: tool.tool_name,
@@ -277,8 +284,6 @@ function toReport(row: any): QueueReport {
     tags: (row.report_tags ?? []).flatMap((link: any) =>
       link.tags ? [link.tags.code] : [],
     ),
-    note: row.moderation_note ?? null,
-    noteAt: row.moderation_note_at ?? null,
   };
 }
 
@@ -323,9 +328,8 @@ function toEntry(row: any): QueueEntry {
     description: row.description,
     relevance: row.relevance,
     createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
     author: toAuthor(row.author),
-    note: row.moderation_note ?? null,
-    noteAt: row.moderation_note_at ?? null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -334,10 +338,10 @@ function toEntry(row: any): QueueEntry {
  * Everything waiting, in one round of queries.
  *
  * Deliberately not one query per queue in sequence: a moderator opening this page is about
- * to read carefully for twenty minutes, and the whole point of showing four queues together
- * is that the shape of the backlog is visible at a glance. Nothing here is paginated yet,
- * which is the right trade while the corpus is small and the wrong one later; the note is in
- * docs/moderation.md rather than in a TODO nobody reads.
+ * to read carefully, and the point of loading the hidden list beside the flags is that a
+ * decision taken last week is visible while this week's is being taken. Nothing here is
+ * paginated yet, which is the right trade while the corpus is small and the wrong one later;
+ * the note is in docs/moderation.md rather than in a TODO nobody reads.
  */
 export async function loadQueues(role: Role): Promise<Result<Queues>> {
   if (import.meta.env.DEV && usingFixtures()) return { ok: true, value: FIXTURES };
@@ -346,68 +350,41 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const [
-      reports,
-      debates,
-      entries,
-      flags,
-      hiddenReports,
-      hiddenDebates,
-      hiddenComments,
-      hiddenEntries,
-    ] = await Promise.all([
-      supabase
-        .from('reports')
-        .select(REPORT_COLUMNS)
-        .eq('status', 'pending')
-        .is('deleted_at', null)
-        // Oldest first: the submission that has waited longest is the one to look at next.
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('debates')
-        .select(DEBATE_COLUMNS)
-        .eq('status', 'proposed')
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('network_entries')
-        .select(NETWORK_COLUMNS)
-        .eq('status', 'pending')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('flags')
-        .select(
-          `id,subject_type,subject_id,reason,detail,created_at,flagger:profiles!flags_flagger_id_fkey(${AUTHOR_COLUMNS})`,
-        )
-        .eq('status', 'open')
-        .order('created_at', { ascending: true }),
-      supabase
-        .from('reports')
-        .select(REPORT_COLUMNS)
-        .eq('status', 'hidden')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('debates')
-        .select(DEBATE_COLUMNS)
-        .eq('status', 'hidden')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('comments')
-        .select(COMMENT_COLUMNS)
-        .eq('status', 'hidden')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('network_entries')
-        .select(NETWORK_COLUMNS)
-        .eq('status', 'hidden')
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false }),
-    ]);
+    const [flags, hiddenReports, hiddenDebates, hiddenComments, hiddenEntries] =
+      await Promise.all([
+        supabase
+          .from('flags')
+          .select(
+            `id,subject_type,subject_id,reason,detail,created_at,flagger:profiles!flags_flagger_id_fkey(${AUTHOR_COLUMNS})`,
+          )
+          .eq('status', 'open')
+          // Oldest first: the flag that has waited longest is the one to answer next.
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('reports')
+          .select(REPORT_COLUMNS)
+          .eq('status', 'hidden')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('debates')
+          .select(DEBATE_COLUMNS)
+          .eq('status', 'hidden')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('comments')
+          .select(COMMENT_COLUMNS)
+          .eq('status', 'hidden')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('network_entries')
+          .select(NETWORK_COLUMNS)
+          .eq('status', 'hidden')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }),
+      ]);
 
     const failed = [
-      reports,
-      debates,
-      entries,
       flags,
       hiddenReports,
       hiddenDebates,
@@ -417,20 +394,12 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
 
     if (failed?.error) return { ok: false, message: describe(failed.error) };
 
-    const raters = await countRaters([
-      ...(debates.data ?? []),
-      ...(hiddenDebates.data ?? []),
-    ]);
+    const raters = await countRaters(hiddenDebates.data ?? []);
 
     const value: Queues = {
-      reports: (reports.data ?? []).map(toReport),
-      debates: (debates.data ?? []).map((row) => toDebate(row, raters)),
-      entries: (entries.data ?? []).map(toEntry),
       flags: await withSubjects(flags.data ?? []),
       hiddenReports: (hiddenReports.data ?? []).map(toReport),
-      hiddenDebates: (hiddenDebates.data ?? []).map((row) =>
-        toDebate(row, raters),
-      ),
+      hiddenDebates: (hiddenDebates.data ?? []).map((row) => toDebate(row, raters)),
       hiddenComments: (hiddenComments.data ?? []).map(toComment),
       hiddenEntries: (hiddenEntries.data ?? []).map(toEntry),
       erasures: role === 'admin' ? await loadErasures() : [],
@@ -442,9 +411,9 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
   }
 }
 
-/** How many people have answered each of these debates, from the aggregate view. Five
- *  is the threshold that promotes one without a moderator, so this number is the difference
- *  between "promote it" and "leave it, it will promote itself". */
+/** How many people have answered each of these debates, from the aggregate view. On a hidden
+ *  debate it is the size of what unhiding puts back: a claim twelve people have answered is a
+ *  different decision from one nobody read. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function countRaters(rows: any[]): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
@@ -485,11 +454,12 @@ async function withSubjects(rows: any[]): Promise<QueueFlag[]> {
     rows.filter((row) => row.subject_type === kind).map((row) => row.subject_id);
 
   const [reports, debates, comments] = await Promise.all([
+    // The whole report, not a heading and an aim. This is the one subject kind whose
+    // interesting part is buried — a flag saying "the verification is not verification" is
+    // undecidable from a title — and it is why REPORT_COLUMNS still exists now that the
+    // approval queue does not.
     idsOf('report').length
-      ? supabase
-          .from('reports')
-          .select(`id,title,aim,status,author:profiles!reports_author_id_fkey(${AUTHOR_COLUMNS})`)
-          .in('id', idsOf('report'))
+      ? supabase.from('reports').select(REPORT_COLUMNS).in('id', idsOf('report'))
       : Promise.resolve({ data: [], error: null }),
     idsOf('debate').length
       ? supabase
@@ -544,6 +514,7 @@ async function withSubjects(rows: any[]): Promise<QueueFlag[]> {
             author: toAuthor(found.author),
           }
         : null,
+      report: found && row.subject_type === 'report' ? toReport(found) : null,
     };
   });
 }
@@ -604,21 +575,41 @@ async function loadErasures(): Promise<QueueErasure[]> {
 
 export type Target = 'report' | 'debate' | 'comment' | 'flag' | 'entry' | 'account';
 
+/**
+ * What is left to do.
+ *
+ * `publish`, `request_changes` and `promote` are gone from this list and refused by
+ * public.moderate() by name. They were the approval gate, and there is nothing to approve:
+ * posts are live when they are written. Their enum labels survive in the database because
+ * the audit log is full of them.
+ */
 export type Action =
-  | 'publish'
-  | 'request_changes'
   | 'hide'
   | 'unhide'
-  | 'promote'
   | 'resolve_flag'
   | 'dismiss_flag'
   | 'ban'
   | 'unban'
   | 'erase_account';
 
-/** The actions that will not go through without a reason, mirrored from the CHECK on
- *  public.moderation_actions so the form can say so before the round trip. */
-export const NEEDS_REASON: readonly Action[] = ['hide', 'request_changes', 'ban'];
+/**
+ * Everything except carrying out an erasure request needs an explanation, and the person it
+ * is about will read it. Mirrored from the CHECK on public.moderation_actions and the
+ * refusal inside public.moderate(), so the screen can say so before the round trip rather
+ * than after it.
+ *
+ * The exception is not a softening: an erasure is a standing request being executed, not a
+ * judgement, and a mandatory field there produces "as requested" a hundred times, which
+ * teaches people that the box is a formality. It is the box that everything else depends on.
+ */
+export const NEEDS_REASON: readonly Action[] = [
+  'hide',
+  'unhide',
+  'resolve_flag',
+  'dismiss_flag',
+  'ban',
+  'unban',
+];
 
 /**
  * The single call. Everything the screen does goes through here, because everything the
@@ -657,10 +648,10 @@ export async function act(
 // ── Turning a failure into a sentence ─────────────────────────────────────────────────
 
 /**
- * public.moderate() raises finished sentences on purpose — "This is your own submission, and
- * it goes through the same review as anyone else's" is written for the person who will read
- * it, not for a log. So prose is passed through and only the codes Postgres raises on its
- * own behalf are translated.
+ * public.moderate() raises finished sentences on purpose — "This is your own post. Another
+ * moderator has to decide it" is written for the person who will read it, not for a log. So
+ * prose is passed through and only the codes Postgres raises on its own behalf are
+ * translated.
  */
 function describe(error: unknown): string {
   const code =
@@ -762,127 +753,44 @@ const NOOR: QueueAuthor = {
   institution: { name: 'Weizmann Institute of Science', country: 'IL' },
 };
 
+/** The flagged report, in full. The flag queue carries the whole submission for exactly this
+ *  reason: the flag below says the verification section is not verification, and there is no
+ *  way to agree or disagree with that from a title. */
+const FLAGGED_REPORT: QueueReport = {
+  id: '00000000-0000-4000-9000-000000000001',
+  status: 'published',
+  title: 'Check a lemma on sumsets with a proof assistant',
+  area: 'research',
+  taskType: 'proof_checking',
+  aim: 'I had a lemma about doubling constants that I believed but could not prove cleanly, and wanted to know whether it was true before spending a week on it.',
+  method:
+    '1. Stated the lemma in Lean 4 with Mathlib.\n2. Asked the model for a proof sketch, twice, from a clean context each time.\n3. Both sketches used induction on the size of the sumset.\n4. Translated the first into tactics; three of five goals closed.\n5. Did the remaining two by hand, which took an afternoon.',
+  outcome: 'partial',
+  outcomeNotes:
+    'The induction was the right idea and the base case was for the wrong statement — it had silently strengthened the hypothesis to a set of positive density. Two goals closed directly. The other three needed the hypothesis I actually had.',
+  verification:
+    'Lean accepted the final proof, so the formal statement is verified. I checked separately that the formal statement says what I meant, by rederiving the informal version by hand from the Lean one.',
+  transcriptExcerpt:
+    '> Prove: if |A + A| ≤ K|A| then A is covered by K^C translates of a set of size ≤ |A|.\n\nBy induction on |A|. Assume A has positive density in its ambient group…\n\n> A has no ambient group here. A is a finite subset of the integers.\n\nYou are right. Let me restate without that assumption…',
+  transcriptUrl: null,
+  caveats:
+    'I would state all the hypotheses in full before asking. Most of the wasted time came from it filling in an assumption I had left implicit, and then being confident about it.',
+  thirdPartyMaterialConfirmed: true,
+  timeSpentMinutes: 260,
+  wasPublished: false,
+  wasDisclosed: null,
+  authorConfidence: 8,
+  createdAt: '2026-08-11T09:14:00Z',
+  updatedAt: '2026-08-11T09:14:00Z',
+  author: HANNA,
+  tools: [
+    { name: 'Lean', version: '4.9.0', usedOn: '2026-08-09' },
+    { name: 'Claude', version: 'Opus 4.1', usedOn: '2026-08-09' },
+  ],
+  tags: ['math.NT', 'math.CO'],
+};
+
 const FIXTURES: Queues = {
-  reports: [
-    {
-      id: '00000000-0000-4000-9000-000000000001',
-      status: 'pending',
-      title: 'Check a lemma on sumsets with a proof assistant',
-      area: 'research',
-      taskType: 'proof_checking',
-      aim: 'I had a lemma about doubling constants that I believed but could not prove cleanly, and wanted to know whether it was true before spending a week on it.',
-      method:
-        '1. Stated the lemma in Lean 4 with Mathlib.\n2. Asked the model for a proof sketch, twice, from a clean context each time.\n3. Both sketches used induction on the size of the sumset.\n4. Translated the first into tactics; three of five goals closed.\n5. Did the remaining two by hand, which took an afternoon.',
-      outcome: 'partial',
-      outcomeNotes:
-        'The induction was the right idea and the base case was for the wrong statement — it had silently strengthened the hypothesis to a set of positive density. Two goals closed directly. The other three needed the hypothesis I actually had.',
-      verification:
-        'Lean accepted the final proof, so the formal statement is verified. I checked separately that the formal statement says what I meant, by rederiving the informal version by hand from the Lean one.',
-      transcriptExcerpt:
-        '> Prove: if |A + A| ≤ K|A| then A is covered by K^C translates of a set of size ≤ |A|.\n\nBy induction on |A|. Assume A has positive density in its ambient group…\n\n> A has no ambient group here. A is a finite subset of the integers.\n\nYou are right. Let me restate without that assumption…',
-      transcriptUrl: null,
-      caveats:
-        'I would state all the hypotheses in full before asking. Most of the wasted time came from it filling in an assumption I had left implicit, and then being confident about it.',
-      thirdPartyMaterialConfirmed: true,
-      timeSpentMinutes: 260,
-      wasPublished: false,
-      wasDisclosed: null,
-      authorConfidence: 8,
-      createdAt: '2026-08-11T09:14:00Z',
-      author: HANNA,
-      tools: [
-        { name: 'Lean', version: '4.9.0', usedOn: '2026-08-09' },
-        { name: 'Claude', version: 'Opus 4.1', usedOn: '2026-08-09' },
-      ],
-      tags: ['math.NT', 'math.CO'],
-      note: null,
-      noteAt: null,
-    },
-    {
-      id: '00000000-0000-4000-9000-000000000002',
-      status: 'pending',
-      title: 'Ask for a literature search on a Diophantine equation',
-      area: 'research',
-      taskType: 'literature_search',
-      aim: 'Find out whether the specific family of equations I had reduced my problem to was already in the literature.',
-      method:
-        '1. Described the family precisely.\n2. Asked for references, with the instruction that it should say so if it did not know.\n3. Received six references.\n4. Looked up all six.',
-      outcome: 'failed',
-      outcomeNotes:
-        'Two of the six do not exist. One is a real paper by a real author with an invented title. The remaining three exist and are about something else. The invented reference is the dangerous one — it is plausible, the author works in the area, and I nearly cited it.',
-      verification:
-        'Checked every reference against MathSciNet and arXiv by hand. Emailed one author to ask whether the attributed result was theirs; it was not.',
-      transcriptExcerpt: null,
-      transcriptUrl: null,
-      caveats:
-        'A failure worth recording rather than a complaint. I would not use a model for this again without a retrieval tool attached, and I would still check every line.',
-      thirdPartyMaterialConfirmed: true,
-      timeSpentMinutes: 95,
-      wasPublished: null,
-      wasDisclosed: null,
-      authorConfidence: 9,
-      createdAt: '2026-08-12T16:02:00Z',
-      author: CATEGORY_OF_ONE,
-      tools: [{ name: 'GPT-5', version: '2026-06', usedOn: '2026-08-12' }],
-      tags: ['math.NT'],
-      note: 'The verification section describes what the model told you rather than what you checked. Say what you did with MathSciNet, and it can go in.',
-      noteAt: '2026-08-13T11:20:00Z',
-    },
-    {
-      id: '00000000-0000-4000-9000-000000000003',
-      status: 'pending',
-      title: 'Translate a 1962 paper from Russian for a seminar',
-      area: 'learning',
-      taskType: 'translation',
-      aim: 'Read a paper of Gelfond that has never been translated, well enough to present it.',
-      method:
-        '1. Scanned the paper and ran it through OCR.\n2. Translated section by section, keeping the original beside it.\n3. Checked every formula against the scan by eye, since OCR loses subscripts.',
-      outcome: 'worked',
-      outcomeNotes:
-        'The mathematics came through intact. Two proper names were mangled and one Cyrillic subscript became a Latin one, which changed the meaning of a displayed formula until I caught it.',
-      verification:
-        'Rederived the two main lemmas from the translation without looking at the original, then compared. A colleague who reads Russian checked the introduction and the statement of the theorem.',
-      transcriptExcerpt: null,
-      transcriptUrl: null,
-      caveats: 'Do not trust it on subscripts. Everything else was better than I expected.',
-      thirdPartyMaterialConfirmed: true,
-      timeSpentMinutes: 420,
-      wasPublished: null,
-      wasDisclosed: null,
-      authorConfidence: 7,
-      createdAt: '2026-08-14T08:41:00Z',
-      author: TOMAS,
-      tools: [{ name: 'Gemini', version: '3.0 Pro', usedOn: '2026-08-13' }],
-      tags: ['math.NT', 'math.HO'],
-      note: null,
-      noteAt: null,
-    },
-  ],
-
-  debates: [
-    {
-      id: '00000000-0000-4000-a000-000000000001',
-      status: 'proposed',
-      statement: 'A model-generated reference must be checked against a database before it is cited.',
-      rationale:
-        'Fabricated references are the failure mode this community will meet first and most often, and the check takes a minute.',
-      area: 'writing',
-      createdAt: '2026-08-13T19:30:00Z',
-      author: CATEGORY_OF_ONE,
-      ratingCount: 4,
-    },
-    {
-      id: '00000000-0000-4000-a000-000000000002',
-      status: 'proposed',
-      statement: 'Referees should be told which parts of a paper were drafted with a model.',
-      rationale: null,
-      area: 'writing',
-      createdAt: '2026-08-15T07:05:00Z',
-      author: NOOR,
-      ratingCount: 1,
-    },
-  ],
-
   flags: [
     {
       id: '00000000-0000-4000-b000-000000000001',
@@ -900,45 +808,73 @@ const FIXTURES: Queues = {
         status: 'published',
         author: CATEGORY_OF_ONE,
       },
+      report: null,
     },
     {
       id: '00000000-0000-4000-b000-000000000002',
       subjectType: 'report',
-      subjectId: '00000000-0000-4000-9000-000000000009',
+      subjectId: FLAGGED_REPORT.id,
       reason: 'inaccurate',
-      detail: 'Version 4.9.0 of Lean cannot do what this describes. I think the version is wrong.',
+      detail:
+        'The verification section says Lean accepted the proof. That is a check of the formalisation, not of the informal lemma, and the report reads as though it settles the lemma.',
       createdAt: '2026-08-15T10:48:00Z',
       flagger: TOMAS,
       subject: {
         kind: 'report',
-        heading: 'Close a goal in Lean with a tactic suggestion',
-        body: 'Get a stuck goal closed without reading the whole of Mathlib.',
+        heading: FLAGGED_REPORT.title,
+        body: FLAGGED_REPORT.aim,
         status: 'published',
         author: HANNA,
       },
+      report: FLAGGED_REPORT,
     },
   ],
 
-  entries: [
+  hiddenReports: [
     {
-      id: '00000000-0000-4000-e000-000000000001',
-      status: 'pending' as const,
-      title: 'Lean4 by Example',
-      url: 'https://leanprover-community.github.io/lean4-samples/',
-      category: 'formalisation',
-      description: 'A community-maintained collection of annotated Lean 4 examples.',
-      relevance:
-        'Fills a practical gap: the reference manual explains what Lean 4 can do; this shows how to do it step by step, in mathematics.',
-      createdAt: '2026-08-15T14:32:00Z',
-      author: HANNA,
-      note: null,
-      noteAt: null,
+      id: '00000000-0000-4000-9000-000000000002',
+      status: 'hidden',
+      title: 'Ask for a literature search on a Diophantine equation',
+      area: 'research',
+      taskType: 'literature_search',
+      aim: 'Find out whether the specific family of equations I had reduced my problem to was already in the literature.',
+      method:
+        '1. Described the family precisely.\n2. Asked for references, with the instruction that it should say so if it did not know.\n3. Received six references.\n4. Looked up all six.',
+      outcome: 'failed',
+      outcomeNotes:
+        'Two of the six do not exist. One is a real paper by a real author with an invented title. The remaining three exist and are about something else.',
+      verification:
+        'Checked every reference against MathSciNet and arXiv by hand. Emailed one author to ask whether the attributed result was theirs; it was not.',
+      transcriptExcerpt:
+        'The referee report on the earlier version said: “the argument of Lemma 4 is circular and the author appears not to have noticed”…',
+      transcriptUrl: null,
+      caveats:
+        'A failure worth recording rather than a complaint. I would not use a model for this again without a retrieval tool attached.',
+      thirdPartyMaterialConfirmed: true,
+      timeSpentMinutes: 95,
+      wasPublished: null,
+      wasDisclosed: null,
+      authorConfidence: 9,
+      createdAt: '2026-08-12T16:02:00Z',
+      updatedAt: '2026-08-16T08:30:00Z',
+      author: CATEGORY_OF_ONE,
+      tools: [{ name: 'GPT-5', version: '2026-06', usedOn: '2026-08-12' }],
+      tags: ['math.NT'],
     },
   ],
 
-  hiddenReports: [],
-
-  hiddenDebates: [],
+  hiddenDebates: [
+    {
+      id: '00000000-0000-4000-a000-000000000001',
+      status: 'hidden',
+      statement: 'Anyone who uses a model for proof drafting should say so or leave the field.',
+      rationale: null,
+      area: 'writing',
+      createdAt: '2026-08-13T19:30:00Z',
+      author: CATEGORY_OF_ONE,
+      ratingCount: 4,
+    },
+  ],
 
   hiddenComments: [
     {
@@ -947,8 +883,8 @@ const FIXTURES: Queues = {
       createdAt: '2026-08-10T21:07:00Z',
       status: 'hidden',
       // Hiding keeps the name. Only deleting strips it, and a deleted comment keeps no text
-      // to show here either — which is why a moderator handling a flag about one is told
-      // to hide rather than wait.
+      // to show here either — which is why a moderator answering a flag about one is told to
+      // hide rather than wait.
       author: {
         id: '00000000-0000-4000-8000-000000000006',
         displayName: 'Wolfgang Amsel',
@@ -956,11 +892,24 @@ const FIXTURES: Queues = {
         institution: { name: 'Universität Bonn', country: 'DE' },
       },
       parentType: 'report',
-      parentId: '00000000-0000-4000-9000-000000000001',
+      parentId: FLAGGED_REPORT.id,
     },
   ],
 
-  hiddenEntries: [],
+  hiddenEntries: [
+    {
+      id: '00000000-0000-4000-e000-000000000001',
+      status: 'hidden',
+      title: 'ProofPilot Pro — AI for working mathematicians',
+      url: 'https://example.com/proofpilot',
+      category: 'tool',
+      description: 'A commercial assistant for proof drafting, with a free trial.',
+      relevance: 'Every serious mathematician will need this. Sign up before the price rises.',
+      createdAt: '2026-08-15T14:32:00Z',
+      updatedAt: '2026-08-15T14:32:00Z',
+      author: HANNA,
+    },
+  ],
 
   erasures: [
     {

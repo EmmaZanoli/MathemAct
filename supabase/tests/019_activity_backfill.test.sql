@@ -59,10 +59,16 @@ values
    '11111111-0000-0000-0000-000000000002', 'Did the elaborator accept it without hints?',
    '2026-07-02T09:30:00Z');
 
-insert into public.moderation_actions (actor_id, action, target_type, target_id, created_at)
+-- A `publish` row: the action no longer exists in the interface, and rows carrying it are
+-- exactly what this backfill has to keep reconstructing. It needs a reason here only
+-- because moderation_actions_reason_required now asks for one on every new row — the real
+-- historical rows predate that constraint, which is why it was added NOT VALID.
+insert into public.moderation_actions
+  (actor_id, action, target_type, target_id, reason, created_at)
 values
   ('11111111-0000-0000-0000-000000000003', 'publish', 'report',
-   '22222222-0000-0000-0000-000000000001', '2026-07-01T16:00:00Z');
+   '22222222-0000-0000-0000-000000000001', 'Reads well; verification is real.',
+   '2026-07-01T16:00:00Z');
 
 -- The triggers are deliberately never switched back on. `ALTER TABLE ... ENABLE TRIGGER`
 -- refuses while the table has a pending trigger event, and inserting a report always leaves

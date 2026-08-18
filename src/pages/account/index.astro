@@ -119,13 +119,42 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     <h2>Your submissions</h2>
 
     <p class="field__hint">
-      Every report and network entry you have submitted, in whatever state it is in. A
-      submission waits for a moderator before it joins the corpus; if one has been sent
-      back, what to change is here.
+      Every report and network entry you have posted, in whatever state it is in. Posting
+      publishes: nothing here waited for anybody. A report stays editable until somebody else
+      confirms it or comments on it, and a hidden one stays editable for as long as it is
+      hidden — with the reason a moderator gave on the row.
     </p>
 
     <ul class="submissions" data-submission-list role="list"></ul>
   </section>
+
+  {/* Decisions, including the ones with no row above them: a hidden comment, a debate, or a
+      flag you raised about somebody else's post. The overlap with "Your submissions" is
+      deliberate — the reason belongs beside the thing it is about, and it also belongs in one
+      list somebody can read from top to bottom. */}
+  <section class="section" id="decisions" data-decisions hidden>
+    <h2>Moderation decisions</h2>
+
+    <p class="field__hint">
+      What has been decided about what you posted, and about anything you flagged. Each one
+      is the sentence the moderator wrote. It does not say who decided, and — where you are
+      the author — it does not say who flagged it.
+    </p>
+
+    <ul class="submissions" data-decision-list role="list"></ul>
+  </section>
+
+  <template data-decision-template>
+    <li class="submission">
+      <p class="submission__title" data-heading></p>
+      <p class="mono submission__meta" data-meta></p>
+      <div class="submission__note">
+        <p class="submission__note-head">Why</p>
+        <p data-explanation></p>
+      </div>
+      <p class="field__hint" data-follow-up hidden></p>
+    </li>
+  </template>
 
   {/* Cloned per row. Authored here rather than built in script so that the scoped styles
       below actually apply to it — Astro compiles them against elements in this file. */}
@@ -134,11 +163,11 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
       <p class="submission__title" data-title></p>
       <p class="mono submission__meta" data-meta></p>
       <div class="submission__note" data-note-block hidden>
-        <p class="submission__note-head">Changes asked for</p>
+        <p class="submission__note-head">Why it was hidden</p>
         <p data-note></p>
       </div>
       <p class="actions" data-edit-block hidden>
-        <a class="button button--secondary" data-edit-link href="">Edit and resubmit</a>
+        <a class="button button--secondary" data-edit-link href="">Edit</a>
       </p>
       <p class="field__hint" data-no-edit hidden>
         There is no edit screen for a network entry yet. To act on this, delete the entry
@@ -212,6 +241,8 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   import { loadOwnReports } from '../../lib/reports';
   import type { OwnSubmission } from '../../lib/reports';
   import { loadOwnEntries } from '../../lib/network';
+  import { loadNotices, noticeFollowUp, noticeHeading } from '../../lib/notices';
+  import type { Notice } from '../../lib/notices';
   import { loadProfile, saveProfile } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import {
@@ -299,18 +330,21 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   }
 
   /**
-   * Everything you have submitted — reports and network entries — and any change a moderator
-   * has asked for.
+   * Everything you have posted — reports and network entries — and, on anything hidden, the
+   * reason a moderator gave.
    *
-   * Two queries rather than one, because they are two tables and each is owned by the module
-   * that owns it. They are merged here and sorted by date, so the section reads as "what I
-   * have posted" rather than as two lists that happen to be adjacent; the kind is on each
-   * row, which is what a person needs to know to act on it.
+   * Three queries rather than one, because they are three tables and each is owned by the
+   * module that owns it. Reports and entries are merged here and sorted by date, so the
+   * section reads as "what I have posted" rather than as two lists that happen to be
+   * adjacent; the kind is on each row, which is what a person needs to know to act on it.
+   * The decisions are the third, and they are joined to the rows by subject id rather than
+   * carried on them — the note columns that used to live on public.reports went with
+   * pre-moderation, and one table that knows what was decided beats a copy on every table a
+   * decision can be about.
    *
-   * Both are awaited together and a failure of either is survivable: whichever came back is
-   * shown. The reason is the one this section exists for — a moderator's note has no other
-   * route to its author — so showing half of them beats showing none, and a note is more
-   * likely to be unread than misread.
+   * All three are awaited together and a failure of any is survivable: whatever came back is
+   * shown. A row with its explanation missing still says it was hidden, which is the half
+   * that must not be lost.
    *
    * The section stays hidden when there is nothing in it. Somebody who has not posted yet
    * does not need an empty box telling them so — the invitation to post is already above
@@ -318,7 +352,15 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
    * whose main business is the profile form.
    */
   async function fillSubmissions(id: string): Promise<void> {
-    const [reports, entries] = await Promise.all([loadOwnReports(id), loadOwnEntries(id)]);
+    const [reports, entries, notices] = await Promise.all([
+      loadOwnReports(id),
+      loadOwnEntries(id),
+      loadNotices(),
+    ]);
+
+    const decisions = notices.ok ? notices.value : [];
+
+    fillDecisions(decisions);
 
     const submissions = [
       ...(reports.ok ? reports.value : []),
@@ -326,6 +368,15 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
     if (submissions.length === 0) return;
+
+    // The current reason for each hidden thing: newest first out of the query, so the first
+    // match is the one that still applies. An older decision on the same row is history and
+    // belongs in the list below, not on the row.
+    const reasonFor = new Map<string, string>();
+    for (const notice of decisions) {
+      if (notice.role !== 'author' || notice.outcome !== 'hidden') continue;
+      if (!reasonFor.has(notice.subjectId)) reasonFor.set(notice.subjectId, notice.explanation);
+    }
 
     const section = query<HTMLElement>('[data-submissions]');
     const list = query<HTMLElement>('[data-submission-list]');
@@ -341,24 +392,68 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
           `${submission.kind === 'entry' ? 'Network entry' : 'Report'} · ` +
           `${stateOf(submission)} · posted ${longDate(submission.createdAt)}`;
 
-        if (submission.note) {
-          query<HTMLElement>('[data-note-block]', row).hidden = false;
-          query<HTMLElement>('[data-note]', row).textContent = submission.note;
+        if (submission.status === 'hidden' && !submission.deletedAt) {
+          const reason = reasonFor.get(submission.id);
 
-          // "Sent back" means pending + has a note. Show the edit link — for a report,
-          // which has an edit screen. An entry has none yet, so rather than offer a button
-          // that goes nowhere the row says what the author has to do instead. That is the
-          // honest shape of a half-built path, and it is listed in docs/moderation.md.
-          if (submission.status === 'pending' && !submission.deletedAt) {
-            if (submission.kind === 'report') {
-              const editBlock = query<HTMLElement>('[data-edit-block]', row);
-              editBlock.hidden = false;
-              query<HTMLAnchorElement>('[data-edit-link]', row).href =
-                path(`/account/edit-submission/?id=${submission.id}`);
-            } else {
-              query<HTMLElement>('[data-no-edit]', row).hidden = false;
-            }
+          if (reason) {
+            query<HTMLElement>('[data-note-block]', row).hidden = false;
+            query<HTMLElement>('[data-note]', row).textContent = reason;
           }
+        }
+
+        // The edit screen exists for a report and not for an entry, so an entry offers the
+        // instruction instead of a button that goes nowhere. That is the honest shape of a
+        // half-built path, and it is listed in docs/moderation.md.
+        if (submission.editable) {
+          if (submission.kind === 'report') {
+            const editBlock = query<HTMLElement>('[data-edit-block]', row);
+            editBlock.hidden = false;
+            query<HTMLAnchorElement>('[data-edit-link]', row).href =
+              path(`/account/edit-submission/?id=${submission.id}`);
+          } else {
+            query<HTMLElement>('[data-no-edit]', row).hidden = false;
+          }
+        }
+
+        return row;
+      }),
+    );
+
+    section.hidden = false;
+  }
+
+  /**
+   * Every decision you have been told about, newest first.
+   *
+   * Separate from the list above because most decisions have no row there: a hidden comment,
+   * a debate, and every answer to a flag you raised about somebody else's post. This is the
+   * only place those are readable at all — the activity feed says that something was decided
+   * and links here; the sentence itself is here.
+   */
+  function fillDecisions(notices: readonly Notice[]): void {
+    if (notices.length === 0) return;
+
+    const section = query<HTMLElement>('[data-decisions]');
+    const list = query<HTMLElement>('[data-decision-list]');
+    const template = query<HTMLTemplateElement>('[data-decision-template]');
+
+    list.replaceChildren(
+      ...notices.map((notice) => {
+        const item = template.content.cloneNode(true) as DocumentFragment;
+        const row = item.firstElementChild as HTMLElement;
+
+        query<HTMLElement>('[data-heading]', row).textContent = noticeHeading(notice);
+        query<HTMLElement>('[data-meta]', row).textContent = [
+          notice.label ?? 'no longer on the site',
+          longDate(notice.createdAt),
+        ].join(' · ');
+        query<HTMLElement>('[data-explanation]', row).textContent = notice.explanation;
+
+        const followUp = noticeFollowUp(notice);
+        if (followUp) {
+          const element = query<HTMLElement>('[data-follow-up]', row);
+          element.textContent = followUp;
+          element.hidden = false;
         }
 
         return row;
@@ -373,9 +468,8 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
    *  that silently happens to you. */
   function stateOf(submission: OwnSubmission): string {
     if (submission.deletedAt) return 'deleted by you';
-    if (submission.status === 'published') return 'published';
-    if (submission.status === 'hidden') return 'hidden by a moderator';
-    return submission.note ? 'sent back for changes' : 'waiting for review';
+    if (submission.status === 'hidden') return 'hidden after a flag';
+    return submission.editable ? 'published, still editable' : 'published';
   }
 
   form.addEventListener('submit', async (event) => {

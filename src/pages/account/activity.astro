@@ -3,8 +3,13 @@
  * Your activity: what you did here, and what happened because of it.
  *
  * This is the page docs/moderation.md has been promising by its absence — "No notification
- * of any kind. Nothing tells an author their report was published, sent back, or hidden.
- * They find out by looking." This is the looking, gathered into one place.
+ * of any kind. Nothing tells an author what happened to what they posted. They find out by
+ * looking." This is the looking, gathered into one place.
+ *
+ * It says *that* something happened and never why: a moderation decision's reason is written
+ * to a person and lives in public.moderation_notices, which /account/#decisions reads. Rows
+ * about a decision link there rather than to the post, because for a hide that is also the
+ * only page that still works.
  *
  * Three decisions worth stating, because each was a fork:
  *

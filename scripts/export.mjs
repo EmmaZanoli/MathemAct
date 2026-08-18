@@ -194,7 +194,8 @@ const REPORTS = `
 `;
 
 /**
- * Debates that are not hidden — proposed as well as active.
+ * Debates that are not hidden. `active` is the only status anything is written in since
+ * post-moderation; `proposed` still appears on rows older than that.
  *
  * "Active" is the promoted set, and exporting only those would drop every claim still
  * collecting answers from the site that lists them. Proposed is neither pending nor hidden:

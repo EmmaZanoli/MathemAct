@@ -31,7 +31,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(41);
+select plan(42);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ insert into public.reports (
    'Confirm a lemma.', 'Stated it in Lean.', 'worked', 'It closed.', 'Lean accepted it.', true),
 
   ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001',
-   'pending', 'Still waiting for review', 'writing', 'exposition',
+   'published', 'A second one, later hidden', 'writing', 'exposition',
    'Draft a seminar note.', 'Asked, then rewrote.', 'partial', 'Half usable.',
    'Checked by hand.', true);
 
@@ -269,8 +269,9 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"11111111-0000-0000-0000-000000000003","role":"authenticated"}';
 
 select lives_ok(
-  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000002', 'publish') $$,
-  'a moderator publishes the pending submission'
+  $$ select public.moderate('report', '22222222-0000-0000-0000-000000000002', 'hide',
+                            'The transcript quotes an unpublished referee report.') $$,
+  'a moderator hides a report'
 );
 
 reset role;
@@ -278,7 +279,7 @@ reset role;
 select is(
   (select count(*)::int from public.activity
     where subject_id = '11111111-0000-0000-0000-000000000001'
-      and kind = 'report_published'),
+      and kind = 'content_hidden'),
   1,
   'and the author is told, which nothing on this site did before'
 );
@@ -286,7 +287,7 @@ select is(
 select is(
   (select actor_id from public.activity
     where subject_id = '11111111-0000-0000-0000-000000000001'
-      and kind = 'report_published'),
+      and kind = 'content_hidden'),
   null::uuid,
   'the decision is reported; the moderator who took it is not named'
 );
@@ -294,9 +295,19 @@ select is(
 select is(
   (select label from public.activity
     where subject_id = '11111111-0000-0000-0000-000000000001'
-      and kind = 'report_published'),
-  'Still waiting for review',
-  'the row carries the title, so the feed can say which submission'
+      and kind = 'content_hidden'),
+  'A second one, later hidden',
+  'the row carries the title, so the feed can say which report'
+);
+
+-- The reason is not here and must not arrive here. This table holds events; the sentence a
+-- moderator wrote lives in public.moderation_notices, addressed to the person it is about.
+select is(
+  (select count(*)::int from public.moderation_notices
+    where recipient_id = '11111111-0000-0000-0000-000000000001'
+      and outcome = 'hidden'),
+  1,
+  'the explanation reaches the author through the notices table, not through the feed'
 );
 
 -- Hiding a comment. The row moves to the thread, because a link to a comment is a link to

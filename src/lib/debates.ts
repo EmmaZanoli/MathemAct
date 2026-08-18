@@ -115,9 +115,9 @@ let cached: Debate[] | null = null;
  * nightly job existed has gone; see the same note in src/lib/reports.ts for why its
  * absence is the feature rather than a regression.
  *
- * Both statuses are in the file. A proposed claim is public, rateable, and being rated is
- * how it gets promoted — it is neither pending nor hidden, and the page that lists them
- * splits the two itself.
+ * Everything not hidden is in the file. `proposed` is a status nothing enters any more —
+ * a debate is active when it is written — but the type keeps it, because rows written
+ * before 2026-08-18 were exported under it and an export is a historical document.
  */
 async function readDebates(): Promise<Debate[]> {
   if (cached) return cached;
@@ -145,8 +145,7 @@ export async function getDebate(id: string): Promise<Debate | undefined> {
   return (await readDebates()).find((debate) => debate.id === id);
 }
 
-/** One person's debates, for their author page. Both statuses, for the reason above: a
- *  proposed claim is public and being rated is how it gets promoted. */
+/** One person's debates, for their author page. Every status the export carries. */
 export async function debatesByAuthor(authorId: string): Promise<Debate[]> {
   return (await readDebates()).filter(
     (debate) => debate.author?.id === authorId,

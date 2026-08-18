@@ -90,8 +90,8 @@ select is(
 
 select is(
   (select status::text from public.reports limit 1),
-  'pending'::text,
-  'and it is pending: the function is not a way to self-publish'
+  'published'::text,
+  'and it is in the corpus: submitting is publishing, and nothing waits for a moderator'
 );
 
 select is(

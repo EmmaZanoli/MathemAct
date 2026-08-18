@@ -19,8 +19,11 @@ mathematics are part of the intended audience.
 ## Status
 
 Public site, identity layer, account flows, the submission form, reading, and moderation
-built. Moderators reach the queue at `/moderate/` — a nav link appears once the page has
-confirmed their role via localStorage, using the same pattern as the sign-in indicator.
+built. **Posting publishes**: nothing is reviewed before it appears. Moderation is what
+happens when a reader flags something — a moderator decides whether it stays up, and the
+explanation they write is shown to the author and to the flagger alike. Moderators reach the
+screen at `/moderate/` — a nav link appears once the page has confirmed their role via
+localStorage, using the same pattern as the sign-in indicator.
 
 | | |
 |---|---|
@@ -37,9 +40,9 @@ confirmed their role via localStorage, using the same pattern as the sign-in ind
 | ✅ | Debates, the agreement scale, and the histogram — median, never a mean |
 | ✅ | Network: submission, moderation, and a monthly link check |
 | ✅ | Discussion, the citation graph, and the flag queue |
-| ✅ | Moderation: an audited queue, and erasure that erases |
+| ✅ | Moderation: flag-led, audited, explained to both sides, and erasure that erases |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |
-| ✅ | Editing and resubmitting a submission a moderator sent back |
+| ✅ | Editing a report: until somebody answers it, and again while it is hidden |
 | ⬜ | Search |
 
 The account pages need `PUBLIC_SUPABASE_ANON_KEY` and `PUBLIC_TURNSTILE_SITE_KEY`, plus
@@ -194,12 +197,13 @@ database monthly and reports what the matcher makes of real mathematics institut
 ```
 src/pages/              home, about, privacy, code of conduct, search, 404
 src/pages/account/      sign up, confirm, sign in, sign out, reset, password, profile, erase,
-                        edit and resubmit a submission sent back
+                        activity, moderation decisions, and editing a report you may still edit
 src/pages/reports/      the listing, a report, the submission form
 src/pages/authors/      one contributor's reports, debates, and submitted entries
 src/pages/debates/      the index, a debate, and the suggest form
 src/pages/network/      the listing and the submission form
-src/pages/moderate/     the queues; ships as the 404 page and reveals itself to a moderator
+src/pages/moderate/     open flags and what is hidden; ships as the 404 page and reveals
+                        itself to a moderator
 */view.astro            client-rendered stand-ins for pages the last export predates
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
 src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)

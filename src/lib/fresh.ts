@@ -143,12 +143,12 @@ export async function reportsSince(since: string): Promise<FreshReport[]> {
   }));
 }
 
-/** Debates created after `since`. Anything this new is `proposed`: nothing is born
- *  active, and the threshold that promotes one takes five people. */
+/** Debates created after `since`. Anything this new is `active`: a debate is part of the
+ *  record when it is written, and only a moderation decision moves it out of that state. */
 export async function debatesSince(since: string): Promise<FreshDebate[]> {
   const rows = await ask<RawFreshDebate>(
     'debates?select=id,statement,area,created_at' +
-      `&status=eq.proposed&created_at=gt.${encodeURIComponent(since)}` +
+      `&status=eq.active&created_at=gt.${encodeURIComponent(since)}` +
       `&order=created_at.desc&limit=${LIMIT}`,
   );
 

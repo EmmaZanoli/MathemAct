@@ -823,7 +823,11 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
         }
 
         slot.replaceChildren();
-        showStatus(status, 'notice', 'Flagged. A moderator will look at it.');
+        showStatus(
+          status,
+          'notice',
+          'Flagged. A moderator will look at it and write you what they decided, either way.',
+        );
       });
     }
 

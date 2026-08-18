@@ -65,8 +65,10 @@ insert into public.reports (
    'published', 'A published report', 'research', 'proof_checking',
    'Confirm a lemma.', 'Stated it in Lean.', 'worked', 'It closed.', 'Lean accepted it.', true),
 
+  -- A leftover from the retired approval queue. Nothing is written in this status now, and
+  -- the read policies still have to keep it out of sight.
   ('22222222-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001',
-   'pending', 'A report still in the queue', 'writing', 'exposition',
+   'pending', 'A report left over from the approval queue', 'writing', 'exposition',
    'Draft a seminar note.', 'Asked, then rewrote.', 'partial', 'Half usable.',
    'Checked by hand.', true),
 
