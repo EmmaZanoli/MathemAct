@@ -170,6 +170,18 @@ export async function listUsedTags(): Promise<CorpusTag[]> {
   return [...tags.values()].sort((a, b) => a.code.localeCompare(b.code, 'en'));
 }
 
+const ALL_TAGS_DATA = import.meta.glob<{ default: { code: string; label: string }[] }>(
+  '/data/tags.json',
+  { eager: true },
+);
+
+/** All tags in the vocabulary, whether or not any report uses them. Used to provide
+ *  client-side label lookups for values that appear only in fresh cards. */
+export async function listAllTags(): Promise<CorpusTag[]> {
+  const rows = Object.values(ALL_TAGS_DATA)[0]?.default ?? [];
+  return rows.map(({ code, label }) => ({ code, label }));
+}
+
 // ══ Writes ════════════════════════════════════════════════════════════════════════════
 // Everything below runs in a browser and always will. Submitting a report and reporting
 // whether one still works are the two things that genuinely cannot be static, and they are
