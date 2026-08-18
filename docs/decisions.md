@@ -1883,3 +1883,44 @@ moderation one was not.
 `public.moderation_actions`, which outlives the accounts on both ends of it. `39` pgTAP
 assertions in `supabase/tests/018_activity.test.sql`; the four that matter are the two
 missing actors, the silence toward a flagged author, and the absent INSERT grant.
+
+## 2026-08-18 — The activity feed shipped empty, because a trigger cannot see the past
+
+Every existing account opened `/account/activity/` and read "Nothing here yet" while holding
+published reports. Nothing was broken: `public.activity` existed, the grants were right, the
+query succeeded, and the table was empty. Triggers observe statements, and everything posted
+before `20260818120100` happened with nothing watching.
+
+This is the failure mode worth naming, because it is not a bug and no test would have caught
+it. A trigger-fed table is correct from the moment it exists and silent about everything
+before, and the interface built on top says the one thing guaranteed to be misread — an empty
+state, to a person who knows the opposite is true. The audience least likely to try twice.
+
+`20260818140000_activity_backfill.sql` reconstructs it, and almost all of it is recoverable:
+every source table carries `created_at`, and `public.moderation_actions` is a complete dated
+log of what was decided, so "a moderator published your report on the 1st" comes back exactly.
+Only `edited_report` is unrecoverable — there is no revision history, by the decision in
+`docs/moderation.md`, so an edit before today left no trace.
+
+**Real dates, not the migration's date.** Stamping the reconstruction with today would put a
+lie in the one column people read as history. `private.log_activity()` therefore gained
+`p_created_at`.
+
+**The dedup key is that timestamp, and it works for a precise reason.** The migration lands
+after the triggers have been live, so most of what the backfill walks is already there. A
+trigger fires in the *same transaction* as the row that fired it, so the activity row's
+`now()` and the source row's `created_at` default are the same value rather than merely close
+— and that column is also the only thing separating the rows that would otherwise collide,
+two people rating one debate among them. It holds because `created_at` is absent from the
+INSERT column grant on every source table. Granting it later would quietly break this, which
+is why the note is in the function rather than here.
+
+**The moderation routing moved out of the trigger into `private.log_moderation()`.** A trigger
+function cannot be called outside a trigger, so the alternative was a second copy of the
+longest branch in the feature — the one where a mistake writes a wrong notification to a real
+person permanently. The trigger is now a wrapper and its behaviour is unchanged.
+
+`private.backfill_activity()` is a function rather than a `DO` block so that pgTAP can call
+it: `supabase/tests/019_activity_backfill.test.sql` turns the triggers off, writes history
+underneath them, and asserts the reconstruction has the right dates, the right actors, no
+moderator's name, and no duplicates on a second run or over rows the triggers already saw.
