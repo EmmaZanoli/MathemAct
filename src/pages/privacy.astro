@@ -53,6 +53,18 @@ import { SITE } from '../lib/site';
       <p class="legal-basis">Legal basis: performance of the account contract (Article 6(1)(b)).</p>
     </dd>
 
+    <dt>Your activity record</dt>
+    <dd>
+      A list of what you did here — posted, rated, flagged, commented — and of what
+      happened to it afterwards: a moderator's decision, somebody's comment, somebody's
+      rating. You can read it under <a href={path('/account/activity/')}>your activity</a>,
+      and nobody else can, including moderators. It records the event and the date, never
+      an email address and never anything a moderator wrote to another moderator. It is
+      deleted outright when your account is erased, along with the note of when you last
+      looked at it.
+      <p class="legal-basis">Legal basis: performance of the account contract (Article 6(1)(b)).</p>
+    </dd>
+
     <dt>An erasure request, if you make one</dt>
     <dd>
       The fact that your account has asked to be erased, when it was asked, and anything
@@ -82,7 +94,10 @@ import { SITE } from '../lib/site';
   <p>
     There is no cookie banner because there are no persistent cookies. Being signed in is
     kept in this browser's own local storage, written when you sign in and removed when you
-    sign out.
+    sign out. Two small numbers sit beside it for the same reason — whether this account
+    moderates, and how many notifications were waiting last time a page asked — so that the
+    header can be drawn without every page you read contacting the database. Both are
+    cleared when you sign out, and neither leaves the browser.
   </p>
 
   <h2>Retention</h2>

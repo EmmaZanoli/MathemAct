@@ -117,8 +117,10 @@ marker, and no diff:
 - A comment edited within 24 hours has, by construction, no replies and is less than a day
   old. `updated_at` is stored and could carry an "edited" marker later; it does not today.
 - A **change request** is visible to its author under "Your submissions" on their account
-  page, with the date it was asked. It is cleared when the report is published, because it
-  then describes a version that was accepted.
+  page, with the date it was asked, for a report and for a network entry alike. It is
+  cleared when the submission is published, because it then describes a version that was
+  accepted. Since 2026-08-18 the author is also told a change was asked for in their
+  activity feed, which links back to that section.
 
 If revision history is ever wanted, the honest version is a table of past versions with a
 visible diff, not an "edited" badge. That is a feature, not a patch.
@@ -228,16 +230,27 @@ mid-decision.
 
 - **No pagination.** Every queue loads in full. Fine at the current size, wrong at a
   thousand pending rows.
-- **No edit screen for a pending submission.** An author who is sent back can read the note
-  on their account page but cannot yet act on it — they would have to delete and repost. This
-  is the next thing to build; it is what makes "send back" worth more than "hide".
-- **No notification of any kind.** Nothing tells an author their report was published,
-  sent back, or hidden. They find out by looking. Mail would go through Supabase's own
-  templates and 300 messages a day, and is a real design decision rather than a switch.
+- **No notification that leaves the site.** An author is now told in the interface: every
+  decision this screen takes writes a row to `public.activity`, which they read at
+  `/account/activity/`. What they see is the outcome and the date — never the moderator's
+  name and never the reason text, which is written to another moderator. A change request
+  still reads under "Your submissions", where the note itself is. What does not exist is
+  **mail**: nothing reaches somebody who does not come back to the site. That would go
+  through Supabase's own templates and 300 messages a day, and is a real design decision
+  rather than a switch.
+- **No edit screen for a network entry.** A report that is sent back is read and rewritten
+  under "Your submissions" — that screen has existed since 2026-08-17. An entry appears in
+  the same list, in the same state, with the same note on it, and there the path stops:
+  acting on the note means deleting the entry and submitting it again. The row says so
+  rather than offering a button that goes nowhere. `resources_update_own_pending` already
+  permits the edit, so what is missing is the form and a `resubmit_entry` alongside
+  `resubmit_report`, not a policy.
 - **Removing a citation is not logged.** A moderator may delete a citation whose stored
   excerpt should not be there — the one hard delete on the site — and that path predates the
   audit log and still bypasses it.
 - **No view of the log in the interface.** It is readable through PostgREST by any moderator
   and is not on the screen. It should be, next to each queue.
-- **Banning is not visible anywhere.** A banned account looks ordinary to everybody
-  including itself, until it tries to post and is refused by a policy.
+- **Banning is barely visible.** A banned account now gets one line in its activity feed
+  saying so. Everything else about it still looks ordinary — the post forms are not
+  disabled, and the refusal when it tries to post still comes from a policy rather than
+  from the interface.

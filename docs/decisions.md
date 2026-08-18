@@ -1813,3 +1813,156 @@ rather than dispatched `input`, on all three submission forms: counter matches
 `CommentThread.astro` keeps its own inline counter update. It has one hard-coded counter,
 looked up inside a per-comment root rather than a form, and moving it would mean giving the
 shared helper a second shape for no gain.
+
+## 2026-08-18 — There is a notification centre, and it is an event table rather than an inbox
+
+`public.activity` and `public.activity_seen`, read at `/account/activity/`. This is the first
+thing on this site that tells anybody anything, and it reverses part of a decision taken two
+days earlier, so both halves are worth writing down.
+
+**What was rejected on 2026-08-16 and stays rejected.** "A message table is a second inbox
+nobody checks" — a table of prose somebody had to compose, for a reader to find. That is
+still the wrong shape. `reports.moderation_note` is still where a change request lives, and
+"Your submissions" is still where it is read; the feed only says *that* changes were asked
+for and links there.
+
+**What changed.** The rejected thing was messages. This stores *events* — a kind, a target, a
+timestamp, sometimes an actor — and every word a person reads is composed in
+`src/lib/activity.ts`. Nothing is written by a human, so nothing goes stale, and rewording a
+notification is an edit to one file rather than a migration over history.
+
+**Why a table rather than deriving the feed at read time.** Three of the events cannot be
+derived at all, and the third is the one that settles it:
+
+1. `public.reports` has no `published_at`. Status is the current state and carries no date,
+   so "your report was published on the 14th" is unrecoverable from the row.
+2. `public.moderation_actions` is readable by moderators and by nobody else, deliberately.
+   The moderated person cannot read their own row and must not start being able to.
+3. `public.ratings` is readable only by its author — that is what keeps a debate's aggregate
+   hidden until somebody has taken a position. A debate's author cannot count the ratings on
+   their own debate, and should not be able to.
+
+**The moderation trigger hangs off the log, not off the content tables.** One `AFTER INSERT`
+on `public.moderation_actions` covers publish, request changes, hide, unhide, promote, ban
+and both flag outcomes. The invariant is worth more than the four triggers it replaces: one
+audit row per decision, therefore one notification per decision — no logged decision goes
+unannounced and nothing announces a decision that was not logged. It also means
+`public.moderate()` was not reissued to add this feature, so it could not acquire a
+transcription error while doing so.
+
+**Three places the row deliberately says less than it could.** A moderation outcome carries
+no actor: the author is told what was decided, never by whom, because naming the moderator
+turns a hide into a grievance with an address on it and undoes, one table over, the reason
+the log is restricted. A rating carries no actor, for the same reason `public.ratings` is
+private. And there is no event at all for *being* flagged — only the flagger hears anything,
+when the flag is resolved or dismissed.
+
+**`label` is denormalised, and the rule about what may go in it is the whole of its safety.**
+It is always the heading of the report, debate or entry the event is *on* — content the
+subject either wrote or can already read. Never a comment body, never a flag's detail, never
+a moderator's reason. Copying one of those would republish, in a row nobody moderates,
+exactly the text a moderator might later hide. A flagged *comment* resolves to the heading of
+its thread rather than to itself.
+
+**`is_inbound` is a column, not a client guess.** A badge that lights up because you posted is
+a badge that is ignored within a week, so "something you did" and "something that happened to
+you" are separated in the database. `private.log_activity()` classifies every kind with a
+`CASE` that has no `ELSE`, so adding an enum value without deciding which half it is in
+raises `case_not_found` in CI rather than quietly defaulting.
+
+**The header badge is a guess, like the other two.** A live count would mean the header asking
+the database on every page, including `/reports/` and `/debates/`, which are deliberately free
+of the auth bundle. So `activity-hint.ts` joins `session-hint.ts` and `mod-hint.ts` in
+localStorage, refreshed by the pages that already hold a session — the account pages, and any
+report or debate page through `CommentThread.astro`. The link appears only when the stored
+count is above zero, which is what makes a third control in a spare header defensible: it is
+there when it has something to say. Both hints are now cleared on sign-out, which the
+moderation one was not.
+
+**Feed rows are not an audit log.** They cascade away with the account, unlike
+`public.moderation_actions`, which outlives the accounts on both ends of it. `39` pgTAP
+assertions in `supabase/tests/018_activity.test.sql`; the four that matter are the two
+missing actors, the silence toward a flagged author, and the absent INSERT grant.
+
+## 2026-08-18 — The activity feed shipped empty, because a trigger cannot see the past
+
+Every existing account opened `/account/activity/` and read "Nothing here yet" while holding
+published reports. Nothing was broken: `public.activity` existed, the grants were right, the
+query succeeded, and the table was empty. Triggers observe statements, and everything posted
+before `20260818120100` happened with nothing watching.
+
+This is the failure mode worth naming, because it is not a bug and no test would have caught
+it. A trigger-fed table is correct from the moment it exists and silent about everything
+before, and the interface built on top says the one thing guaranteed to be misread — an empty
+state, to a person who knows the opposite is true. The audience least likely to try twice.
+
+`20260818140000_activity_backfill.sql` reconstructs it, and almost all of it is recoverable:
+every source table carries `created_at`, and `public.moderation_actions` is a complete dated
+log of what was decided, so "a moderator published your report on the 1st" comes back exactly.
+Only `edited_report` is unrecoverable — there is no revision history, by the decision in
+`docs/moderation.md`, so an edit before today left no trace.
+
+**Real dates, not the migration's date.** Stamping the reconstruction with today would put a
+lie in the one column people read as history. `private.log_activity()` therefore gained
+`p_created_at`.
+
+**The dedup key is that timestamp, and it works for a precise reason.** The migration lands
+after the triggers have been live, so most of what the backfill walks is already there. A
+trigger fires in the *same transaction* as the row that fired it, so the activity row's
+`now()` and the source row's `created_at` default are the same value rather than merely close
+— and that column is also the only thing separating the rows that would otherwise collide,
+two people rating one debate among them. It holds because `created_at` is absent from the
+INSERT column grant on every source table. Granting it later would quietly break this, which
+is why the note is in the function rather than here.
+
+**The moderation routing moved out of the trigger into `private.log_moderation()`.** A trigger
+function cannot be called outside a trigger, so the alternative was a second copy of the
+longest branch in the feature — the one where a mistake writes a wrong notification to a real
+person permanently. The trigger is now a wrapper and its behaviour is unchanged.
+
+`private.backfill_activity()` is a function rather than a `DO` block so that pgTAP can call
+it: `supabase/tests/019_activity_backfill.test.sql` turns the triggers off, writes history
+underneath them, and asserts the reconstruction has the right dates, the right actors, no
+moderator's name, and no duplicates on a second run or over rows the triggers already saw.
+
+## 2026-08-18 — The activity feed pages by keyset, because its timestamps are not unique
+
+`/account/activity/` loads fifty events and offers "Show earlier activity". The choice worth
+recording is not that it paginates but *how*, because the obvious option is quietly wrong here.
+
+**`.range()` would break, and not rarely.** Offset pagination is only stable if the sort is
+total, and `public.activity.created_at` is nowhere near unique. A trigger writes every row it
+produces inside one transaction, so `now()` gives the same answer twice and a single comment
+lands two rows equal to the microsecond; `20260818140000` reconstructed whole histories the
+same way. An order with ties in it has no defined arrangement between them, so a page boundary
+falling inside a group is where a row gets shown twice or skipped — and rows *of this table*
+travel in groups by construction.
+
+So the sort is `created_at desc, id desc` and the cursor carries both, resuming with
+`created_at < c or (created_at = c and id < i)`. `20260818160000` puts the tiebreaker in
+`activity_subject_idx` so that resume is a seek rather than a walk from the top. The partial
+index on inbound rows is left alone: it serves a `count(*)` over a range and never orders.
+
+**The timestamp is passed back verbatim and must never touch `Date`.** `timestamptz` carries
+microseconds and a JS `Date` carries milliseconds, so round-tripping the cursor through one
+moves the boundary by up to 999µs and silently drops or repeats whatever is in the gap. It
+goes back exactly as PostgREST returned it; postgrest-js appends it through `URLSearchParams`,
+which encodes the `+` of the zone offset.
+
+**A pgTAP assertion pins the premise.** `018` now asserts that the two rows one comment writes
+share a `created_at` exactly, and that the index carries the tiebreaker. Without the first,
+the `id` half of the cursor reads as superstition and the next person to touch this removes it.
+
+**Ratings are collapsed across every page loaded, not per page.** A run of ratings on one
+debate does not respect a page boundary, so folding per page would show that debate as two
+events with two counts — worse than not folding at all, because it reads as two things having
+happened. The page therefore keeps the raw rows and re-renders the whole list on each append.
+The consequence is that a count further up can grow as somebody reads downward: the correct
+number arriving late, which is the cheaper of the two surprises.
+
+**A button rather than infinite scroll.** This is a record people read backwards looking for
+something, and a list that grows as you approach the end takes the scrollbar — the only honest
+indication of how much is left — and makes it lie. The button also lives outside the list, so
+re-rendering does not destroy the element focus is on; when the last page arrives it hides
+itself and focus moves to the line that replaces it, rather than being left on a hidden
+element with nowhere to go.

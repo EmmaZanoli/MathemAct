@@ -254,6 +254,8 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
 </section>
 
 <script>
+  import { countUnread } from '../lib/activity';
+  import { setActivityHint } from '../lib/activity-hint';
   import { createCitation } from '../lib/citations';
   import {
     deleteComment,
@@ -350,6 +352,13 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       if (viewerId === state.userId) return;
       viewerId = state.userId;
       void open(state.userId);
+
+      // The only place outside /account/ that refreshes the notification count, and the
+      // reason it is worth doing here: a report or debate page is where a signed-in person
+      // actually spends time, and this page has already paid for the Supabase client. The
+      // listings have not and never will, so without this the header's badge would only
+      // ever update on a visit to the profile. One head count, no rows.
+      void countUnread(state.userId).then(setActivityHint);
     });
 
     void startSession();
