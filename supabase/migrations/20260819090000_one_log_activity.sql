@@ -25,11 +25,13 @@
 -- function, and the old one stays. Before reissuing any function, check what the *latest*
 -- migration touching it left behind, not the one that created it.
 --
--- Two things are fixed here.
+-- Three things are fixed here.
 --
 --   1. The seven-argument overload is dropped, and the eight-argument one is reissued with
 --      the `content_kept` branch it was supposed to get.
---   2. The moderation mapping goes back where 20260818140000 put it. That migration moved it
+--   2. `content_kept` joins the kinds allowed to carry a comment_id, which it needs when the
+--      flag that was dismissed was a flag against a comment.
+--   3. The moderation mapping goes back where 20260818140000 put it. That migration moved it
 --      out of the trigger into private.log_moderation() so that the trigger and
 --      private.backfill_activity() could not drift apart; the flag-led migration then
 --      inlined a new copy into the trigger and left log_moderation() holding the old one.
@@ -188,7 +190,33 @@ revoke all on function private.log_activity(uuid, public.activity_kind, uuid,
                                             timestamptz)
   from public;
 
--- ── 3. One moderation mapping, back where it belongs ────────────────────────────────
+-- ── 3. A kept comment may say which comment ─────────────────────────────────────────
+-- public.activity restricts which kinds may carry a comment_id, because a comment id on an
+-- event that is not about a comment produces a link with a dangling fragment — a page that
+-- looks broken rather than a row that looks wrong. `content_kept` was added to the enum
+-- without being added to that list, and a flag dismissed against a *comment* writes exactly
+-- that row: the author is told their comment was looked at and left alone, and the link
+-- needs the fragment to find it. It is the same shape as `content_hidden`, which is already
+-- in the list for the same reason.
+--
+-- Validated rather than NOT VALID: the rule is being widened, so every existing row already
+-- satisfies it, and there is no history here to protect from a rule it predates.
+
+alter table public.activity drop constraint activity_comment_id_relevant;
+
+alter table public.activity
+  add constraint activity_comment_id_relevant
+    check (
+      comment_id is null
+      or kind in ('commented', 'content_commented', 'comment_reply', 'content_hidden',
+                  'content_unhidden', 'content_kept')
+    );
+
+comment on constraint activity_comment_id_relevant on public.activity is
+  'A comment id belongs only to the events that are about a comment. Anything else would '
+  'render as a link with a dangling fragment.';
+
+-- ── 4. One moderation mapping, back where it belongs ────────────────────────────────
 -- private.log_moderation() is called by the trigger on public.moderation_actions and by
 -- private.backfill_activity(). The flag-led migration inlined its own copy into the trigger
 -- and left this one describing the world before post-moderation, which is a slow way to be
