@@ -88,6 +88,9 @@ import { path } from '../../lib/paths';
         one is told what you wrote.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
+      <p class="queue__more" data-more hidden>
+        <button class="button button--quiet" data-load-more="flags">Load 20 more flags</button>
+      </p>
       <p class="queue__empty" data-empty hidden>No open flags.</p>
     </section>
 
@@ -98,7 +101,39 @@ import { path } from '../../lib/paths';
         entry — editable by them while it stays hidden. Unhiding publishes it again, and
         needs a sentence too: the author is told either way.
       </p>
-      <ol class="queue__list" data-list role="list"></ol>
+
+      <div data-subsection="hidden-reports" hidden>
+        <h3 class="queue__subhead">Reports</h3>
+        <ol class="queue__list" data-list role="list"></ol>
+        <p class="queue__more" data-more hidden>
+          <button class="button button--quiet" data-load-more="hidden-reports">Load 20 more reports</button>
+        </p>
+      </div>
+
+      <div data-subsection="hidden-debates" hidden>
+        <h3 class="queue__subhead">Debates</h3>
+        <ol class="queue__list" data-list role="list"></ol>
+        <p class="queue__more" data-more hidden>
+          <button class="button button--quiet" data-load-more="hidden-debates">Load 20 more debates</button>
+        </p>
+      </div>
+
+      <div data-subsection="hidden-comments" hidden>
+        <h3 class="queue__subhead">Comments</h3>
+        <ol class="queue__list" data-list role="list"></ol>
+        <p class="queue__more" data-more hidden>
+          <button class="button button--quiet" data-load-more="hidden-comments">Load 20 more comments</button>
+        </p>
+      </div>
+
+      <div data-subsection="hidden-entries" hidden>
+        <h3 class="queue__subhead">Network entries</h3>
+        <ol class="queue__list" data-list role="list"></ol>
+        <p class="queue__more" data-more hidden>
+          <button class="button button--quiet" data-load-more="hidden-entries">Load 20 more entries</button>
+        </p>
+      </div>
+
       <p class="queue__empty" data-empty hidden>Nothing is hidden.</p>
     </section>
 
@@ -110,6 +145,9 @@ import { path } from '../../lib/paths';
         cannot be undone and the log will not record whose account it was.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
+      <p class="queue__more" data-more hidden>
+        <button class="button button--quiet" data-load-more="erasures">Load 20 more requests</button>
+      </p>
       <p class="queue__empty" data-empty hidden>No standing requests.</p>
     </section>
   </div>
@@ -272,9 +310,13 @@ import { path } from '../../lib/paths';
     act,
     fixturesActive,
     loadQueues,
+    loadMoreFlags,
+    loadMoreHidden,
+    loadMoreErasures,
     loadRole,
     moderates,
     NEEDS_REASON,
+    QUEUE_PAGE_SIZE,
   } from '../../lib/moderation';
   import { setModHint, clearModHint } from '../../lib/mod-hint';
   import type {
@@ -331,12 +373,31 @@ import { path } from '../../lib/paths';
     opened = true;
     notFound.hidden = true;
     screen.hidden = false;
+    wireLoadMore();
     void fill();
   }
+
+  // ── Per-section offsets, reset by fill() and advanced by load-more handlers ────────
+
+  let flagsOffset = 0;
+  let flagsShown = 0;
+  let hiddenOffset = 0;
+  let hiddenReportsShown = 0;
+  let hiddenDebatesShown = 0;
+  let hiddenCommentsShown = 0;
+  let hiddenEntriesShown = 0;
+  let erasuresOffset = 0;
+  let erasuresShown = 0;
 
   // ── Filling the queues ──────────────────────────────────────────────────────────────
 
   async function fill(): Promise<void> {
+    flagsOffset = 0; flagsShown = 0;
+    hiddenOffset = 0;
+    hiddenReportsShown = 0; hiddenDebatesShown = 0;
+    hiddenCommentsShown = 0; hiddenEntriesShown = 0;
+    erasuresOffset = 0; erasuresShown = 0;
+
     const result = await loadQueues(role);
 
     if (!result.ok) {
@@ -344,50 +405,182 @@ import { path } from '../../lib/paths';
       return;
     }
 
-    const queues = result.value;
+    const q = result.value;
 
-    section('flags', queues.flags, flagItem);
-    section(
-      'hidden',
-      [
-        ...queues.hiddenReports.map((row) => ({ kind: 'report' as const, row })),
-        ...queues.hiddenDebates.map((row) => ({ kind: 'debate' as const, row })),
-        ...queues.hiddenComments.map((row) => ({ kind: 'comment' as const, row })),
-        ...queues.hiddenEntries.map((row) => ({ kind: 'entry' as const, row })),
-      ],
-      hiddenItem,
-    );
+    flagsShown = q.flags.length;
+    fillSection('flags', q.flags, flagItem, q.flagsHasMore);
 
-    const erasures = query<HTMLElement>('[data-section="erasures"]');
-    erasures.hidden = role !== 'admin';
-    if (role === 'admin') section('erasures', queues.erasures, erasureItem);
+    hiddenReportsShown = q.hiddenReports.length;
+    hiddenDebatesShown = q.hiddenDebates.length;
+    hiddenCommentsShown = q.hiddenComments.length;
+    hiddenEntriesShown = q.hiddenEntries.length;
+    fillSubsection('hidden-reports', q.hiddenReports, (row) => hiddenItem({ kind: 'report', row }), q.hiddenReportsHasMore);
+    fillSubsection('hidden-debates', q.hiddenDebates, (row) => hiddenItem({ kind: 'debate', row }), q.hiddenDebatesHasMore);
+    fillSubsection('hidden-comments', q.hiddenComments, (row) => hiddenItem({ kind: 'comment', row }), q.hiddenCommentsHasMore);
+    fillSubsection('hidden-entries', q.hiddenEntries, (row) => hiddenItem({ kind: 'entry', row }), q.hiddenEntriesHasMore);
+    updateHiddenSection();
 
-    const hidden =
-      queues.hiddenReports.length +
-      queues.hiddenDebates.length +
-      queues.hiddenComments.length +
-      queues.hiddenEntries.length;
+    const erasureSection = query<HTMLElement>('[data-section="erasures"]');
+    erasureSection.hidden = role !== 'admin';
+    if (role === 'admin') {
+      erasuresShown = q.erasures.length;
+      fillSection('erasures', q.erasures, erasureItem, q.erasuresHasMore);
+    }
 
-    tally.textContent =
-      queues.flags.length === 0
-        ? `No open flags · ${hidden} hidden`
-        : `${queues.flags.length} open ${queues.flags.length === 1 ? 'flag' : 'flags'} · ` +
-          `${hidden} hidden`;
+    updateTally();
   }
 
-  function section<T>(
+  function updateTally(): void {
+    const hiddenTotal = hiddenReportsShown + hiddenDebatesShown + hiddenCommentsShown + hiddenEntriesShown;
+    const hiddenHasMore =
+      !query<HTMLElement>('[data-subsection="hidden-reports"] [data-more]').hidden ||
+      !query<HTMLElement>('[data-subsection="hidden-debates"] [data-more]').hidden ||
+      !query<HTMLElement>('[data-subsection="hidden-comments"] [data-more]').hidden ||
+      !query<HTMLElement>('[data-subsection="hidden-entries"] [data-more]').hidden;
+
+    const flagsHasMore = !query<HTMLElement>('[data-section="flags"] [data-more]').hidden;
+    const flagLabel = `${flagsShown}${flagsHasMore ? '+' : ''} open ${flagsShown === 1 && !flagsHasMore ? 'flag' : 'flags'}`;
+    const hiddenLabel = `${hiddenTotal}${hiddenHasMore ? '+' : ''} hidden`;
+
+    tally.textContent = flagsShown === 0 && !flagsHasMore
+      ? `No open flags · ${hiddenLabel}`
+      : `${flagLabel} · ${hiddenLabel}`;
+  }
+
+  // Replace a section's list entirely (used by fill).
+  function fillSection<T>(
     name: string,
     rows: readonly T[],
     build: (row: T) => HTMLElement,
+    hasMore: boolean,
   ): void {
     const root = query<HTMLElement>(`[data-section="${name}"]`);
     const list = query<HTMLElement>('[data-list]', root);
     const empty = query<HTMLElement>('[data-empty]', root);
     const count = query<HTMLElement>('[data-count]', root);
+    const more = root.querySelector<HTMLElement>('[data-more]');
 
     list.replaceChildren(...rows.map(build));
     empty.hidden = rows.length > 0;
-    count.textContent = rows.length ? String(rows.length) : '';
+    count.textContent = rows.length ? `${rows.length}${hasMore ? '+' : ''}` : '';
+    if (more) more.hidden = !hasMore;
+  }
+
+  // Replace a sub-section's list entirely (used by fill for hidden types).
+  function fillSubsection<T>(
+    name: string,
+    rows: readonly T[],
+    build: (row: T) => HTMLElement,
+    hasMore: boolean,
+  ): void {
+    const root = query<HTMLElement>(`[data-subsection="${name}"]`);
+    const list = query<HTMLElement>('[data-list]', root);
+    const more = query<HTMLElement>('[data-more]', root);
+
+    root.hidden = rows.length === 0;
+    list.replaceChildren(...rows.map(build));
+    more.hidden = !hasMore;
+  }
+
+  // Append to a section's list (used by load-more handlers).
+  function appendSection<T>(
+    name: string,
+    rows: readonly T[],
+    build: (row: T) => HTMLElement,
+    newTotal: number,
+    hasMore: boolean,
+  ): void {
+    const root = query<HTMLElement>(`[data-section="${name}"]`);
+    const list = query<HTMLElement>('[data-list]', root);
+    const count = query<HTMLElement>('[data-count]', root);
+    const more = root.querySelector<HTMLElement>('[data-more]');
+
+    list.append(...rows.map(build));
+    count.textContent = `${newTotal}${hasMore ? '+' : ''}`;
+    if (more) more.hidden = !hasMore;
+  }
+
+  // Append to a hidden sub-section's list (used by load-more handler for hidden).
+  function appendSubsection<T>(
+    name: string,
+    rows: readonly T[],
+    build: (row: T) => HTMLElement,
+    hasMore: boolean,
+  ): void {
+    if (!rows.length && !hasMore) return;
+    const root = query<HTMLElement>(`[data-subsection="${name}"]`);
+    const list = query<HTMLElement>('[data-list]', root);
+    const more = query<HTMLElement>('[data-more]', root);
+
+    root.hidden = false;
+    list.append(...rows.map(build));
+    more.hidden = !hasMore;
+  }
+
+  // Recompute the hidden section's heading count and empty state.
+  function updateHiddenSection(): void {
+    const hiddenSection = query<HTMLElement>('[data-section="hidden"]');
+    const count = query<HTMLElement>('[data-count]', hiddenSection);
+    const empty = query<HTMLElement>('[data-empty]', hiddenSection);
+
+    const total = hiddenReportsShown + hiddenDebatesShown + hiddenCommentsShown + hiddenEntriesShown;
+    const hasMore =
+      !query<HTMLElement>('[data-subsection="hidden-reports"] [data-more]').hidden ||
+      !query<HTMLElement>('[data-subsection="hidden-debates"] [data-more]').hidden ||
+      !query<HTMLElement>('[data-subsection="hidden-comments"] [data-more]').hidden ||
+      !query<HTMLElement>('[data-subsection="hidden-entries"] [data-more]').hidden;
+
+    count.textContent = total ? `${total}${hasMore ? '+' : ''}` : '';
+    empty.hidden = total > 0;
+  }
+
+  // ── Wiring load-more buttons ─────────────────────────────────────────────────────────
+
+  function wireLoadMore(): void {
+    for (const btn of screen.querySelectorAll<HTMLButtonElement>('[data-load-more]')) {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        await handleLoadMore(btn.dataset.loadMore ?? '');
+        btn.disabled = false;
+      });
+    }
+  }
+
+  async function handleLoadMore(target: string): Promise<void> {
+    hideStatus(status);
+
+    if (target === 'flags') {
+      flagsOffset += QUEUE_PAGE_SIZE;
+      const result = await loadMoreFlags(flagsOffset);
+      if (!result.ok) { showStatus(status, 'error', result.message); flagsOffset -= QUEUE_PAGE_SIZE; return; }
+      flagsShown += result.value.flags.length;
+      appendSection('flags', result.value.flags, flagItem, flagsShown, result.value.flagsHasMore);
+
+    } else if (target === 'hidden-reports' || target === 'hidden-debates' || target === 'hidden-comments' || target === 'hidden-entries') {
+      hiddenOffset += QUEUE_PAGE_SIZE;
+      const result = await loadMoreHidden(hiddenOffset);
+      if (!result.ok) { showStatus(status, 'error', result.message); hiddenOffset -= QUEUE_PAGE_SIZE; return; }
+
+      const v = result.value;
+      hiddenReportsShown += v.hiddenReports.length;
+      hiddenDebatesShown += v.hiddenDebates.length;
+      hiddenCommentsShown += v.hiddenComments.length;
+      hiddenEntriesShown += v.hiddenEntries.length;
+      appendSubsection('hidden-reports', v.hiddenReports, (row) => hiddenItem({ kind: 'report', row }), v.hiddenReportsHasMore);
+      appendSubsection('hidden-debates', v.hiddenDebates, (row) => hiddenItem({ kind: 'debate', row }), v.hiddenDebatesHasMore);
+      appendSubsection('hidden-comments', v.hiddenComments, (row) => hiddenItem({ kind: 'comment', row }), v.hiddenCommentsHasMore);
+      appendSubsection('hidden-entries', v.hiddenEntries, (row) => hiddenItem({ kind: 'entry', row }), v.hiddenEntriesHasMore);
+      updateHiddenSection();
+
+    } else if (target === 'erasures') {
+      erasuresOffset += QUEUE_PAGE_SIZE;
+      const result = await loadMoreErasures(erasuresOffset);
+      if (!result.ok) { showStatus(status, 'error', result.message); erasuresOffset -= QUEUE_PAGE_SIZE; return; }
+      erasuresShown += result.value.erasures.length;
+      appendSection('erasures', result.value.erasures, erasureItem, erasuresShown, result.value.erasuresHasMore);
+    }
+
+    updateTally();
   }
 
   function clone(name: string): HTMLElement {
@@ -797,6 +990,19 @@ import { path } from '../../lib/paths';
     margin-block-start: var(--space-sm);
     font-size: var(--size-2);
     color: var(--ink-muted);
+  }
+
+  .queue__subhead {
+    margin-block-start: var(--space-xl);
+    padding-block-end: var(--space-2xs);
+    border-block-end: var(--border);
+    font-size: var(--size-3);
+    font-weight: var(--weight-semibold);
+    color: var(--ink-muted);
+  }
+
+  .queue__more {
+    margin-block-start: var(--space-md);
   }
 
   .queue__list {

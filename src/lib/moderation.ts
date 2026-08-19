@@ -191,14 +191,23 @@ export interface QueueErasure {
   readonly commentCount: number;
 }
 
-export interface Queues {
+/** How many items each queue section loads at a time. */
+export const QUEUE_PAGE_SIZE = 20;
+
+export interface QueuePage {
   readonly flags: readonly QueueFlag[];
+  readonly flagsHasMore: boolean;
   readonly hiddenReports: readonly QueueReport[];
+  readonly hiddenReportsHasMore: boolean;
   readonly hiddenDebates: readonly QueueDebate[];
+  readonly hiddenDebatesHasMore: boolean;
   readonly hiddenComments: readonly QueueComment[];
+  readonly hiddenCommentsHasMore: boolean;
   readonly hiddenEntries: readonly QueueEntry[];
+  readonly hiddenEntriesHasMore: boolean;
   /** Empty for a moderator: erasure is an account action and only admins see it. */
   readonly erasures: readonly QueueErasure[];
+  readonly erasuresHasMore: boolean;
 }
 
 // ── Reading the queues ────────────────────────────────────────────────────────────────
@@ -335,15 +344,14 @@ function toEntry(row: any): QueueEntry {
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 /**
- * Everything waiting, in one round of queries.
+ * First page of every queue section, loaded in parallel.
  *
- * Deliberately not one query per queue in sequence: a moderator opening this page is about
- * to read carefully, and the point of loading the hidden list beside the flags is that a
- * decision taken last week is visible while this week's is being taken. Nothing here is
- * paginated yet, which is the right trade while the corpus is small and the wrong one later;
- * the note is in docs/moderation.md rather than in a TODO nobody reads.
+ * Each section is capped at QUEUE_PAGE_SIZE items; the *HasMore flags signal when there
+ * is more to fetch. Use loadMoreFlags / loadMoreHidden / loadMoreErasures for subsequent
+ * pages — those functions make only the queries they need, whereas this one makes all of
+ * them, which is the right trade on the initial load (the page is blank until they settle).
  */
-export async function loadQueues(role: Role): Promise<Result<Queues>> {
+export async function loadQueues(role: Role): Promise<Result<QueuePage>> {
   if (import.meta.env.DEV && usingFixtures()) return { ok: true, value: FIXTURES };
 
   const supabase = getSupabase();
@@ -359,29 +367,34 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
           )
           .eq('status', 'open')
           // Oldest first: the flag that has waited longest is the one to answer next.
-          .order('created_at', { ascending: true }),
+          .order('created_at', { ascending: true })
+          .range(0, QUEUE_PAGE_SIZE),
         supabase
           .from('reports')
           .select(REPORT_COLUMNS)
           .eq('status', 'hidden')
           .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .range(0, QUEUE_PAGE_SIZE),
         supabase
           .from('debates')
           .select(DEBATE_COLUMNS)
           .eq('status', 'hidden')
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .range(0, QUEUE_PAGE_SIZE),
         supabase
           .from('comments')
           .select(COMMENT_COLUMNS)
           .eq('status', 'hidden')
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .range(0, QUEUE_PAGE_SIZE),
         supabase
           .from('network_entries')
           .select(NETWORK_COLUMNS)
           .eq('status', 'hidden')
           .is('deleted_at', null)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .range(0, QUEUE_PAGE_SIZE),
       ]);
 
     const failed = [
@@ -394,18 +407,213 @@ export async function loadQueues(role: Role): Promise<Result<Queues>> {
 
     if (failed?.error) return { ok: false, message: describe(failed.error) };
 
-    const raters = await countRaters(hiddenDebates.data ?? []);
+    // .range(0, N) fetches N+1 rows. If we got N+1, there are more.
+    const flagsData = flags.data ?? [];
+    const reportsData = hiddenReports.data ?? [];
+    const debatesData = hiddenDebates.data ?? [];
+    const commentsData = hiddenComments.data ?? [];
+    const entriesData = hiddenEntries.data ?? [];
 
-    const value: Queues = {
-      flags: await withSubjects(flags.data ?? []),
-      hiddenReports: (hiddenReports.data ?? []).map(toReport),
-      hiddenDebates: (hiddenDebates.data ?? []).map((row) => toDebate(row, raters)),
-      hiddenComments: (hiddenComments.data ?? []).map(toComment),
-      hiddenEntries: (hiddenEntries.data ?? []).map(toEntry),
-      erasures: role === 'admin' ? await loadErasures() : [],
+    const flagsHasMore = flagsData.length > QUEUE_PAGE_SIZE;
+    const reportsHasMore = reportsData.length > QUEUE_PAGE_SIZE;
+    const debatesHasMore = debatesData.length > QUEUE_PAGE_SIZE;
+    const commentsHasMore = commentsData.length > QUEUE_PAGE_SIZE;
+    const entriesHasMore = entriesData.length > QUEUE_PAGE_SIZE;
+
+    const flagsPage = flagsHasMore ? flagsData.slice(0, QUEUE_PAGE_SIZE) : flagsData;
+    const reportsPage = reportsHasMore ? reportsData.slice(0, QUEUE_PAGE_SIZE) : reportsData;
+    const debatesPage = debatesHasMore ? debatesData.slice(0, QUEUE_PAGE_SIZE) : debatesData;
+    const commentsPage = commentsHasMore ? commentsData.slice(0, QUEUE_PAGE_SIZE) : commentsData;
+    const entriesPage = entriesHasMore ? entriesData.slice(0, QUEUE_PAGE_SIZE) : entriesData;
+
+    const raters = await countRaters(debatesPage);
+    const { erasures, hasMore: erasuresHasMore } =
+      role === 'admin' ? await loadErasures(0) : { erasures: [], hasMore: false };
+
+    const value: QueuePage = {
+      flags: await withSubjects(flagsPage),
+      flagsHasMore,
+      hiddenReports: reportsPage.map(toReport),
+      hiddenReportsHasMore: reportsHasMore,
+      hiddenDebates: debatesPage.map((row) => toDebate(row, raters)),
+      hiddenDebatesHasMore: debatesHasMore,
+      hiddenComments: commentsPage.map(toComment),
+      hiddenCommentsHasMore: commentsHasMore,
+      hiddenEntries: entriesPage.map(toEntry),
+      hiddenEntriesHasMore: entriesHasMore,
+      erasures,
+      erasuresHasMore,
     };
 
     return { ok: true, value };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/**
+ * Next page of open flags, starting at `offset`.
+ *
+ * Called by the "load more" button in the flags section after the first page is already
+ * shown. Does not touch hidden items or erasures.
+ */
+export async function loadMoreFlags(
+  offset: number,
+): Promise<Result<{ flags: readonly QueueFlag[]; flagsHasMore: boolean }>> {
+  if (import.meta.env.DEV && usingFixtures())
+    return { ok: true, value: { flags: [], flagsHasMore: false } };
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('flags')
+      .select(
+        `id,subject_type,subject_id,reason,detail,created_at,flagger:profiles!flags_flagger_id_fkey(${AUTHOR_COLUMNS})`,
+      )
+      .eq('status', 'open')
+      .order('created_at', { ascending: true })
+      .range(offset, offset + QUEUE_PAGE_SIZE);
+
+    if (error) return { ok: false, message: describe(error) };
+
+    const flagsData = data ?? [];
+    const flagsHasMore = flagsData.length > QUEUE_PAGE_SIZE;
+    return {
+      ok: true,
+      value: {
+        flags: await withSubjects(flagsHasMore ? flagsData.slice(0, QUEUE_PAGE_SIZE) : flagsData),
+        flagsHasMore,
+      },
+    };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/**
+ * Next page of hidden content across all four content types, starting at `offset`.
+ *
+ * All four types advance together with one shared offset. In practice most sites will
+ * overflow only one type at a time, so the other three queries return empty quickly.
+ */
+export async function loadMoreHidden(offset: number): Promise<
+  Result<{
+    hiddenReports: readonly QueueReport[];
+    hiddenReportsHasMore: boolean;
+    hiddenDebates: readonly QueueDebate[];
+    hiddenDebatesHasMore: boolean;
+    hiddenComments: readonly QueueComment[];
+    hiddenCommentsHasMore: boolean;
+    hiddenEntries: readonly QueueEntry[];
+    hiddenEntriesHasMore: boolean;
+  }>
+> {
+  if (import.meta.env.DEV && usingFixtures())
+    return {
+      ok: true,
+      value: {
+        hiddenReports: [],
+        hiddenReportsHasMore: false,
+        hiddenDebates: [],
+        hiddenDebatesHasMore: false,
+        hiddenComments: [],
+        hiddenCommentsHasMore: false,
+        hiddenEntries: [],
+        hiddenEntriesHasMore: false,
+      },
+    };
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const [reportsRes, debatesRes, commentsRes, entriesRes] = await Promise.all([
+      supabase
+        .from('reports')
+        .select(REPORT_COLUMNS)
+        .eq('status', 'hidden')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + QUEUE_PAGE_SIZE),
+      supabase
+        .from('debates')
+        .select(DEBATE_COLUMNS)
+        .eq('status', 'hidden')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + QUEUE_PAGE_SIZE),
+      supabase
+        .from('comments')
+        .select(COMMENT_COLUMNS)
+        .eq('status', 'hidden')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + QUEUE_PAGE_SIZE),
+      supabase
+        .from('network_entries')
+        .select(NETWORK_COLUMNS)
+        .eq('status', 'hidden')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + QUEUE_PAGE_SIZE),
+    ]);
+
+    const failed = [reportsRes, debatesRes, commentsRes, entriesRes].find((r) => r.error);
+    if (failed?.error) return { ok: false, message: describe(failed.error) };
+
+    const reportsData = reportsRes.data ?? [];
+    const debatesData = debatesRes.data ?? [];
+    const commentsData = commentsRes.data ?? [];
+    const entriesData = entriesRes.data ?? [];
+
+    const reportsHasMore = reportsData.length > QUEUE_PAGE_SIZE;
+    const debatesHasMore = debatesData.length > QUEUE_PAGE_SIZE;
+    const commentsHasMore = commentsData.length > QUEUE_PAGE_SIZE;
+    const entriesHasMore = entriesData.length > QUEUE_PAGE_SIZE;
+
+    const debatesPage = debatesHasMore ? debatesData.slice(0, QUEUE_PAGE_SIZE) : debatesData;
+    const raters = await countRaters(debatesPage);
+
+    return {
+      ok: true,
+      value: {
+        hiddenReports: (reportsHasMore ? reportsData.slice(0, QUEUE_PAGE_SIZE) : reportsData).map(
+          toReport,
+        ),
+        hiddenReportsHasMore: reportsHasMore,
+        hiddenDebates: debatesPage.map((row) => toDebate(row, raters)),
+        hiddenDebatesHasMore: debatesHasMore,
+        hiddenComments: (commentsHasMore ? commentsData.slice(0, QUEUE_PAGE_SIZE) : commentsData).map(
+          toComment,
+        ),
+        hiddenCommentsHasMore: commentsHasMore,
+        hiddenEntries: (entriesHasMore ? entriesData.slice(0, QUEUE_PAGE_SIZE) : entriesData).map(
+          toEntry,
+        ),
+        hiddenEntriesHasMore: entriesHasMore,
+      },
+    };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/**
+ * Next page of pending erasure requests, starting at `offset`. Admins only — the RLS
+ * policy on deletion_requests returns nothing to a moderator, so the gate is the same one.
+ */
+export async function loadMoreErasures(
+  offset: number,
+): Promise<Result<{ erasures: readonly QueueErasure[]; erasuresHasMore: boolean }>> {
+  if (import.meta.env.DEV && usingFixtures())
+    return { ok: true, value: { erasures: [], erasuresHasMore: false } };
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { erasures, hasMore } = await loadErasures(offset);
+    return { ok: true, value: { erasures, erasuresHasMore: hasMore } };
   } catch (error) {
     return { ok: false, message: describe(error) };
   }
@@ -522,20 +730,26 @@ async function withSubjects(rows: any[]): Promise<QueueFlag[]> {
 /** Standing erasure requests, with the size of what erasing will detach. Admins only: the
  *  policy on public.deletion_requests returns nothing to a moderator, so this is not a
  *  second gate but the same one, stated where a reader of this file will see it. */
-async function loadErasures(): Promise<QueueErasure[]> {
+async function loadErasures(
+  offset: number,
+): Promise<{ erasures: QueueErasure[]; hasMore: boolean }> {
   const supabase = getSupabase();
-  if (!supabase) return [];
+  if (!supabase) return { erasures: [], hasMore: false };
 
   const { data, error } = await supabase
     .from('deletion_requests')
     .select('id,user_id,note,requested_at')
     .eq('status', 'pending')
-    .order('requested_at', { ascending: true });
+    .order('requested_at', { ascending: true })
+    .range(offset, offset + QUEUE_PAGE_SIZE);
 
-  if (error || !data?.length) return [];
+  if (error || !data?.length) return { erasures: [], hasMore: false };
+
+  const hasMore = data.length > QUEUE_PAGE_SIZE;
+  const page = hasMore ? data.slice(0, QUEUE_PAGE_SIZE) : data;
 
   // deletion_requests references auth.users, not profiles, so there is no embed to follow.
-  const ids = data.map((row) => row.user_id as string);
+  const ids = page.map((row) => row.user_id as string);
   const { data: people } = await supabase.from('profiles').select(AUTHOR_COLUMNS).in('id', ids);
 
   const byId = new Map<string, QueueAuthor>();
@@ -544,8 +758,8 @@ async function loadErasures(): Promise<QueueErasure[]> {
     if (author) byId.set(author.id, author);
   }
 
-  return Promise.all(
-    data.map(async (row) => {
+  const erasures = await Promise.all(
+    page.map(async (row) => {
       const userId = row.user_id as string;
 
       const [reports, comments] = await Promise.all([
@@ -569,6 +783,8 @@ async function loadErasures(): Promise<QueueErasure[]> {
       };
     }),
   );
+
+  return { erasures, hasMore };
 }
 
 // ── Acting ────────────────────────────────────────────────────────────────────────────
@@ -790,7 +1006,7 @@ const FLAGGED_REPORT: QueueReport = {
   tags: ['math.NT', 'math.CO'],
 };
 
-const FIXTURES: Queues = {
+const FIXTURES: QueuePage = {
   flags: [
     {
       id: '00000000-0000-4000-b000-000000000001',
@@ -830,6 +1046,8 @@ const FIXTURES: Queues = {
     },
   ],
 
+  flagsHasMore: false,
+
   hiddenReports: [
     {
       id: '00000000-0000-4000-9000-000000000002',
@@ -863,6 +1081,8 @@ const FIXTURES: Queues = {
     },
   ],
 
+  hiddenReportsHasMore: false,
+
   hiddenDebates: [
     {
       id: '00000000-0000-4000-a000-000000000001',
@@ -875,6 +1095,8 @@ const FIXTURES: Queues = {
       ratingCount: 4,
     },
   ],
+
+  hiddenDebatesHasMore: false,
 
   hiddenComments: [
     {
@@ -896,6 +1118,8 @@ const FIXTURES: Queues = {
     },
   ],
 
+  hiddenCommentsHasMore: false,
+
   hiddenEntries: [
     {
       id: '00000000-0000-4000-e000-000000000001',
@@ -910,6 +1134,8 @@ const FIXTURES: Queues = {
       author: HANNA,
     },
   ],
+
+  hiddenEntriesHasMore: false,
 
   erasures: [
     {
@@ -926,4 +1152,5 @@ const FIXTURES: Queues = {
       commentCount: 11,
     },
   ],
+  erasuresHasMore: false,
 };

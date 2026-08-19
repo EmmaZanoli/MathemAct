@@ -292,8 +292,10 @@ asserts all three.
 Honest list, because a runbook that overstates what exists is how a volunteer discovers a gap
 mid-decision.
 
-- **No pagination.** Both queues load in full. Fine at the current size, wrong at a thousand
-  open flags.
+- **No pagination on past decisions.** The flag queue, hidden queue, and erasure queue are all
+  paginated at 20 items per section, with "load more" per section. What is not paginated is
+  the past-decisions view for a moderator: `public.moderation_notices` and
+  `public.moderation_actions` are readable but not shown beside the relevant hidden row.
 - **No notification that leaves the site.** Everything a person is told, they are told here:
   a feed row at `/account/activity/` and the explanation at `/account/#decisions`. What does
   not exist is **mail** — nothing reaches somebody who does not come back to the site. That
