@@ -529,32 +529,189 @@
   /* ── Debates ────────────────────────────────────────────────────────────────────── */
 
   .debate {
-    --shell-width: var(--width-prose);
+    --shell-width: var(--width-shell);
   }
 
   .debate > * + * {
     margin-block-start: var(--space-xl);
   }
 
-  .debate__label {
-    margin-block-end: var(--space-2xs);
+  .debate__hero {
+    padding-block-start: var(--space-sm);
   }
 
-  /* The claim is the page. Serif, large, and quoted — it is a statement being reported
-     rather than the site speaking, and the distinction matters on a site that takes no
-     position on any of them. */
+  .debate__eyebrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    margin-block-end: var(--space-md);
+  }
+
+  .debate__pill {
+    display: inline-flex;
+    padding: var(--space-3xs) var(--space-2xs);
+    border: var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+  }
+
+  .debate__pill--status {
+    border-color: color-mix(in srgb, var(--accent) 25%, var(--rule));
+    background: var(--accent-wash);
+    color: var(--accent-strong);
+  }
+
+  /* The claim is the page. Serif, large — it is a statement being reported rather than the
+     site speaking, and the distinction matters on a site that takes no position on any of
+     them. The visual quote treatment is removed; the blockquote element is kept. */
   .debate__statement {
-    max-width: var(--measure);
     margin: 0;
-    padding-inline-start: var(--space-md);
-    border-inline-start: var(--border-width-thick) solid var(--accent);
+    padding: 0;
+    border: 0;
   }
 
   .debate__statement p {
+    margin: 0;
+    color: var(--accent-strong);
     font-family: var(--font-serif);
-    font-size: var(--size-6);
-    line-height: var(--leading-snug);
-    text-wrap: pretty;
+    font-size: var(--size-7);
+    font-weight: var(--weight-semibold);
+    line-height: var(--leading-tight);
+    letter-spacing: var(--tracking-tight);
+    text-wrap: balance;
+  }
+
+  .debate__meta {
+    display: flex;
+    flex-wrap: wrap;
+    margin: var(--space-sm) 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  .debate__meta li + li::before {
+    content: '·';
+    margin-inline: var(--space-2xs);
+    color: var(--rule);
+  }
+
+  .debate__rationale .field-block__label {
+    margin-block-end: var(--space-2xs);
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-size: var(--size-4);
+    font-weight: var(--weight-semibold);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .debate__rationale .field-block__body {
+    max-width: none;
+    line-height: var(--leading-relaxed);
+  }
+
+  .rate {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .rate > * + * {
+    margin-block-start: 0;
+  }
+
+  .debate-panel {
+    padding: var(--space-lg);
+    border: var(--border);
+    border-radius: calc(var(--radius-md) * 2);
+    background: var(--surface);
+  }
+
+  .debate-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-md);
+    margin-block-end: var(--space-lg);
+  }
+
+  .debate-panel h2 {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: var(--size-5);
+  }
+
+  .debate-section-number {
+    font-family: var(--font-mono);
+    font-weight: var(--weight-normal);
+    color: var(--ink-muted);
+  }
+
+  .debate-explainer {
+    max-width: 20rem;
+    color: var(--accent-strong);
+    font-size: var(--size-1);
+  }
+
+  .debate-explainer summary {
+    cursor: pointer;
+  }
+
+  .debate-explainer p {
+    margin-block-start: var(--space-xs);
+    color: var(--ink-muted);
+  }
+
+  /* Override the narrow max-widths that forms.css applies to .form, .panel, and
+     .form-status — inside the vote panel everything should span the full card width. */
+  .debate-panel--vote .form,
+  .debate-panel--vote .form fieldset,
+  .debate-panel--vote .panel,
+  .debate-panel--vote .form-status {
+    max-width: none;
+  }
+
+
+  .rate__actions {
+    justify-content: flex-end;
+    margin-block-start: var(--space-md);
+  }
+
+  .results-placeholder {
+    margin-block-start: var(--space-md);
+    padding: var(--space-lg);
+    border: var(--border);
+    border-radius: var(--radius-md);
+    background: var(--ground);
+    text-align: center;
+  }
+
+  .results-placeholder p {
+    max-width: var(--measure);
+    margin: var(--space-2xs) auto 0;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  @media (max-width: 42rem) {
+    .debate__statement p {
+      font-size: var(--size-6);
+    }
+
+    .debate-panel {
+      padding: var(--space-md);
+    }
+
+    .debate-section-head {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 
   .debate-list {
@@ -588,21 +745,6 @@
 
   .debate-item__facts {
     margin-block-start: var(--space-2xs);
-  }
-
-  .rate > * + * {
-    margin-block-start: var(--space-lg);
-  }
-
-  /* The one sentence that says why the distribution is not on screen yet. A rule and a
-     surface rather than a colour: it is an explanation, not a warning. */
-  .rate__withheld {
-    max-width: var(--measure);
-    padding: var(--space-sm) var(--space-md);
-    border-inline-start: var(--border-width-thick) solid var(--rule);
-    background-color: var(--surface);
-    color: var(--ink-muted);
-    font-size: var(--size-2);
   }
 
   /* ── Debate guidance ────────────────────────────────────────────────────────────── */
@@ -941,6 +1083,51 @@
      control ended up floating in the middle of the strip looking like a call to action. */
   .quote-strip .link-button {
     justify-self: start;
+  }
+
+  /* ── Debate-scoped thread overrides ─────────────────────────────────────────────── */
+  /* CommentThread is shared; these rules narrow the generic .thread styles to the debate
+     page only, rather than changing the component globally. */
+
+  .debate .thread {
+    max-width: none;
+    margin-block-start: var(--space-xl);
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+
+  .debate .thread__head {
+    justify-content: space-between;
+    margin-block-end: var(--space-md);
+  }
+
+  .debate .thread__head h2::before {
+    content: '3. ';
+    font-family: var(--font-mono);
+    font-weight: var(--weight-normal);
+    color: var(--ink-muted);
+  }
+
+  .debate .thread__list {
+    gap: var(--space-md);
+  }
+
+  .debate .comment {
+    padding: var(--space-md);
+    border: var(--border);
+    border-radius: calc(var(--radius-md) * 2);
+    background: var(--surface);
+  }
+
+  .debate .comment__body {
+    margin-block-start: var(--space-xs);
+  }
+
+  .debate .composer {
+    padding: var(--space-md);
+    border: var(--border);
+    border-radius: calc(var(--radius-md) * 2);
+    background: var(--surface);
   }
 }
 

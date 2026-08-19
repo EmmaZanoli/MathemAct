@@ -77,11 +77,14 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     </div>
   </dl>
 
-  <p class="histogram__note">
-    No average is shown, and none is computed. On an eleven-point scale a mean reports mild
-    agreement for a community that has split into two camps, which is the case this corpus
-    exists to make visible rather than to smooth over.
-  </p>
+  <details class="histogram__why">
+    <summary>Why isn't an average shown?</summary>
+    <p class="histogram__note">
+      An average can hide disagreement and polarisation. We show the
+      complete distribution so that a divided community still looks
+      divided.
+    </p>
+  </details>
 </div>
 
 <style>
@@ -94,14 +97,17 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
   .histogram__plot {
     display: grid;
     grid-template-columns: repeat(11, minmax(0, 1fr));
-    gap: var(--space-3xs);
+    gap: var(--space-2xs);
+    padding-block-start: var(--space-sm);
+    border-block-end: var(--border);
   }
 
   .histogram__col {
+    position: relative;
     display: grid;
     /* you · count · bar · tick · anchor · median. Fixed rows so every column's tick sits on
        the same line however tall its bar is. */
-    grid-template-rows: 1.2em 1.2em 8rem auto 2.4em 1.2em;
+    grid-template-rows: 1.5rem 1.25rem 10rem auto 2.4rem 1.4rem;
     gap: var(--space-3xs);
     justify-items: center;
     text-align: center;
@@ -139,18 +145,26 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
 
   .histogram__bar {
     align-self: end;
-    width: 100%;
+    width: 55%;
     height: var(--height);
     min-height: 2px;
-    background-color: var(--accent);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: color-mix(in srgb, var(--accent) 42%, var(--surface));
   }
 
-  /* The reader's own answer. A thicker ink outline as well as the word above it — the
-     colour is the same accent as every other bar on purpose, because a second colour here
-     would be a fourth meaning for colour on a site that has already spent three. */
+  /* The reader's own answer: a dashed vertical line through the column and the word "you"
+     above it. The outline is removed in favour of the line so the bar stays the same tint. */
+  .histogram__col[data-mine]::after {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    bottom: 3.8rem;
+    left: 50%;
+    border-inline-start: 1px dashed var(--accent-strong);
+  }
+
   .histogram__col[data-mine] .histogram__bar {
-    outline: var(--border-width-thick) solid var(--ink);
-    outline-offset: 1px;
+    outline: none;
   }
 
   .histogram__you,
@@ -161,8 +175,15 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
   }
 
   .histogram__you {
-    color: var(--ink);
+    color: var(--accent-strong);
+    font-family: var(--font-sans);
     font-weight: var(--weight-semibold);
+  }
+
+  .histogram__you::before {
+    content: '◆';
+    display: block;
+    font-size: var(--size-0);
   }
 
   .histogram__median {
@@ -193,11 +214,22 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
 
   .histogram__counts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-    gap: var(--space-sm);
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
     margin: 0;
-    padding-block-start: var(--space-sm);
-    border-block-start: var(--border);
+    padding: 0;
+    overflow: hidden;
+    border: var(--border);
+    border-radius: calc(var(--radius-md) * 2);
+  }
+
+  .histogram__counts > div {
+    padding: var(--space-sm);
+    text-align: center;
+  }
+
+  .histogram__counts > div + div {
+    border-inline-start: var(--border);
   }
 
   .histogram__counts dt {
@@ -209,14 +241,25 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
   }
 
   .histogram__counts dd {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--size-4);
+    margin-block-start: var(--space-3xs);
+    margin-inline-start: 0;
+    font-family: var(--font-serif);
+    font-size: var(--size-5);
+    font-weight: var(--weight-semibold);
+  }
+
+  .histogram__why {
+    font-size: var(--size-2);
+    color: var(--ink-muted);
+  }
+
+  .histogram__why summary {
+    cursor: pointer;
+    color: var(--accent-strong);
   }
 
   .histogram__note {
-    max-width: var(--measure);
+    margin-block-start: var(--space-2xs);
     color: var(--ink-muted);
-    font-size: var(--size-2);
   }
 </style>
