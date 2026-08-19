@@ -86,6 +86,21 @@ export interface QueueAuthor {
   readonly displayName: string;
   readonly isPseudonym: boolean;
   readonly institution: { readonly name: string; readonly country: string } | null;
+  /**
+   * Whether this account is banned already.
+   *
+   * On the moderation screen only, and it decides two things: the row says so beside the name,
+   * and the "Ban that account" button is removed rather than offered and refused. Without it a
+   * moderator answering a flag cannot tell that the author is already banned — which is
+   * precisely the context where it matters — and every flag row offered a control that
+   * `public.moderate()` would turn down.
+   *
+   * It is **not** in the export and must not be: `scripts/export.mjs` refuses
+   * `profiles.is_banned` alongside `profiles.role`, because a public list of banned accounts is
+   * a punishment nobody agreed to. Nothing built from `data/` knows this, and no page a reader
+   * sees renders it.
+   */
+  readonly isBanned: boolean;
 }
 
 export interface QueueTool {
@@ -242,7 +257,7 @@ export interface QueuePage {
 // ── Reading the queues ────────────────────────────────────────────────────────────────
 
 const AUTHOR_COLUMNS =
-  'id,display_name,is_pseudonym,institution_name,institution_country';
+  'id,display_name,is_pseudonym,institution_name,institution_country,is_banned';
 
 const REPORT_COLUMNS = [
   'id,status,title,area,task_type,aim,method,outcome,outcome_notes,verification',
@@ -274,6 +289,7 @@ interface RawAuthor {
   is_pseudonym: boolean;
   institution_name: string | null;
   institution_country: string | null;
+  is_banned: boolean;
 }
 
 function toAuthor(row: RawAuthor | null | undefined): QueueAuthor | null {
@@ -287,6 +303,7 @@ function toAuthor(row: RawAuthor | null | undefined): QueueAuthor | null {
       row.institution_name && row.institution_country
         ? { name: row.institution_name, country: row.institution_country }
         : null,
+    isBanned: row.is_banned,
   };
 }
 
@@ -842,7 +859,6 @@ const ACCOUNT_COLUMNS =
 
 interface RawAccount extends RawAuthor {
   role: string;
-  is_banned: boolean;
   created_at: string;
 }
 
@@ -1135,6 +1151,7 @@ const HANNA: QueueAuthor = {
   displayName: 'Hanna Lindqvist',
   isPseudonym: false,
   institution: { name: 'Uppsala universitet', country: 'SE' },
+  isBanned: false,
 };
 
 const CATEGORY_OF_ONE: QueueAuthor = {
@@ -1142,6 +1159,7 @@ const CATEGORY_OF_ONE: QueueAuthor = {
   displayName: 'category_of_one',
   isPseudonym: true,
   institution: null,
+  isBanned: false,
 };
 
 const TOMAS: QueueAuthor = {
@@ -1149,6 +1167,7 @@ const TOMAS: QueueAuthor = {
   displayName: 'Tomáš Brázda',
   isPseudonym: false,
   institution: { name: 'Univerzita Karlova', country: 'CZ' },
+  isBanned: false,
 };
 
 const NOOR: QueueAuthor = {
@@ -1156,6 +1175,7 @@ const NOOR: QueueAuthor = {
   displayName: 'Noor Haddad',
   isPseudonym: false,
   institution: { name: 'Weizmann Institute of Science', country: 'IL' },
+  isBanned: false,
 };
 
 /** The flagged report, in full. The flag queue carries the whole submission for exactly this
@@ -1351,6 +1371,7 @@ const FIXTURES: QueuePage = {
         displayName: 'Wolfgang Amsel',
         isPseudonym: false,
         institution: { name: 'Universität Bonn', country: 'DE' },
+        isBanned: false,
       },
       parentType: 'report',
       parentId: FLAGGED_REPORT.id,
@@ -1370,7 +1391,11 @@ const FIXTURES: QueuePage = {
       relevance: 'Every serious mathematician will need this. Sign up before the price rises.',
       createdAt: '2026-08-15T14:32:00Z',
       updatedAt: '2026-08-15T14:32:00Z',
-      author: HANNA,
+      // The account in the banned list below, which is the coherent version of this fixture:
+      // the advertisement and the ban are the same story. It also exercises the row that says
+      // "account banned" and offers no ban button, which is otherwise only visible by banning
+      // somebody.
+      author: PROOFPILOT,
     },
   ],
 
@@ -1388,6 +1413,7 @@ const FIXTURES: QueuePage = {
         displayName: 'Kolmogorov Complexity Enjoyer',
         isPseudonym: true,
         institution: null,
+        isBanned: false,
       },
       reportCount: 3,
       commentCount: 11,

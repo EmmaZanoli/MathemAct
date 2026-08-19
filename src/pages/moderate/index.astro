@@ -722,8 +722,15 @@ import { path } from '../../lib/paths';
   }
 
   /** How somebody is named on this screen: their display name, marked as a pseudonym when
-   *  it is one, and their institution when they have a badge. Never an address — there is
-   *  no column holding one and this is the screen where somebody would think to add it. */
+   *  it is one, their institution when they have a badge, and whether the account is already
+   *  banned. Never an address — there is no column holding one and this is the screen where
+   *  somebody would think to add it.
+   *
+   *  The ban marker lives here rather than in the two rows that need it, so that every place a
+   *  person is named on this screen says it and there is no per-row rule to forget. It appears
+   *  on a flagger as well as on an author, which is deliberate: a flag raised by an account
+   *  since banned is worth reading differently. It appears **only** here — no page a reader
+   *  sees knows this, and `scripts/export.mjs` refuses the column so that none can. */
   function name(author: QueueAuthor | null): string {
     if (!author) return 'account erased';
 
@@ -732,8 +739,16 @@ import { path } from '../../lib/paths';
     if (author.institution) {
       parts.push(`· ${author.institution.name}, ${author.institution.country}`);
     }
+    if (author.isBanned) parts.push('· account banned');
 
     return parts.join(' ');
+  }
+
+  /** Whether a ban is a thing this row can offer. There has to be an account behind it, and it
+   *  must not be banned already — `public.moderate()` refuses a second ban by name, and a
+   *  button that always refuses is the same failure as a disabled one. */
+  function bannable(author: QueueAuthor | null | undefined): boolean {
+    return author ? !author.isBanned : false;
   }
 
   /**
@@ -868,7 +883,7 @@ import { path } from '../../lib/paths';
       }
 
       return { target: 'flag' as Target, id: flag.id, action };
-    }, Boolean(flag.subject?.author));
+    }, bannable(flag.subject?.author));
 
     return item;
   }
@@ -937,7 +952,7 @@ import { path } from '../../lib/paths';
 
         return { target: entry.kind as Target, id: entry.row.id, action };
       },
-      Boolean(author),
+      bannable(author),
     );
 
     return item;
@@ -1031,11 +1046,15 @@ import { path } from '../../lib/paths';
     put(item, '[data-title]', name(account));
 
     const meta = [account.role, `joined ${verificationMonth(account.joinedAt)}`];
-    if (account.isBanned) {
-      // The date comes from the audit log. An account banned by direct database access has no
-      // row there, and the word alone is the honest rendering of that.
-      meta.push(account.bannedAt ? `banned ${longDate(account.bannedAt)}` : 'banned');
+
+    // Only the date, because name() above has already said that the account is banned. The date
+    // comes from the audit log, and an account banned by direct database access has no row
+    // there — then the title carries the state and this line says nothing, which is the honest
+    // rendering of a log that is silent.
+    if (account.isBanned && account.bannedAt) {
+      meta.push(`banned ${longDate(account.bannedAt)}`);
     }
+
     put(item, '[data-meta]', meta.join(' · '));
 
     const posts = query<HTMLAnchorElement>('[data-posts-link]', item);
@@ -1084,7 +1103,7 @@ import { path } from '../../lib/paths';
   function wire(
     item: HTMLElement,
     resolve: (action: Action) => Call | null,
-    hasAuthor = true,
+    canBan = true,
   ): void {
     const reasonBox = item.querySelector<HTMLTextAreaElement>('[data-reason]');
 
@@ -1094,10 +1113,13 @@ import { path } from '../../lib/paths';
       // public.moderate() rather than an action nobody meant.
       const named = (button.dataset.act ?? '') as Action;
 
-      // A control for something absent — banning the account behind a contribution whose
-      // author has already erased theirs — is removed rather than disabled. A disabled
-      // button invites a second click and explains nothing.
-      if (named === 'ban' && !hasAuthor) {
+      // A control for something that cannot happen is removed rather than disabled: there is
+      // no account behind the contribution because its author erased theirs, or the account is
+      // banned already and public.moderate() refuses a second one by name. A disabled button
+      // invites a second click and explains nothing, and a button that always refuses is the
+      // same failure wearing a better error message. Where the account is already banned the
+      // row says so beside the name, so the absence is explained rather than merely quiet.
+      if (named === 'ban' && !canBan) {
         button.remove();
         continue;
       }

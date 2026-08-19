@@ -138,10 +138,12 @@ database will refuse.
 ### What a ban does, exactly
 
 It sets `public.profiles.is_banned`, which every insert policy on the site reads. Nothing else.
-Seven write paths stop — reports, debates, network entries, comments, ratings, confirmations,
-flags — and `supabase/tests/020_account_bans.test.sql` asserts each of them from the banned
-side, because "a ban means a ban" is written in seven places and one of them being wrong would
-present as a member having a bad day.
+**Eight** write paths stop — reports, debates, network entries, comments, ratings,
+confirmations, flags, citations — and `supabase/tests/020_account_bans.test.sql` asserts each of
+them from the banned side, because "a ban means a ban" is written in eight places, there is
+nothing central holding it, and one of them being wrong would present as a member having a bad
+day. This paragraph said seven for a day, having forgotten `citations_insert_own`, which is the
+argument for the test rather than the list.
 
 What a ban is **not**:
 

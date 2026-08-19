@@ -20,15 +20,19 @@
 --
 -- The last section is the point of the whole feature and belongs in a test rather than in a
 -- runbook: a banned account cannot write. Every content table is asserted from the banned
--- side, because "a ban means a ban" appears in seven policies and one of them being wrong
--- would look exactly like a member having a bad day.
+-- side, because "a ban means a ban" appears in **eight** insert policies and one of them being
+-- wrong would look exactly like a member having a bad day. Eight rather than seven is not a
+-- detail: the first version of this file, and the runbook beside it, both said seven and both
+-- forgot public.citations. A clause repeated in eight places with nothing central holding it is
+-- exactly the kind of rule that gets counted wrong, which is the argument for asserting each
+-- one by hand rather than trusting the list.
 
 begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(32);
+select plan(33);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -310,6 +314,21 @@ select throws_ok(
              '11111111-0000-0000-0000-000000000001', 'off_topic') $$,
   '42501'::text, null::text,
   'and cannot flag, which would otherwise make a ban a promotion to critic'
+);
+
+-- The eighth, and the one the first version of this file missed. Every clause of
+-- citations_insert_own is satisfied here except the ban: both ends exist, the types differ so
+-- it is not a self-citation, and there is no source comment to have to own. So the refusal is
+-- attributable to `not p.is_banned` and to nothing else, which is what makes the assertion
+-- worth having rather than merely green.
+select throws_ok(
+  $$ insert into public.citations (source_type, source_id, target_type, target_id,
+                                   context, created_by)
+     values ('report', '22222222-0000-0000-0000-000000000001',
+             'debate', '33333333-0000-0000-0000-000000000001',
+             'Relevant to the claim.', '11111111-0000-0000-0000-000000000001') $$,
+  '42501'::text, null::text,
+  'nor cite one thing from another'
 );
 
 -- What a ban is not. Reading is untouched, and so is the way out: an account that could not

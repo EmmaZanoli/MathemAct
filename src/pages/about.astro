@@ -1,5 +1,6 @@
 ---
 import Page from '../layouts/Page.astro';
+import { path } from '../lib/paths';
 import { LEIDEN, LICENCE, SITE } from '../lib/site';
 ---
 
@@ -76,6 +77,16 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
     Published contributions are openly available under a <a href={LICENCE.url} rel="license"
       >{LICENCE.fullName} ({LICENCE.name})</a
     >, and the underlying corpus is made available as structured data.
+  </p>
+
+  <p>
+    Nothing is reviewed before it appears. Moderation happens when a reader flags something, and
+    every decision is explained in writing to the person who wrote the content and to the person
+    who flagged it. Separately, an account can be suspended for spam or sustained hostility —
+    which stops it posting, leaves everything it has already posted in place, is explained to
+    whoever holds it, and can be lifted. The
+    <a href={path('/code-of-conduct/')}>code of conduct</a> sets out what is in scope, what
+    happens after a flag, and exactly what a suspension does and how to appeal it.
   </p>
 
  

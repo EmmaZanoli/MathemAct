@@ -94,6 +94,42 @@ is a link — and why comment authors, whose names are not links, have none.
 That same nightly job is the backup, the citable CC BY dataset, and — because a free Supabase
 project pauses after about a week without a connection — the keep-alive.
 
+### Moderation and suspensions
+
+Nothing is reviewed before it appears. A reader flags something, a moderator decides whether it
+stays up, and the explanation they write is stored once and read by the author and the flagger
+both — never naming the moderator or the flagger. The audit log is separate, append-only, and
+moderators-only. Everything goes through one `SECURITY DEFINER` function, `public.moderate()`;
+there are no moderator `UPDATE` policies on any content table, so a direct write bypassing the
+log silently changes nothing.
+
+**Suspending an account** is the second kind of decision — about a person rather than a post,
+for spam or sustained hostility. It sets `profiles.is_banned`, which closes eight insert
+policies (reports, debates, network entries, comments, ratings, confirmations, flags,
+citations) and nothing else:
+
+- **Not a lockout.** Sign-in, reading, profile edits, password changes and erasure requests all
+  still work. `auth.users` is untouched. An account somebody could not leave would be a
+  data-protection problem, not a moderation tool.
+- **Not a content removal.** Everything already posted stays published under CC BY with its
+  name and badge. Hiding a post is a separate decision with its own audit row and explanation.
+  There is deliberately no bulk "ban and hide everything" — thirty notices to one person turns
+  an explanation into a mailshot.
+- **Not permanent.** `unban` is its own decision with its own explanation, reachable from the
+  banned list on `/moderate/`.
+- **Not public.** [scripts/export.mjs](scripts/export.mjs) refuses `profiles.is_banned`
+  alongside `profiles.role`, so no page built from `data/` can render a suspension marker, and
+  none does. It is visible only on `/moderate/`.
+- **Not emailed.** The notice, the banner on `/account/` and the activity line are all on-site,
+  so a suspended account that never returns is never told. That is the one significant gap and
+  it is stated as such in the code of conduct rather than glossed.
+
+`public.moderate()` refuses a self-ban, a ban of anybody with moderation standing, a second ban
+of an already-banned account, and any of it without a written reason.
+
+Full runbook in [docs/moderation.md](docs/moderation.md); the user-facing version is on the
+[code of conduct page](src/pages/code-of-conduct.astro).
+
 ### Identity, in one paragraph
 
 Two tiers: Registered, and Institutional on top of it. Affiliation is never claimed — it
@@ -176,7 +212,7 @@ is allowed to set, who may file or read an erasure request, every report policy 
 directions, the constraints that make a report structured rather than a paragraph, the
 tombstone rule, the rate limits, the submission RPC, the agreement scale, every comment
 policy including the nesting limit and what soft deletion destroys, the citation and
-flag queues, the activity feed and its backfill, and account bans — the seven write paths a
+flag queues, the activity feed and its backfill, and account bans — the eight write paths a
 ban closes, asserted one by one, and the notice it sends.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
