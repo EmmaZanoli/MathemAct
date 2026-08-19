@@ -361,7 +361,14 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
     });
 
     void startSession();
-    void overlay();
+
+    // On static pages parentId is baked into the HTML; on view pages it is set
+    // asynchronously after a fetch. Fire overlay only once the id is in place.
+    if (root.dataset.parentId) {
+      void overlay();
+    } else {
+      root.addEventListener('thread-ready', () => void overlay(), { once: true });
+    }
 
     async function open(id: string): Promise<void> {
       const profile = await loadProfile(id);

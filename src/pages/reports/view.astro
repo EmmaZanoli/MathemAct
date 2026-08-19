@@ -294,6 +294,7 @@ import { path } from '../../lib/paths';
     thread.dataset.parentId = reportId;
     thread.dataset.nodeTitle = report.title;
     thread.dataset.nodeHref = path(`/reports/${reportId}/`);
+    thread.dispatchEvent(new CustomEvent('thread-ready'));
 
     loadingEl.hidden = true;
     contentEl.hidden = false;

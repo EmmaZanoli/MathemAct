@@ -200,6 +200,7 @@ import { path } from '../../lib/paths';
     thread.dataset.parentId = debateId;
     thread.dataset.nodeTitle = debate.statement;
     thread.dataset.nodeHref = path(`/debates/${debateId}/`);
+    thread.dispatchEvent(new CustomEvent('thread-ready'));
 
     // Reveal the content.
     loadingEl.hidden = true;
