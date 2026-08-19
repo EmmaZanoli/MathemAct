@@ -50,14 +50,18 @@ const [thread, incoming, outgoing] = await Promise.all([
     <p class="breadcrumb"><a href={path('/debates/')}>← All debates</a></p>
 
     {/* The statement and the rationale are quotable; the rating control is not. */}
-    <header data-quotable data-pagefind-body>
-      {/* Pagefind filter metadata. */}
+    <header class="debate__hero" data-quotable data-pagefind-body>
       <span data-pagefind-filter="type:debate" hidden></span>
-      <p class="debate__label">
-        <span class="meta">
+
+      <div class="debate__eyebrow">
+        <span class="debate__pill debate__pill--status">
           {debate.status === 'active' ? 'Active debate' : 'Proposed'}
         </span>
-      </p>
+
+        <span class="debate__pill" data-pagefind-filter="area">
+          {areaLabel(debate.area)}
+        </span>
+      </div>
 
       {/* The statement is the page. Set as a blockquote because it is a claim being
           reported rather than the site speaking. */}
@@ -65,8 +69,7 @@ const [thread, incoming, outgoing] = await Promise.all([
         <p>{debate.statement}</p>
       </blockquote>
 
-      <ul class="card__facts" role="list">
-        <li data-pagefind-filter="area">{areaLabel(debate.area)}</li>
+      <ul class="debate__meta" role="list">
         <li>
           {
             debate.author ? (
@@ -82,19 +85,22 @@ const [thread, incoming, outgoing] = await Promise.all([
             )
           }
         </li>
+
         <li>
-          <span class="meta">
-            {debate.activatedAt
-              ? `Active since ${longDate(debate.activatedAt)}`
-              : `Proposed ${longDate(debate.createdAt)}`}
-          </span>
+          {debate.activatedAt
+            ? `Active since ${longDate(debate.activatedAt)}`
+            : `Proposed ${longDate(debate.createdAt)}`}
         </li>
       </ul>
     </header>
 
     {
       debate.rationale && (
-        <section class="field-block" data-quotable data-pagefind-body>
+        <section
+          class="field-block debate__rationale"
+          data-quotable
+          data-pagefind-body
+        >
           <span class="field-block__label">Why this was proposed</span>
           <p class="field-block__body">{debate.rationale}</p>
         </section>
@@ -102,48 +108,86 @@ const [thread, incoming, outgoing] = await Promise.all([
     }
 
     <section class="rate" data-rate data-debate-id={debate.id} data-pagefind-ignore>
-      <h2>Where do you stand?</h2>
+      <section class="debate-panel debate-panel--vote">
+        <div class="debate-section-head">
+          <h2>
+            <span class="debate-section-number">1.</span>
+            Where do you stand?
+          </h2>
 
-      {/* Signed out. An anonymous reader cannot rate, so they cannot see the distribution
-          either — the rule is about who has formed a view before looking, not about who is
-          logged in, and making an exception here would be the loophole. */}
-      <div class="panel" data-rate-signedout hidden>
-        <p>
-          <a href={path('/account/sign-in/')}>Sign in</a> to answer this one. The distribution
-          appears once you have — you are asked what you think before you are told what
-          everybody else thinks.
-        </p>
-      </div>
-
-      <div class="panel" data-rate-unconfirmed hidden>
-        <p>
-          Rating needs a confirmed email address.
-          <a href={path('/account/confirm/')}>Get another confirmation link</a>.
-        </p>
-      </div>
-
-      <form class="form" data-rate-form hidden novalidate>
-        <RatingScale name="score" />
-
-        <div class="actions">
-          <button class="button button--primary" type="submit">Record my answer</button>
+          <details class="debate-explainer">
+            <summary>Why are results hidden until you answer?</summary>
+            <p>
+              We ask what you think before showing how everybody else
+              responded, so their answers do not influence yours.
+            </p>
+          </details>
         </div>
 
-        <FormStatus id="rate-status" />
-      </form>
+        {/* Signed out. An anonymous reader cannot rate, so they cannot see the distribution
+            either — the rule is about who has formed a view before looking, not about who is
+            logged in, and making an exception here would be the loophole. */}
+        <div class="panel" data-rate-signedout hidden>
+          <p>
+            <a href={path('/account/sign-in/')}>Sign in</a> to answer this one.
+            The distribution appears once you have answered.
+          </p>
+        </div>
 
-      {/* One sentence, and it says why rather than that. "You must rate to see results" is
-          a rule; this is a reason, and a reader who disagrees with it can at least argue
-          with the right thing. */}
-      <p class="rate__withheld" data-rate-withheld hidden>
-        The distribution is hidden until you have answered, so that what other people think
-        does not decide what you think.
-      </p>
+        <div class="panel" data-rate-unconfirmed hidden>
+          <p>
+            Rating needs a confirmed email address.
+            <a href={path('/account/confirm/')}>
+              Get another confirmation link
+            </a>.
+          </p>
+        </div>
 
-      <div data-aggregate-wrap hidden>
-        <h3>How people answered</h3>
+        <form class="form" data-rate-form hidden novalidate>
+          <RatingScale name="score" />
+
+          <div class="actions rate__actions">
+            <button class="button button--primary" type="submit">
+              Record my answer
+            </button>
+          </div>
+
+          <FormStatus id="rate-status" />
+        </form>
+      </section>
+
+      <section
+        class="debate-panel debate-panel--results"
+        data-rate-withheld
+        hidden
+      >
+        <h2>
+          <span class="debate-section-number">2.</span>
+          How people answered
+        </h2>
+
+        <div class="results-placeholder">
+          <strong>Results will appear here after you answer.</strong>
+          <p>
+            You'll see the complete distribution of scores from 0–10.
+            We don't show results beforehand so your opinion isn't
+            influenced by others.
+          </p>
+        </div>
+      </section>
+
+      <section
+        class="debate-panel debate-panel--results"
+        data-aggregate-wrap
+        hidden
+      >
+        <h2>
+          <span class="debate-section-number">2.</span>
+          How people answered
+        </h2>
+
         <Histogram />
-      </div>
+      </section>
     </section>
 
     <References incoming={incoming} outgoing={outgoing} />

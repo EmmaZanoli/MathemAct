@@ -102,6 +102,7 @@ const { name } = Astro.props;
   .rating__point {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: var(--space-3xs);
     cursor: pointer;
   }
@@ -118,29 +119,42 @@ const { name } = Astro.props;
     clip-path: inset(50%);
   }
 
-  /* A score is a number a machine parses, so it is mono like every other one here. */
+  /* Score as plain number; the circle below it is the interactive target. */
   .rating__number {
-    display: block;
-    padding-block: var(--space-2xs);
-    border: var(--border);
-    border-radius: var(--radius-sm);
-    background-color: var(--surface);
-    font-family: var(--font-mono);
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-family: var(--font-sans);
     font-size: var(--size-2);
     text-align: center;
   }
 
-  /* Selection is marked three ways — a thicker ink border, a wash, and a bolder number —
-     because colour is never allowed to be the only carrier of meaning. */
+  /* The circle indicator, drawn via ::after so the number sits above it. */
+  .rating__number::after {
+    content: '';
+    display: block;
+    width: 0.75rem;
+    height: 0.75rem;
+    margin: var(--space-2xs) auto 0;
+    border: var(--border-width) solid var(--ink-muted);
+    border-radius: 50%;
+    background: var(--surface);
+  }
+
+  /* Selection: filled circle with an inset ring — colour + shape + weight, three
+     independent cues so no single one is the sole carrier of meaning. */
   .rating__point:has(.rating__input:checked) .rating__number {
-    border-width: var(--border-width-thick);
-    border-color: var(--ink);
-    background-color: var(--accent-wash);
-    padding-block: calc(var(--space-2xs) - 1px);
     font-weight: var(--weight-semibold);
   }
 
-  .rating__point:has(.rating__input:focus-visible) .rating__number {
+  .rating__point:has(.rating__input:checked) .rating__number::after {
+    border: 3px solid var(--accent-strong);
+    background: var(--accent-strong);
+    box-shadow: inset 0 0 0 2px var(--surface);
+  }
+
+  .rating__point:has(.rating__input:focus-visible) .rating__number::after {
     outline: var(--focus-ring);
     outline-offset: var(--focus-offset);
   }
@@ -161,23 +175,35 @@ const { name } = Astro.props;
     border-block-start: var(--border);
   }
 
+  /* Styled like a scale point so it reads as one, rather than as a separate button. */
   .rating__decline {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2xs);
-    padding: var(--space-2xs) var(--space-sm);
-    border: var(--border);
-    border-radius: var(--radius-sm);
-    background-color: var(--surface);
     cursor: pointer;
+    font-size: var(--size-2);
+  }
+
+  /* Circle for the "no opinion" option, matching the scale points. */
+  .rating__decline::before {
+    content: '';
+    display: inline-block;
+    flex-shrink: 0;
+    width: 0.75rem;
+    height: 0.75rem;
+    border: var(--border-width) solid var(--ink-muted);
+    border-radius: 50%;
+    background: var(--surface);
   }
 
   .rating__decline:has(.rating__decline-input:checked) {
-    border-width: var(--border-width-thick);
-    border-color: var(--ink);
-    background-color: var(--accent-wash);
-    padding: calc(var(--space-2xs) - 1px) calc(var(--space-sm) - 1px);
     font-weight: var(--weight-semibold);
+  }
+
+  .rating__decline:has(.rating__decline-input:checked)::before {
+    border: 3px solid var(--accent-strong);
+    background: var(--accent-strong);
+    box-shadow: inset 0 0 0 2px var(--surface);
   }
 
   .rating__decline:has(.rating__decline-input:focus-visible) {
@@ -186,7 +212,6 @@ const { name } = Astro.props;
   }
 
   .rating__decline-hint {
-    max-width: var(--measure);
     margin-block-start: var(--space-2xs);
     color: var(--ink-muted);
     font-size: var(--size-2);
