@@ -86,6 +86,21 @@ export interface QueueAuthor {
   readonly displayName: string;
   readonly isPseudonym: boolean;
   readonly institution: { readonly name: string; readonly country: string } | null;
+  /**
+   * Whether this account is banned already.
+   *
+   * On the moderation screen only, and it decides two things: the row says so beside the name,
+   * and the "Ban that account" button is removed rather than offered and refused. Without it a
+   * moderator answering a flag cannot tell that the author is already banned — which is
+   * precisely the context where it matters — and every flag row offered a control that
+   * `public.moderate()` would turn down.
+   *
+   * It is **not** in the export and must not be: `scripts/export.mjs` refuses
+   * `profiles.is_banned` alongside `profiles.role`, because a public list of banned accounts is
+   * a punishment nobody agreed to. Nothing built from `data/` knows this, and no page a reader
+   * sees renders it.
+   */
+  readonly isBanned: boolean;
 }
 
 export interface QueueTool {
@@ -191,6 +206,31 @@ export interface QueueErasure {
   readonly commentCount: number;
 }
 
+/**
+ * An account, as the accounts section shows it.
+ *
+ * A ban is the one decision on this screen that is not about a post, so it is the one place a
+ * moderator needs a person rather than a row. What is here is what decides a ban: the name and
+ * badge, whether they already hold moderation standing — the function refuses to ban those, so
+ * the screen offers no button rather than a refusal — and whether they are banned now.
+ *
+ * `bannedAt` comes from public.moderation_actions rather than from a column on the profile.
+ * There is no `banned_at`, and inventing one would put a second copy of a fact the log already
+ * holds next to the flag it describes. The log is the record; this is a read of it.
+ */
+export interface QueueAccount {
+  readonly id: string;
+  readonly displayName: string;
+  readonly isPseudonym: boolean;
+  readonly institution: { readonly name: string; readonly country: string } | null;
+  readonly role: Role;
+  readonly isBanned: boolean;
+  readonly joinedAt: string;
+  /** When the current ban was imposed, from the audit log. Null when the account is not
+   *  banned, and also when it was banned before this screen existed. */
+  readonly bannedAt: string | null;
+}
+
 /** How many items each queue section loads at a time. */
 export const QUEUE_PAGE_SIZE = 20;
 
@@ -205,6 +245,10 @@ export interface QueuePage {
   readonly hiddenCommentsHasMore: boolean;
   readonly hiddenEntries: readonly QueueEntry[];
   readonly hiddenEntriesHasMore: boolean;
+  /** Everybody currently banned, so that a ban can be lifted by somebody who did not impose
+   *  it. Not paginated: if this list is ever long enough to need it, something has gone wrong
+   *  that pagination is not the answer to. */
+  readonly bannedAccounts: readonly QueueAccount[];
   /** Empty for a moderator: erasure is an account action and only admins see it. */
   readonly erasures: readonly QueueErasure[];
   readonly erasuresHasMore: boolean;
@@ -213,7 +257,7 @@ export interface QueuePage {
 // ── Reading the queues ────────────────────────────────────────────────────────────────
 
 const AUTHOR_COLUMNS =
-  'id,display_name,is_pseudonym,institution_name,institution_country';
+  'id,display_name,is_pseudonym,institution_name,institution_country,is_banned';
 
 const REPORT_COLUMNS = [
   'id,status,title,area,task_type,aim,method,outcome,outcome_notes,verification',
@@ -245,6 +289,7 @@ interface RawAuthor {
   is_pseudonym: boolean;
   institution_name: string | null;
   institution_country: string | null;
+  is_banned: boolean;
 }
 
 function toAuthor(row: RawAuthor | null | undefined): QueueAuthor | null {
@@ -258,6 +303,7 @@ function toAuthor(row: RawAuthor | null | undefined): QueueAuthor | null {
       row.institution_name && row.institution_country
         ? { name: row.institution_name, country: row.institution_country }
         : null,
+    isBanned: row.is_banned,
   };
 }
 
@@ -430,6 +476,14 @@ export async function loadQueues(role: Role): Promise<Result<QueuePage>> {
     const { erasures, hasMore: erasuresHasMore } =
       role === 'admin' ? await loadErasures(0) : { erasures: [], hasMore: false };
 
+    // A failure here fails the page, like every query above it. Tempting to let it through so
+    // that a moderator keeps the flag queue — but the empty state for this list reads "Nobody
+    // is banned", and a query that could not run must not be rendered as an answer. In
+    // practice the failure is the database being unreachable, in which case nothing above
+    // succeeded either.
+    const banned = await loadBannedAccounts();
+    if (!banned.ok) return { ok: false, message: banned.message };
+
     const value: QueuePage = {
       flags: await withSubjects(flagsPage),
       flagsHasMore,
@@ -441,6 +495,7 @@ export async function loadQueues(role: Role): Promise<Result<QueuePage>> {
       hiddenCommentsHasMore: commentsHasMore,
       hiddenEntries: entriesPage.map(toEntry),
       hiddenEntriesHasMore: entriesHasMore,
+      bannedAccounts: banned.value,
       erasures,
       erasuresHasMore,
     };
@@ -787,6 +842,156 @@ async function loadErasures(
   return { erasures, hasMore };
 }
 
+// ── Accounts ──────────────────────────────────────────────────────────────────────────
+//
+// The only part of this screen that is not driven by a queue. A flag arrives; a spammer does
+// not. Somebody posting eleven advertisements in an afternoon may never be flagged at all —
+// and a network entry cannot be flagged, because public.flags.subject_type is
+// public.content_kind, which has no `entry` — so a ban reachable only from a flag is a ban
+// unreachable in the case it exists for.
+//
+// Two ways in, and they are the two ways a moderator actually arrives: by name, having read
+// the name on the thing that made them open this screen, and from the list of everybody
+// currently banned, which is what makes a ban reversible by somebody who did not impose it.
+
+const ACCOUNT_COLUMNS =
+  'id,display_name,is_pseudonym,institution_name,institution_country,role,is_banned,created_at';
+
+interface RawAccount extends RawAuthor {
+  role: string;
+  created_at: string;
+}
+
+function toAccount(row: RawAccount, bannedAt: string | null): QueueAccount {
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    isPseudonym: row.is_pseudonym,
+    institution:
+      row.institution_name && row.institution_country
+        ? { name: row.institution_name, country: row.institution_country }
+        : null,
+    role: row.role === 'admin' || row.role === 'moderator' ? row.role : 'member',
+    isBanned: row.is_banned,
+    joinedAt: row.created_at,
+    bannedAt,
+  };
+}
+
+/**
+ * When each of these accounts was last banned, out of the audit log.
+ *
+ * One query for the whole page rather than one per row, and a miss is not a failure: an
+ * account banned before 20260819120000 has an audit row like any other, but one banned by
+ * direct database access has none, and the row then reads "banned" with no date. That is the
+ * honest rendering — the date is a fact from the log, and where the log is silent the screen
+ * should be too.
+ */
+async function banDates(ids: readonly string[]): Promise<Map<string, string>> {
+  const dates = new Map<string, string>();
+
+  const supabase = getSupabase();
+  if (!supabase || !ids.length) return dates;
+
+  const { data } = await supabase
+    .from('moderation_actions')
+    .select('target_id,created_at')
+    .eq('action', 'ban')
+    .in('target_id', ids)
+    .order('created_at', { ascending: false });
+
+  // Newest first, so the first row for an account is the ban that still applies. An earlier
+  // one is a ban that was lifted and is history.
+  for (const row of data ?? []) {
+    const id = row.target_id as string;
+    if (!dates.has(id)) dates.set(id, row.created_at as string);
+  }
+
+  return dates;
+}
+
+/** Everybody currently banned, alphabetically. Served by profiles_banned_idx, whose
+ *  predicate is this query. */
+export async function loadBannedAccounts(): Promise<Result<readonly QueueAccount[]>> {
+  if (import.meta.env.DEV && usingFixtures())
+    return { ok: true, value: FIXTURES.bannedAccounts };
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(ACCOUNT_COLUMNS)
+      .eq('is_banned', true)
+      .order('display_name', { ascending: true });
+
+    if (error) return { ok: false, message: describe(error) };
+
+    const rows = (data ?? []) as unknown as RawAccount[];
+    const dates = await banDates(rows.map((row) => row.id));
+
+    return { ok: true, value: rows.map((row) => toAccount(row, dates.get(row.id) ?? null)) };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
+/**
+ * Accounts whose display name contains `term`, capped.
+ *
+ * Substring rather than prefix, because the name a moderator has in front of them is whatever
+ * appeared under a post, and a pseudonym is as likely to be remembered from the middle. It is
+ * a sequential scan and deliberately unindexed; see the migration for why a trigram index
+ * would be a cost paid on every profile write for a query run twice a month.
+ *
+ * The term is passed through as typed. A `%` in it widens the match rather than matching a
+ * literal per cent sign — which is a search that returns too much on a screen two people use,
+ * not a hazard, and escaping it would mean explaining the escape.
+ */
+export async function searchAccounts(term: string): Promise<Result<readonly QueueAccount[]>> {
+  const wanted = term.trim();
+
+  if (wanted.length < 2) {
+    return {
+      ok: false,
+      message: 'Type at least two characters of the display name.',
+    };
+  }
+
+  if (import.meta.env.DEV && usingFixtures()) {
+    const lower = wanted.toLowerCase();
+    return {
+      ok: true,
+      value: FIXTURES_ACCOUNTS.filter((account) =>
+        account.displayName.toLowerCase().includes(lower),
+      ),
+    };
+  }
+
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, message: UNAVAILABLE };
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select(ACCOUNT_COLUMNS)
+      .ilike('display_name', `%${wanted}%`)
+      .order('display_name', { ascending: true })
+      .limit(QUEUE_PAGE_SIZE);
+
+    if (error) return { ok: false, message: describe(error) };
+
+    const rows = (data ?? []) as unknown as RawAccount[];
+    const banned = rows.filter((row) => row.is_banned).map((row) => row.id);
+    const dates = await banDates(banned);
+
+    return { ok: true, value: rows.map((row) => toAccount(row, dates.get(row.id) ?? null)) };
+  } catch (error) {
+    return { ok: false, message: describe(error) };
+  }
+}
+
 // ── Acting ────────────────────────────────────────────────────────────────────────────
 
 export type Target = 'report' | 'debate' | 'comment' | 'flag' | 'entry' | 'account';
@@ -946,6 +1151,7 @@ const HANNA: QueueAuthor = {
   displayName: 'Hanna Lindqvist',
   isPseudonym: false,
   institution: { name: 'Uppsala universitet', country: 'SE' },
+  isBanned: false,
 };
 
 const CATEGORY_OF_ONE: QueueAuthor = {
@@ -953,6 +1159,7 @@ const CATEGORY_OF_ONE: QueueAuthor = {
   displayName: 'category_of_one',
   isPseudonym: true,
   institution: null,
+  isBanned: false,
 };
 
 const TOMAS: QueueAuthor = {
@@ -960,6 +1167,7 @@ const TOMAS: QueueAuthor = {
   displayName: 'Tomáš Brázda',
   isPseudonym: false,
   institution: { name: 'Univerzita Karlova', country: 'CZ' },
+  isBanned: false,
 };
 
 const NOOR: QueueAuthor = {
@@ -967,6 +1175,7 @@ const NOOR: QueueAuthor = {
   displayName: 'Noor Haddad',
   isPseudonym: false,
   institution: { name: 'Weizmann Institute of Science', country: 'IL' },
+  isBanned: false,
 };
 
 /** The flagged report, in full. The flag queue carries the whole submission for exactly this
@@ -1005,6 +1214,56 @@ const FLAGGED_REPORT: QueueReport = {
   ],
   tags: ['math.NT', 'math.CO'],
 };
+
+/** The account the accounts section is for: one that posted the same advertisement eleven
+ *  times and was never flagged, because nobody flags an advertisement, they just leave. */
+const PROOFPILOT: QueueAccount = {
+  id: '00000000-0000-4000-8000-000000000007',
+  displayName: 'ProofPilot Team',
+  isPseudonym: false,
+  institution: null,
+  role: 'member',
+  isBanned: true,
+  joinedAt: '2026-08-15T09:00:00Z',
+  bannedAt: '2026-08-15T18:20:00Z',
+};
+
+/** What a search runs against in development. A moderator and an admin are in it on purpose:
+ *  the screen has to show that those accounts are not bannable from here rather than offer a
+ *  button the database will refuse. */
+const FIXTURES_ACCOUNTS: readonly QueueAccount[] = [
+  PROOFPILOT,
+  {
+    id: HANNA.id,
+    displayName: HANNA.displayName,
+    isPseudonym: HANNA.isPseudonym,
+    institution: HANNA.institution,
+    role: 'member',
+    isBanned: false,
+    joinedAt: '2026-07-02T11:30:00Z',
+    bannedAt: null,
+  },
+  {
+    id: CATEGORY_OF_ONE.id,
+    displayName: CATEGORY_OF_ONE.displayName,
+    isPseudonym: CATEGORY_OF_ONE.isPseudonym,
+    institution: CATEGORY_OF_ONE.institution,
+    role: 'member',
+    isBanned: false,
+    joinedAt: '2026-07-19T08:05:00Z',
+    bannedAt: null,
+  },
+  {
+    id: TOMAS.id,
+    displayName: TOMAS.displayName,
+    isPseudonym: TOMAS.isPseudonym,
+    institution: TOMAS.institution,
+    role: 'moderator',
+    isBanned: false,
+    joinedAt: '2026-06-11T14:45:00Z',
+    bannedAt: null,
+  },
+];
 
 const FIXTURES: QueuePage = {
   flags: [
@@ -1112,6 +1371,7 @@ const FIXTURES: QueuePage = {
         displayName: 'Wolfgang Amsel',
         isPseudonym: false,
         institution: { name: 'Universität Bonn', country: 'DE' },
+        isBanned: false,
       },
       parentType: 'report',
       parentId: FLAGGED_REPORT.id,
@@ -1131,11 +1391,17 @@ const FIXTURES: QueuePage = {
       relevance: 'Every serious mathematician will need this. Sign up before the price rises.',
       createdAt: '2026-08-15T14:32:00Z',
       updatedAt: '2026-08-15T14:32:00Z',
-      author: HANNA,
+      // The account in the banned list below, which is the coherent version of this fixture:
+      // the advertisement and the ban are the same story. It also exercises the row that says
+      // "account banned" and offers no ban button, which is otherwise only visible by banning
+      // somebody.
+      author: PROOFPILOT,
     },
   ],
 
   hiddenEntriesHasMore: false,
+
+  bannedAccounts: [PROOFPILOT],
 
   erasures: [
     {
@@ -1147,6 +1413,7 @@ const FIXTURES: QueuePage = {
         displayName: 'Kolmogorov Complexity Enjoyer',
         isPseudonym: true,
         institution: null,
+        isBanned: false,
       },
       reportCount: 3,
       commentCount: 11,

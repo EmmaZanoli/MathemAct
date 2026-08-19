@@ -139,7 +139,11 @@ import { SITE } from '../lib/site';
   <ul class="tombstone-list">
     <li>The content stays up, with the reason written to both of you.</li>
     <li>The content hidden, with the thread structure left intact and the reason written to both of you.</li>
-    <li>The account suspended, or removed.</li>
+    <li>
+      The account suspended, with the reason written to whoever holds it. A suspension stops
+      you posting and leaves everything you have already posted where it is. It can be lifted.
+    </li>
+    <li>The account removed.</li>
   </ul>
 
   <p>
@@ -147,6 +151,76 @@ import { SITE } from '../lib/site';
     applied and why, in writing, on your account page. You can reply, and a decision will be
     reconsidered if you have reason to think it was wrong. Deanonymisation and harassment do
     not get a warning first.
+  </p>
+
+  <h2>If your account is suspended</h2>
+
+  <p>
+    Most decisions here are about one thing somebody posted. A suspension is different: it is
+    about an account rather than about a post, and it is used for the two patterns that hiding
+    cannot answer — <strong>spam</strong>, meaning the same promotion posted over and over, and
+    <strong>sustained hostility</strong> toward other people. One badly judged report is not a
+    suspension. Being wrong is not a suspension, and neither is being negative about a tool
+    everyone else likes.
+  </p>
+
+  <p>
+    <strong>A suspension is not a lockout.</strong> You keep your account and you keep your
+    access to it. You can still sign in, read everything on the site, change your display name
+    and bio, change your password, and ask for the account to be erased. What stops is writing:
+    while a suspension is in place you cannot post a report, suggest a debate, submit anything to
+    the network, comment, rate a debate, confirm whether a report still works, flag anything, or
+    reference one page from another.
+  </p>
+
+  <p>
+    <strong>Nothing you have already posted is removed.</strong> Your reports stay in the corpus,
+    your comments stay in their threads, and your name and badge stay on them. Taking a post down
+    is a separate decision about that post, made for its own reasons and explained on its own. A
+    suspension is about what happens next, not a verdict on your past work.
+  </p>
+
+  <p>You find out in three places, all of them on this site:</p>
+
+  <ul class="tombstone-list">
+    <li>A notice at the top of your account page, saying the account is suspended.</li>
+    <li>
+      The moderator's written explanation under <em>moderation decisions</em>, which is the same
+      sentence the moderators keep for themselves. It does not name the moderator, and it does
+      not name whoever flagged anything.
+    </li>
+    <li>A line in your activity, linking to that explanation.</li>
+  </ul>
+
+  <p>
+    <strong>We do not email you about it</strong>, and you should know that rather than discover
+    it. Nothing about a suspension reaches you unless you come back to the site and look. That is
+    a real gap and it is on the list to fix; in the meantime, if your account has stopped letting
+    you post and you were not expecting it, the explanation is waiting on your account page.
+  </p>
+
+  <p>
+    <strong>You can appeal, and you should if you think it is wrong.</strong> Write to
+    <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>. Wherever there is a second
+    moderator to ask, the reply comes from someone other than the person who decided. A
+    suspension can be lifted, and lifting it is its own decision with its own explanation — you
+    are told when it ends and why, not left to test it by trying to post.
+  </p>
+
+  <p>
+    <strong>Nobody else can see it.</strong> There is no mark on your profile, no badge on your
+    contributions, and no public list of suspended accounts. A reader looking at your author page
+    sees an ordinary contributor, because that is what your work is. This is deliberate: many
+    people here contribute under a pseudonym precisely because admitting to heavy AI use carries a
+    professional cost, and a permanent public mark is not a sanction volunteers answering flags
+    should be able to impose.
+  </p>
+
+  <p>
+    Two last things about who can do it. A moderator cannot suspend their own account, and cannot
+    suspend another moderator — that takes direct access to the database, so that one stolen
+    session cannot silence the people who would notice. And a suspension always carries an
+    explanation: a decision nobody has to write down is not one this site can take.
   </p>
 
   <h2>Changes</h2>

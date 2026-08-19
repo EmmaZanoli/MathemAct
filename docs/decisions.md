@@ -2192,61 +2192,76 @@ is the usual way out of recursive RLS. It works, and it would have added a seven
 note says a seventh means something new. A column is cheaper at read time and needs no
 exception written next to it.
 
-## 2026-08-19 — Five `astro check` errors that were one mistake, papered over ten times
+## 2026-08-19 — A ban was in the database and out of reach, and its explanation went nowhere
 
-`npm run check` had been reporting five errors for some time, all `ts(18047) 'x' is possibly
-null`, two in `CommentThread.astro` and three in `reports/index.astro`. They survived because
-`astro build` does not see them — the same asymmetry as the `.select()` trap — so nothing that
-gates a deploy was red.
+`ban` and `unban` have been in `public.moderate()` since `20260815200200`, and `not
+p.is_banned` has been in every insert policy on the site since the table it guards was created.
+So the *effect* of a ban always worked, and 016 has asserted it for weeks. What did not work was
+everything a moderator or a banned member would actually touch, and each of the three gaps is
+the kind that leaves a feature technically present and practically absent.
 
-Both files have the same shape, and it is the ordinary shape for a script that may or may not
-have an element to work on:
+**The explanation never arrived.** The function refuses to ban without a reason, writes it to
+`public.moderation_actions` — and stops. The account branch was the only branch writing no
+`public.moderation_notices` row, so the sentence a moderator is *compelled* to write was read by
+other moderators and by nobody else. It could not have been written even deliberately:
+`moderation_notices_subject_is_content` restricted `subject_type` to the four content kinds and
+an account is not one of them.
 
-```ts
-const filters = document.querySelector<HTMLFormElement>('[data-filters]');
+That is a direct contradiction of the rule the whole post-moderation design rests on, for the
+single harshest decision available, and it was contradicted in public: the code of conduct has
+said since it shipped that "if your content is hidden or your account is suspended, you are told
+what rule was applied and why, on your account page". `docs/moderation.md` went further and
+listed the notice under things that *existed*. The activity feed's `account_banned` row returned
+`null` for its link, which was correct at the time and reads now as the tell — there was nowhere
+to send somebody, because there was nothing to send them to.
 
-if (filters) {
-  // … several hundred lines, including helper function declarations
-}
-```
+**A ban could not be lifted.** `unban` was in the enum, in the function, in the TypeScript
+`Action` union and in `NEEDS_REASON`. Nothing emitted it, and nothing listed banned accounts, so
+the reversible half of a decision documented as reversible had no route. A ban that cannot be
+lifted is an erasure with the content left behind.
 
-**TypeScript keeps a `const` narrowing inside arrow functions and drops it inside hoisted
-`function` declarations.** A `function foo()` is lifted to the top of the block it is written
-in, so the compiler will not assume the `if` has run by the time it is called. The consequence
-is that `filters.querySelectorAll(…)` is fine in `filters.addEventListener('change', …)` on
-line 574 and an error inside `injectOption()` on line 528 — the same expression, the same
-block, twenty lines apart.
+**A ban was reachable only from a flag**, against the author of the flagged post. Spam is the
+case bans exist for and it is the case that produces no flag: people leave rather than flag an
+advertisement, and **a network entry cannot be flagged at all** — `public.flags.subject_type` is
+`public.content_kind`, which has no `entry`. So the one path in was closed in the one situation
+that needed it.
 
-That is what made it accumulate rather than get fixed. Each error looks local, the obvious
-silencer is a `!`, and a `!` works. Between them the two files had **ten** non-null assertions
-on those two variables and five uses where one had been forgotten. The five errors were not
-five problems; they were the five places nobody had got round to yet.
+What was built: three enum values (`banned`, `unbanned`, `account_holder`), a widened CHECK, a
+notice written in the account branch, an accounts section on `/moderate/` with a search and the
+banned list, a ban control on hidden rows as well as on flags, a suspension banner on
+`/account/`, and `020_account_bans.test.sql`.
 
-The fix is to alias the narrowed value once at the top of the block:
+Four decisions inside that are worth the space:
 
-```ts
-const filterForm = document.querySelector<HTMLFormElement>('[data-filters]');
+- **`recipient_role` gained a third value rather than reusing `author`.** A ban may reach
+  somebody who wrote nothing that was decided about. `author` would have made the page say "your
+  report was hidden" about an account, and the fix for that would have been a special case in the
+  renderer rather than a fact in the row.
+- **The audit row moved inside the account branch, and the shared tail at the foot of
+  `public.moderate()` went with it.** The notice needs the audit id. Every branch now writes its
+  own row and returns, which is one fewer way for an action added later to happen and log the
+  wrong target — the tail's `case when p_action = 'erase_account' then null else p_target_id end`
+  was already the shape of that hazard.
+- **Banning twice is refused.** The effect is idempotent and the notification is not. Without
+  the guard, a second ban writes a second notice and a second feed row telling somebody
+  something had just happened to their account when nothing had.
+- **No "ban and hide everything".** It is the obvious feature for spam and it is deliberately
+  absent: one decision writes one audit row and one notice, and thirty of each in a transaction
+  turns an explanation into a mailshot. It would also mean hiding posts nobody had read against
+  the scope rule. Hiding stays per post; the accounts section links to `/authors/view/?id=…` so
+  the walk is short. That is the *runtime* author page on purpose — an account worth looking at
+  has often posted everything it posted this afternoon and has no generated page yet.
 
-if (filterForm) {
-  const filters = filterForm;
-  // every use below, in any kind of function, needs no assertion
-}
-```
+Recorded rather than fixed: `profiles.is_banned` is readable by anybody, anonymously, because
+the SELECT grant on `public.profiles` is table-wide and badges and author pages are built from
+it. A moderation outcome that is otherwise moderators-only can therefore be enumerated. Fixing
+it means column-level grants, and the caller's own row needs `is_banned` and `role` — which a
+column grant cannot make conditional on the row. Also unfixed: a ban has no duration, so a
+"two-week suspension" is one only if a volunteer remembers. The honest version of that is a
+`banned_until` column and a nightly job, not a sentence in the runbook.
 
-Ten assertions came out, five errors went, and the emitted JavaScript is unchanged: `!` is
-erased at compile time and the alias is a rename. `check` is now 0 errors, 0 warnings, 0 hints.
-
-Two things deliberately not done:
-
-- **The nullable check stays.** `[data-filters]` genuinely is absent when the corpus is empty —
-  the `if (!filterForm)` branch at the foot of that script is the empty-corpus overlay path.
-  Replacing the check with `query()`, which throws, would turn an expected state into an error.
-- **The remaining six assertions in the project were left alone.** They are
-  `template.content.firstElementChild!` and `option.dataset.search!`, which assert things about
-  markup authored in the same file that TypeScript cannot see. Those are claims about the
-  document, not workarounds for a lost narrowing, and collapsing the two categories would lose
-  the distinction that makes the first kind suspicious.
-
-Recorded in CLAUDE.md as a trap, because the tell is subtle: an assertion that works is not
-evidence that the code was wrong, and the honest signal — the same expression failing in one
-function and not another — is only visible if you look at both.
+One claim in `docs/moderation.md` was simply wrong and is now deleted rather than softened: that
+"the post forms are not disabled" for a banned account. They have been since they were written —
+`reports/new.astro`, `debates/new.astro`, `network/new.astro` and `CommentThread.astro` all check
+`mayPost()` and say so in prose. What was missing was the account page, which is where somebody
+goes to find out why, and it now leads with it.
