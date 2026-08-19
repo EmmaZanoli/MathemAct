@@ -85,7 +85,8 @@ import { path } from '../../lib/paths';
         Oldest first, and the whole of what was flagged is below each one — decide from that
         rather than from what the flag says about it. Two answers: hide it, or leave it up.
         Hiding also closes every other flag against the same post, and everyone who raised
-        one is told what you wrote.
+        one is told what you wrote. Banning the account is a separate decision about a person
+        rather than an answer to this flag, so it leaves the flag open — decide that too.
       </p>
       <ol class="queue__list" data-list role="list"></ol>
       <p class="queue__more" data-more hidden>
@@ -135,6 +136,57 @@ import { path } from '../../lib/paths';
       </div>
 
       <p class="queue__empty" data-empty hidden>Nothing is hidden.</p>
+    </section>
+
+    {/* The one section not driven by a queue, because the thing it is for does not arrive as
+        one. Somebody posting the same advertisement eleven times is rarely flagged — people
+        leave rather than flag — and a network entry cannot be flagged at all. So a ban
+        reachable only from a flag is a ban unreachable in the case it exists for. */}
+    <section class="queue__section" data-section="accounts">
+      <h2>Accounts</h2>
+      <p class="queue__note">
+        A ban is about an account rather than about a post: spam, or hostility that no single
+        hide answers. It stops posting, commenting, rating, confirming and flagging, and leaves
+        everything the account has already posted exactly where it is — taking those down is a
+        separate decision, one per post. It is reversible, and the account holder reads what
+        you write.
+      </p>
+
+      <form class="search" data-account-search novalidate>
+        <label class="reason__label" for="account-term">Find an account by display name</label>
+        <div class="search__row">
+          <input
+            class="search__box"
+            type="search"
+            id="account-term"
+            name="term"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="button" type="submit">Search</button>
+        </div>
+        <p class="reason__hint">
+          Two characters or more, matched anywhere in the name. No address is shown here or
+          anywhere else on this screen — there is no column holding one.
+        </p>
+      </form>
+
+      <div data-subsection="found" hidden>
+        <h3 class="queue__subhead">Matches <span class="mono" data-count></span></h3>
+        <ol class="queue__list" data-list role="list"></ol>
+      </div>
+
+      <p class="queue__empty" data-no-match hidden>
+        No account has a display name like that. A pseudonym is matched the same way as a
+        name.
+      </p>
+
+      <div data-subsection="banned" hidden>
+        <h3 class="queue__subhead">Banned now <span class="mono" data-count></span></h3>
+        <ol class="queue__list" data-list role="list"></ol>
+      </div>
+
+      <p class="queue__empty" data-none-banned hidden>Nobody is banned.</p>
     </section>
 
     <section class="queue__section" data-section="erasures" hidden>
@@ -264,14 +316,57 @@ import { path } from '../../lib/paths';
         <p data-note></p>
       </div>
 
+      {/* One box for both buttons, so the label has to cover both. Whichever is pressed, the
+          same person reads the same sentence — the author of the post, who is also the holder
+          of the account. */}
       <div class="reason">
-        <label class="reason__label" data-reason-label>Why it can come back</label>
+        <label class="reason__label" data-reason-label>Why, in a sentence</label>
         <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
-        <p class="reason__hint">Required. The author reads it.</p>
+        <p class="reason__hint">Required. Whoever posted this reads exactly this.</p>
       </div>
 
       <div class="actions">
         <button class="button" data-act="unhide">Unhide</button>
+        <button class="button button--quiet" data-act="ban">Ban that account</button>
+      </div>
+    </li>
+  </template>
+
+  <template data-template="account">
+    <li class="item item--compact">
+      <div class="item__head">
+        <h3 class="item__title" data-title></h3>
+        <p class="mono item__meta" data-meta></p>
+      </div>
+
+      {/* public.moderate() refuses to ban an account with moderation standing, so the screen
+          says so and offers nothing rather than a button that raises. */}
+      <p class="account__standing" data-standing hidden>
+        This account moderates. Changing that needs direct database access, so one compromised
+        session cannot disable the people who would notice.
+      </p>
+
+      {/* The runtime author page, not the generated one. /authors/<id>/ exists only for
+          somebody who had a report in the last export, and the account a moderator is looking
+          at is quite likely to be one that posted eleven things this afternoon. A new tab
+          because losing the queue and the search to a link is worse than a new tab. */}
+      <p class="account__posts">
+        <a data-posts-link target="_blank" rel="noopener">Everything this account has posted</a
+        > — opens in a new tab
+      </p>
+
+      <div class="reason">
+        <label class="reason__label" data-reason-label>Why, in a sentence</label>
+        <textarea class="reason__box" rows="2" data-reason maxlength="1000"></textarea>
+        <p class="reason__hint">
+          Required, and the account holder reads exactly this. Say what the account did, not
+          what you think of it.
+        </p>
+      </div>
+
+      <div class="actions">
+        <button class="button button--quiet" data-act="ban">Ban this account</button>
+        <button class="button" data-act="unban">Lift the ban</button>
       </div>
     </li>
   </template>
@@ -315,12 +410,14 @@ import { path } from '../../lib/paths';
     loadMoreErasures,
     loadRole,
     moderates,
+    searchAccounts,
     NEEDS_REASON,
     QUEUE_PAGE_SIZE,
   } from '../../lib/moderation';
   import { setModHint, clearModHint } from '../../lib/mod-hint';
   import type {
     Action,
+    QueueAccount,
     QueueAuthor,
     QueueComment,
     QueueErasure,
@@ -374,6 +471,7 @@ import { path } from '../../lib/paths';
     notFound.hidden = true;
     screen.hidden = false;
     wireLoadMore();
+    wireAccountSearch();
     void fill();
   }
 
@@ -420,6 +518,8 @@ import { path } from '../../lib/paths';
     fillSubsection('hidden-entries', q.hiddenEntries, (row) => hiddenItem({ kind: 'entry', row }), q.hiddenEntriesHasMore);
     updateHiddenSection();
 
+    fillBanned(q.bannedAccounts);
+
     const erasureSection = query<HTMLElement>('[data-section="erasures"]');
     erasureSection.hidden = role !== 'admin';
     if (role === 'admin') {
@@ -428,6 +528,12 @@ import { path } from '../../lib/paths';
     }
 
     updateTally();
+
+    // A search that is still on screen is re-run rather than left showing the state before
+    // the decision. It is not part of the queues, so nothing above would have touched it, and
+    // a row still offering "Ban this account" after the ban went through is the one thing this
+    // section must not do.
+    if (searchTerm) void runSearch(searchTerm);
   }
 
   function updateTally(): void {
@@ -819,7 +925,20 @@ import { path } from '../../lib/paths';
       put(item, '[data-note-at]', longDate(entry.row.updatedAt));
     }
 
-    wire(item, (action) => ({ target: entry.kind as Target, id: entry.row.id, action }));
+    // Banning from here rather than only from a flag, because this is the list a moderator is
+    // looking at when the pattern becomes visible: eleven hidden entries with one name on
+    // them is the evidence, and it is not any single flag's answer.
+    wire(
+      item,
+      (action) => {
+        if (action === 'ban') {
+          return author ? { target: 'account' as Target, id: author.id, action } : null;
+        }
+
+        return { target: entry.kind as Target, id: entry.row.id, action };
+      },
+      Boolean(author),
+    );
 
     return item;
   }
@@ -841,6 +960,106 @@ import { path } from '../../lib/paths';
       id: request.id,
       action: 'erase_account' as Action,
     }));
+
+    return item;
+  }
+
+  // ── Accounts ────────────────────────────────────────────────────────────────────────
+  //
+  // Two lists over one template: whoever the search found, and whoever is banned now. The
+  // same row does both jobs because the decision is symmetrical — one button appears and the
+  // other is removed, according to the state the row is in.
+
+  /** The live search term, so that fill() can re-run it after a decision. Empty when no
+   *  search is on screen. */
+  let searchTerm = '';
+
+  function wireAccountSearch(): void {
+    const form = query<HTMLFormElement>('[data-account-search]');
+    const box = query<HTMLInputElement>('#account-term', form);
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      hideStatus(status);
+
+      searchTerm = box.value.trim();
+
+      if (!searchTerm) {
+        query<HTMLElement>('[data-subsection="found"]').hidden = true;
+        query<HTMLElement>('[data-no-match]').hidden = true;
+        return;
+      }
+
+      await runSearch(searchTerm);
+    });
+  }
+
+  async function runSearch(term: string): Promise<void> {
+    const result = await searchAccounts(term);
+
+    if (!result.ok) {
+      showStatus(status, 'error', result.message);
+      return;
+    }
+
+    const found = query<HTMLElement>('[data-subsection="found"]');
+    const list = query<HTMLElement>('[data-list]', found);
+    const count = query<HTMLElement>('[data-count]', found);
+
+    list.replaceChildren(...result.value.map(accountItem));
+    count.textContent = result.value.length ? String(result.value.length) : '';
+    found.hidden = result.value.length === 0;
+    query<HTMLElement>('[data-no-match]').hidden = result.value.length > 0;
+  }
+
+  function fillBanned(accounts: readonly QueueAccount[]): void {
+    const section = query<HTMLElement>('[data-subsection="banned"]');
+    const list = query<HTMLElement>('[data-list]', section);
+    const count = query<HTMLElement>('[data-count]', section);
+
+    list.replaceChildren(...accounts.map(accountItem));
+    count.textContent = accounts.length ? String(accounts.length) : '';
+    section.hidden = accounts.length === 0;
+    query<HTMLElement>('[data-none-banned]').hidden = accounts.length > 0;
+  }
+
+  function accountItem(account: QueueAccount): HTMLElement {
+    const item = clone('account');
+
+    // name() takes the author shape, which an account is a wider version of. Same rule
+    // applies: a display name, a pseudonym marker, a badge, and never an address.
+    put(item, '[data-title]', name(account));
+
+    const meta = [account.role, `joined ${verificationMonth(account.joinedAt)}`];
+    if (account.isBanned) {
+      // The date comes from the audit log. An account banned by direct database access has no
+      // row there, and the word alone is the honest rendering of that.
+      meta.push(account.bannedAt ? `banned ${longDate(account.bannedAt)}` : 'banned');
+    }
+    put(item, '[data-meta]', meta.join(' · '));
+
+    const posts = query<HTMLAnchorElement>('[data-posts-link]', item);
+    posts.href = path(`/authors/view/?id=${account.id}`);
+
+    // An account that moderates cannot be banned from here, so the row states the rule and
+    // carries no controls at all — not a disabled button, and not a reason box for a decision
+    // that has nowhere to go.
+    const standing = account.role !== 'member';
+    query<HTMLElement>('[data-standing]', item).hidden = !standing;
+
+    if (standing) {
+      item.querySelector('.reason')?.remove();
+      item.querySelector('.actions')?.remove();
+      return item;
+    }
+
+    for (const button of item.querySelectorAll<HTMLButtonElement>('[data-act]')) {
+      const named = button.dataset.act;
+      if (account.isBanned && named === 'ban') button.remove();
+      if (!account.isBanned && named === 'unban') button.remove();
+    }
+
+    wire(item, (action) => ({ target: 'account' as Target, id: account.id, action }));
 
     return item;
   }
@@ -1140,6 +1359,42 @@ import { path } from '../../lib/paths';
 
   .erasure__counts {
     margin-block-start: var(--space-md);
+  }
+
+  /* ── An account ──────────────────────────────────────────────────────────────────── */
+  .search {
+    margin-block-start: var(--space-lg);
+  }
+
+  .search__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs) var(--space-xs);
+    margin-block-start: var(--space-2xs);
+  }
+
+  .search__box {
+    flex: 1 1 18rem;
+    max-inline-size: var(--measure);
+    padding: var(--space-2xs) var(--space-xs);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background-color: var(--ground);
+    color: var(--ink);
+    font: inherit;
+    font-size: var(--size-2);
+  }
+
+  .search__box:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .account__standing,
+  .account__posts {
+    margin-block-start: var(--space-sm);
+    font-size: var(--size-2);
+    color: var(--ink-muted);
   }
 
   .flag__gone {

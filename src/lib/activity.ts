@@ -407,9 +407,13 @@ function href(item: ActivityItem): string | null {
     case 'flag_dismissed':
       return path('/account/#decisions');
 
+    // Since 20260819120000 a ban writes public.moderation_notices like every other decision,
+    // so there is somewhere for this row to go. It used to return null because there was
+    // genuinely nothing to link to: the sentence a moderator was required to write reached the
+    // audit log and stopped, and this was the only thing the account was ever told.
     case 'account_banned':
     case 'account_unbanned':
-      return null;
+      return path('/account/#decisions');
 
     default:
       break;
@@ -488,9 +492,9 @@ function sentence(item: ActivityItem): string {
         ? 'Somebody flagged your comment. A moderator looked and left it where it was.'
         : `Somebody flagged your ${noun(item.targetType)}. A moderator looked and left it where it was.`;
     case 'account_banned':
-      return 'Your account has been suspended. You can still read the site, but not post.';
+      return 'Your account has been suspended. You can still read the site, but not post. The reason is with your moderation decisions.';
     case 'account_unbanned':
-      return 'Your account has been restored. You can post again.';
+      return 'Your account has been restored. You can post again. The reason is with your moderation decisions.';
     case 'flag_resolved':
       return 'Something you flagged was taken off the site. The reason is with your moderation decisions.';
     case 'flag_dismissed':

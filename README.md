@@ -21,7 +21,10 @@ mathematics are part of the intended audience.
 Public site, identity layer, account flows, the submission form, reading, and moderation
 built. **Posting publishes**: nothing is reviewed before it appears. Moderation is what
 happens when a reader flags something — a moderator decides whether it stays up, and the
-explanation they write is shown to the author and to the flagger alike. Moderators reach the
+explanation they write is shown to the author and to the flagger alike. The second kind of
+decision is about a person rather than a post: **an account can be banned** for spam or
+sustained hostility, which stops it writing anything, leaves everything it has already written
+in place, is reversible, and is explained in writing to whoever holds it. Moderators reach the
 screen at `/moderate/` — a nav link appears once the page has confirmed their role via
 localStorage, using the same pattern as the sign-in indicator.
 
@@ -41,6 +44,7 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | Network: submission, moderation, and a monthly link check |
 | ✅ | Discussion, the citation graph, and the flag queue |
 | ✅ | Moderation: flag-led, audited, explained to both sides, and erasure that erases |
+| ✅ | Account bans: reachable, reversible, and explained to the account holder |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |
 | ✅ | Editing a report: until somebody answers it, and again while it is hidden |
 | ⬜ | Search |
@@ -166,13 +170,14 @@ production rather than a report after it.
 
 ### Database tests
 
-397 pgTAP assertions across seventeen files in `supabase/tests/`, covering domain matching, the
+510 pgTAP assertions across twenty files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the
 tombstone rule, the rate limits, the submission RPC, the agreement scale, every comment
-policy including the nesting limit and what soft deletion destroys, and the citation and
-flag queues.
+policy including the nesting limit and what soft deletion destroys, the citation and
+flag queues, the activity feed and its backfill, and account bans — the seven write paths a
+ban closes, asserted one by one, and the notice it sends.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
 the feature works and says nothing about whether it is a door.
@@ -202,8 +207,8 @@ src/pages/reports/      the listing, a report, the submission form
 src/pages/authors/      one contributor's reports, debates, and submitted entries
 src/pages/debates/      the index, a debate, and the suggest form
 src/pages/network/      the listing and the submission form
-src/pages/moderate/     open flags and what is hidden; ships as the 404 page and reveals
-                        itself to a moderator
+src/pages/moderate/     open flags, what is hidden, accounts (search, ban, unban), and erasure
+                        requests; ships as the 404 page and reveals itself to a moderator
 */view.astro            client-rendered stand-ins for pages the last export predates
 src/components/         Tombstone, Markdown, Badges, Field, FormStatus, Turnstile
 src/layouts/            Base (shell), Page (long-form prose), Account (forms + session gate)

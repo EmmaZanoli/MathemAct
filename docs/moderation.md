@@ -1,8 +1,8 @@
 # Moderation
 
-**Draft.** Everything in the first four sections is a proposal to be revised before the
-site opens to real users — particularly the names, the scope rule, and the appeals address.
-The rest describes what the code does today and is accurate.
+**Draft.** Everything above *Editing, and when it stops* is a proposal to be revised before
+the site opens to real users — particularly the names, the scope rule, and the appeals
+address. The rest describes what the code does today and is accurate.
 
 ---
 
@@ -15,6 +15,13 @@ name. What a moderator does is answer a **flag**: somebody reads something, thin
 not belong, and says so. The moderator decides whether it stays up or comes down, and
 **writes an explanation that both the author and the flagger read.**
 
+There is a second kind of decision, and it is about a person rather than a post: **an account
+can be banned.** That is for the case no sequence of hides answers — an account posting the
+same advertisement eleven times, or one whose contribution to every thread is hostility. It
+stops them writing anything, it leaves everything they have already written where it is, it is
+reversible, and like every other decision here it carries an explanation the account holder
+reads. See *Banning an account* below.
+
 Why this way round is in `docs/decisions.md` under *Post-moderation*. The short version:
 pre-moderation put two volunteers between a mathematician and the corpus, scaled with
 submissions rather than with problems, and made a corpus of unvetted first-hand accounts
@@ -25,7 +32,7 @@ read as though somebody had vetted it.
 | Role | Held by | May |
 |---|---|---|
 | `admin` | *(to fill in — the person who owns the Supabase project)* | Everything a moderator may, plus process erasure requests |
-| `moderator` | *(to fill in — two people, not one)* | Hide, unhide, close flags, ban |
+| `moderator` | *(to fill in — two people, not one)* | Hide, unhide, close flags, ban and unban accounts |
 | `member` | Everyone else | Post, comment, rate, confirm, flag |
 
 Roles live in `public.profiles.role` and are set with direct database access. There is no
@@ -61,6 +68,9 @@ In scope:
 - Fabrication: an account of work that was not done, an invented transcript, an invented
   verification step.
 - Promotion of a product or of oneself in place of a genuine account.
+- **Spam** — the same promotion posted repeatedly, whoever it is for. This is the one item in
+  this list whose natural answer is a ban rather than a hide: hiding the eleventh entry does
+  not address an account that will post a twelfth.
 
 Out of scope, and this is the important half:
 
@@ -79,13 +89,17 @@ Out of scope, and this is the important half:
 
 ## The explanation, which is the part that is new
 
-Every decision carries one, and it reaches two people.
+Every decision carries one, and it reaches whoever it is about — one, two, or on a ban, one
+person who wrote nothing.
 
 - **The author of the content** — so that being moderated is something you are told, in
   words, rather than something you discover by absence.
 - **Whoever flagged it** — so that flagging is not a message into a void. This is the half
   people forget, and a flag queue that answers nobody teaches the community that flagging
   does nothing.
+- **The holder of a banned account** — the one recipient who may have no post in the
+  decision at all. `recipient_role` is `account_holder` rather than `author` for exactly that
+  reason: the sentence has to read as being about them and not about something of theirs.
 
 It lives in `public.moderation_notices`, one row per recipient, and is read at
 `/account/#decisions`. Two rules about what it may contain, both enforced by the table
@@ -108,6 +122,85 @@ itself. One mapping turns a decision into feed rows — `private.log_moderation(
 by the trigger on `public.moderation_actions` and by `private.backfill_activity()`, so the
 two cannot drift. Two channels because a notification nobody can act on is noise, and an explanation
 nobody is told about is a file in a drawer.
+
+## Banning an account
+
+The other kind of decision. A hide is about a post; a ban is about a person, and the case for
+it is a pattern rather than any one thing: **spam, or sustained hostility.** Both are patterns
+that hiding cannot answer, because the next post is already being written.
+
+**Two moderators still.** `public.moderate()` refuses a ban of the caller's own account and a
+ban of anybody holding `moderator` or `admin`. Removing standing from somebody who has it needs
+direct database access, deliberately, so that one compromised session cannot disable the people
+who would notice. The accounts section says so on the row rather than offering a button the
+database will refuse.
+
+### What a ban does, exactly
+
+It sets `public.profiles.is_banned`, which every insert policy on the site reads. Nothing else.
+Seven write paths stop — reports, debates, network entries, comments, ratings, confirmations,
+flags — and `supabase/tests/020_account_bans.test.sql` asserts each of them from the banned
+side, because "a ban means a ban" is written in seven places and one of them being wrong would
+present as a member having a bad day.
+
+What a ban is **not**:
+
+- **It does not remove anything they posted.** Their reports stay in the corpus and their
+  comments stay in their threads. Taking a post down is a decision about that post, and one
+  action per post, each with its own audit row and its own explanation. See below for why
+  there is no button that does thirty at once.
+- **It does not stop them reading**, and it does not stop them editing their profile or
+  asking to be erased. An account that could not ask to be erased would be one somebody had
+  been locked inside, which is a data-protection problem and not a moderation tool.
+- **It is not permanent.** `unban` is a decision with an explanation of its own, not the
+  absence of a ban, and it appears on the account's page as its own line.
+
+### What the account is told
+
+A ban writes three things in one transaction: the audit row, a `public.moderation_notices` row
+addressed to the account holder, and a `public.activity` row so that the next visit shows a
+count. The person reads:
+
+- a banner at the top of `/account/` saying the account is suspended, what still works, and
+  that nothing they posted was removed;
+- the moderator's sentence under `/account/#decisions`, with the reply address;
+- a line in `/account/activity/` linking to the same place.
+
+**Until 2026-08-19 none of that existed.** `public.moderate()` insisted on a reason, wrote it
+to the moderators-only log, and stopped — `moderation_notices_subject_is_content` restricted a
+notice to the four content kinds, so a notice about an account could not be written even
+deliberately. The code of conduct has said since it was published that "if your content is
+hidden or your account is suspended, you are told what rule was applied and why, on your
+account page". For a suspension that was not true. It is now.
+
+### Where the button is
+
+`/moderate/` has three places, and the third exists because the first two are not enough.
+
+1. **On an open flag** — "Ban that account", against the author of what was flagged. Note that
+   it does **not** answer the flag: the flag is about the post and stays open until it is
+   decided. The screen says so.
+2. **On a hidden row** — the list a moderator is looking at when a pattern becomes visible.
+   Eleven hidden entries with one name on them is the evidence, and it is not any single
+   flag's answer.
+3. **In the accounts section** — a search by display name, and the list of everybody banned
+   now, which is the reversal path. This is the one that matters for spam: nobody flags an
+   advertisement, they leave, and **a network entry cannot be flagged at all** —
+   `public.flags.subject_type` is `public.content_kind`, which has no `entry`. A ban reachable
+   only from a flag was a ban unreachable in the case it exists for.
+
+Each account row links to `/authors/view/?id=…` — the runtime author page, not the generated
+one, because an account worth looking at is quite likely to have posted everything it posted
+this afternoon and to have no static page yet.
+
+### Why there is no "ban and hide everything"
+
+It is the obvious feature and it is deliberately absent. One decision writes one audit row and
+one notice; thirty in a transaction turns an explanation into a mailshot, and the person
+receives thirty copies of one sentence. It would also mean removing posts nobody had read
+against the rules in *What is in scope*, which is the one thing this project's moderation is
+built not to do. Hiding stays per post, and the accounts section links to what the account
+posted so that the walk is short.
 
 ## Appeals
 
@@ -210,7 +303,7 @@ is something here worth attacking. The page is manners. The wall is row level se
 member who runs the same queries by hand gets empty arrays, and `public.moderate()` refuses
 them by name.
 
-Three sections, in the order they are worked:
+Four sections, in the order they are worked:
 
 1. **Open flags** — oldest first, with the whole of what was flagged shown inline. For a
    report that means the entire submission, verification section and transcript included,
@@ -219,7 +312,13 @@ Three sections, in the order they are worked:
 2. **Hidden** — everything currently hidden, so that a decision can be reversed and so that
    a revision by its author can be noticed. A report or entry revised while hidden says so,
    with the date.
-3. **Erasure requests** — admins only.
+3. **Accounts** — a search by display name, and everybody banned now. The only section not
+   driven by a queue, because the thing it is for does not arrive as one: a flag arrives, a
+   spammer does not. The banned list is what makes a ban reversible by somebody who did not
+   impose it, and it carries the date from the audit log — an account banned by direct
+   database access has no row there and reads as "banned" with no date, which is the honest
+   rendering of a log that is silent.
+4. **Erasure requests** — admins only.
 
 `?fixtures` fills the queues with invented rows and skips the gate, for working on the screen
 without a moderator account. It exists only in `astro dev`: `import.meta.env.DEV` is `false`
@@ -239,9 +338,19 @@ write attempted directly from a console silently changes nothing.
 | Leave it up | The flag is `dismissed`. The content does not move. | **Required.** Read by the flagger, and by the author — who learns from it that a flag existed, and never who raised it. |
 | Close: already gone | The flag is `actioned` without touching the content. Offered only when what it named is already hidden or deleted. | **Required.** Read by the flagger. |
 | Unhide | → `published`, or `active` for a debate. Nothing records the status before hiding, so unhiding publishes. | **Required.** Read by the author. |
-| Ban | `profiles.is_banned`. Blocks posting, commenting, rating, confirming and flagging. Reversible. | **Required.** |
-| Unban | Lifts it. | **Required.** |
+| Ban | `profiles.is_banned`. Blocks posting, commenting, rating, confirming, flagging and citing. Touches nothing the account has posted. Refused against the caller's own account, against anybody with moderation standing, and against an account already banned. Reversible. | **Required.** Read by the account holder. |
+| Unban | Lifts it. Refused if the account is not banned. | **Required.** Read by the account holder. |
 | Erase | Deletes the account. Admins only, and only against a standing request. | Not required — it is a request being carried out, not a judgement. |
+
+**Every branch writes its own audit row and returns.** The shared insert at the foot of
+`public.moderate()` went on 2026-08-19 when the account branch needed the audit id in order to
+attach a notice to it. One fewer way for an action added later to happen and log the wrong
+target.
+
+**Banning twice is refused rather than repeated.** The effect is idempotent and the
+notification is not: a second ban would write a second audit row, a second notice and a second
+feed row telling somebody their account had just been suspended when nothing had changed since
+the last time they were told.
 
 **Hiding closes the flags.** This is the one piece of automation in the whole path and it
 exists because the alternative was two decisions where there is one: a moderator hides a
@@ -325,10 +434,20 @@ mid-decision.
 - **Removing a citation is not logged.** A moderator may delete a citation whose stored
   excerpt should not be there — the one hard delete on the site — and that path predates the
   audit log and still bypasses it.
-- **Banning is barely visible.** A banned account gets one line in its activity feed saying
-  so, and a notice with the reason. Everything else about it still looks ordinary — the post
-  forms are not disabled, and the refusal when it tries to post still comes from a policy
-  rather than from the interface.
+- **A ban has no duration.** It is on until somebody lifts it, and nothing expires it or
+  reminds anybody it exists beyond its row in the banned list. A two-week suspension is
+  therefore a two-week suspension only if a moderator remembers, which for a volunteer rota is
+  a promise not to make. The honest version is a `banned_until` column and a nightly job, not a
+  note in this file.
+- **A ban is not visible on the account's own contributions.** Somebody reading a banned
+  account's author page sees an ordinary contributor. That is arguably correct — the posts were
+  not the problem, and the corpus is under CC BY — but it is worth saying that it is a
+  consequence rather than a decision anybody took.
+- **`profiles.is_banned` is readable by anybody**, including anonymously: the SELECT grant on
+  `public.profiles` is table-wide, because badges and author pages are built from it. So a
+  moderation outcome that is otherwise moderators-only can be enumerated by anyone who thinks
+  to ask. Narrowing it means column-level grants, and the caller's own row needs `is_banned` and
+  `role` — which a column grant cannot make conditional. Recorded rather than fixed.
 - **Nothing rate-limits flagging.** One person can open a flag on every post on the site,
   once each. The unique constraint stops them doing it twice to the same row and nothing
   stops the sweep.

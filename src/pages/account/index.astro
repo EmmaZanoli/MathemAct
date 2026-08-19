@@ -50,6 +50,22 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     <p>Email address confirmed. The account is ready to use.</p>
   </div>
 
+  {/* A suspension used to be visible only as a refusal from a policy when somebody tried to
+      post. It is a decision about a person and it is said in words, at the top of the page
+      they would come to and find out. Plain `.form-status`, whose ink rule is the neutral
+      state: this is the site telling somebody something, not a form they got wrong. */}
+  <div class="form-status" data-suspended hidden>
+    <p>
+      <strong>This account is suspended.</strong> You can read the site, change how you appear,
+      and erase the account. You cannot post, comment, rate, confirm or flag until the
+      suspension is lifted.
+    </p>
+    <p>
+      Nothing you have already posted was removed by this. The reason is under
+      <a href="#decisions">moderation decisions</a> below, and it says how to reply to it.
+    </p>
+  </div>
+
   <section class="section">
     <h2>What has been verified</h2>
 
@@ -110,8 +126,16 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
       <em>did not</em> work are the ones this corpus is shortest of.
     </p>
 
-    <p class="actions">
+    <p class="actions" data-post-action>
       <a class="button button--primary" href={path('/reports/new/')}>Post a report</a>
+    </p>
+
+    {/* The form refuses a suspended account with a sentence of its own, so this is not the
+        lock — it is the difference between finding that out here and finding it out after ten
+        minutes of writing. */}
+    <p class="field__hint" data-post-blocked hidden>
+      Posting is suspended for this account, so the form would refuse it. The reason is under
+      <a href="#decisions">moderation decisions</a> below.
     </p>
   </section>
 
@@ -241,7 +265,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   import { loadOwnReports } from '../../lib/reports';
   import type { OwnSubmission } from '../../lib/reports';
   import { loadOwnEntries } from '../../lib/network';
-  import { loadNotices, noticeFollowUp, noticeHeading } from '../../lib/notices';
+  import { loadNotices, noticeContext, noticeFollowUp, noticeHeading } from '../../lib/notices';
   import type { Notice } from '../../lib/notices';
   import { loadProfile, saveProfile } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
@@ -270,6 +294,9 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
   const unmatched = query<HTMLElement>('[data-unmatched]');
   const stale = query<HTMLElement>('[data-stale]');
   const confirmed = query<HTMLElement>('[data-confirmed]');
+  const suspended = query<HTMLElement>('[data-suspended]');
+  const postAction = query<HTMLElement>('[data-post-action]');
+  const postBlocked = query<HTMLElement>('[data-post-blocked]');
 
   // A confirmation link that expired lands here with the reason attached, and it has to be
   // read before the client strips it. Both this and the success note are shown to whoever
@@ -313,6 +340,10 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     displayName.value = profile.displayName;
     isPseudonym.checked = profile.isPseudonym;
     bio.value = profile.bio;
+
+    suspended.hidden = !profile.isBanned;
+    postAction.hidden = profile.isBanned;
+    postBlocked.hidden = !profile.isBanned;
 
     const institution = profile.institution;
     unmatched.hidden = institution !== null;
@@ -443,7 +474,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 
         query<HTMLElement>('[data-heading]', row).textContent = noticeHeading(notice);
         query<HTMLElement>('[data-meta]', row).textContent = [
-          notice.label ?? 'no longer on the site',
+          noticeContext(notice),
           longDate(notice.createdAt),
         ].join(' · ');
         query<HTMLElement>('[data-explanation]', row).textContent = notice.explanation;

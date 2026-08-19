@@ -25,6 +25,7 @@
  * exist because a notification nobody can act on is noise, and an explanation nobody is told
  * about is a file in a drawer.
  */
+import { SITE } from './site';
 import { getSupabase } from './supabase';
 
 export type Result<T> =
@@ -34,13 +35,25 @@ export type Result<T> =
 const UNAVAILABLE =
   'Moderation decisions cannot be loaded right now. Try again in a few minutes; nothing has been lost.';
 
-/** What the decision did, in the words a member reads. Mirrors public.moderation_outcome. */
-export type NoticeOutcome = 'hidden' | 'kept' | 'restored';
+/**
+ * What the decision did, in the words a member reads. Mirrors public.moderation_outcome.
+ *
+ * Three of these are about a post and two are about an account. They are one type rather than
+ * two because they arrive in one list, on one page, and a person reading it is not sorting
+ * their news by which table it came from.
+ */
+export type NoticeOutcome = 'hidden' | 'kept' | 'restored' | 'banned' | 'unbanned';
 
-/** Why you are being told. Mirrors public.notice_recipient. */
-export type NoticeRole = 'author' | 'flagger';
+/**
+ * Why you are being told. Mirrors public.notice_recipient.
+ *
+ * `account_holder` is the third and it is not a synonym for `author`: a ban may reach somebody
+ * who wrote nothing that was decided about, and the sentence has to read as being about them
+ * rather than about a post of theirs.
+ */
+export type NoticeRole = 'author' | 'flagger' | 'account_holder';
 
-export type NoticeSubject = 'report' | 'debate' | 'comment' | 'entry';
+export type NoticeSubject = 'report' | 'debate' | 'comment' | 'entry' | 'account';
 
 export interface Notice {
   readonly id: string;
@@ -101,6 +114,7 @@ const NOUN: Record<NoticeSubject, string> = {
   debate: 'debate',
   comment: 'comment',
   entry: 'network entry',
+  account: 'account',
 };
 
 /**
@@ -111,6 +125,15 @@ const NOUN: Record<NoticeSubject, string> = {
  * is that their flag was answered. A single neutral sentence would serve neither.
  */
 export function noticeHeading(notice: Notice): string {
+  // A suspension first, because it is the one decision with no post behind it. There is no
+  // "your report" to name — only the account of the person reading the sentence, which is why
+  // this notice carries no label and this branch names no noun.
+  if (notice.subjectType === 'account') {
+    return notice.outcome === 'unbanned'
+      ? 'This account can post again'
+      : 'This account is suspended';
+  }
+
   const noun = NOUN[notice.subjectType];
 
   if (notice.role === 'flagger') {
@@ -122,21 +145,41 @@ export function noticeHeading(notice: Notice): string {
       case 'restored':
         return `The ${noun} you flagged was restored`;
     }
+  } else {
+    switch (notice.outcome) {
+      case 'hidden':
+        return `Your ${noun} was hidden`;
+      case 'kept':
+        return `Your ${noun} was flagged, and stays up`;
+      case 'restored':
+        return `Your ${noun} is back`;
+    }
   }
 
-  switch (notice.outcome) {
-    case 'hidden':
-      return `Your ${noun} was hidden`;
-    case 'kept':
-      return `Your ${noun} was flagged, and stays up`;
-    case 'restored':
-      return `Your ${noun} is back`;
-  }
+  // A ban outcome on a post, which the branch above has already ruled out. Reached only if a
+  // value is added to public.moderation_outcome without a sentence written for it, and a
+  // decision somebody cannot read is worse than a plain one.
+  return `A decision about your ${noun}`;
 }
 
-/** What to do next, where there is anything to do. Only an author whose own post is hidden
- *  has a next step; everybody else is being told, not asked. */
+/**
+ * What to do next, where there is anything to do.
+ *
+ * Only two notices have a next step: an author whose post is hidden can rewrite it, and a
+ * suspended account can appeal. Everybody else is being told, not asked, and inventing an
+ * action for them would read as a form to fill in.
+ */
 export function noticeFollowUp(notice: Notice): string | null {
+  // What a ban is not, said plainly, because the two things people assume are both wrong: it
+  // does not remove what they posted, and it is not the end of the conversation.
+  if (notice.subjectType === 'account') {
+    return notice.outcome === 'banned'
+      ? 'Nothing you posted was taken down by this, and you can still read the site and erase ' +
+          `the account. If you think the decision is wrong, write to ${SITE.contactEmail} — it ` +
+          'will be read by a moderator other than the one who took it wherever there is one to ask.'
+      : null;
+  }
+
   if (notice.role !== 'author' || notice.outcome !== 'hidden') return null;
 
   switch (notice.subjectType) {
@@ -149,4 +192,18 @@ export function noticeFollowUp(notice: Notice): string | null {
     case 'comment':
       return 'The thread is still there, and you can reply to it again.';
   }
+}
+
+/**
+ * What the decision was about, for the line under the heading.
+ *
+ * Every notice about a post carries the heading of that post, and a null one means the post has
+ * since gone outright — worth saying, because "no longer on the site" explains a decision with
+ * nothing behind it. A notice about an account has no label by construction, and the same
+ * sentence there would be alarming nonsense: the account is not gone, it is the thing being
+ * read from.
+ */
+export function noticeContext(notice: Notice): string {
+  if (notice.subjectType === 'account') return 'this account';
+  return notice.label ?? 'no longer on the site';
 }
