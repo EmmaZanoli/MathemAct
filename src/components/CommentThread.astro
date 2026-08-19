@@ -284,7 +284,6 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
 
   if (root) {
     const parentType = root.dataset.parentType as ParentType;
-    const parentId = root.dataset.parentId!;
 
     const list = query<HTMLElement>('[data-thread-list]', root);
     const countLabel = query<HTMLElement>('[data-thread-count]', root);
@@ -314,7 +313,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       // A passage taken from this very page is an ordinary quotation: the text is already
       // in the box, and a citation from a page to itself is refused by the database and
       // would be noise in the referenced-by block if it were not.
-      attached = passage && passage.sourceId !== parentId ? passage : null;
+      attached = passage && passage.sourceId !== root.dataset.parentId ? passage : null;
 
       strip.hidden = attached === null;
       if (!attached) return;
@@ -437,7 +436,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
      * the static corpus makes. Failure is silent: the built thread stands.
      */
     async function overlay(): Promise<void> {
-      const result = await loadThread(parentType, parentId);
+      const result = await loadThread(parentType, root.dataset.parentId!);
       if (!result.ok) return;
 
       let added = 0;
@@ -845,7 +844,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       }
 
       setBusy(submit, true, 'Posting…');
-      const posted = await postComment(parentType, parentId, viewerId, body.value, replyingTo);
+      const posted = await postComment(parentType, root.dataset.parentId!, viewerId, body.value, replyingTo);
 
       if (!posted.ok) {
         setBusy(submit, false);
@@ -862,7 +861,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
         const linked = await createCitation(
           {
             sourceType: parentType,
-            sourceId: parentId,
+            sourceId: root.dataset.parentId!,
             sourceCommentId: posted.value.id,
             targetType: attached.sourceType,
             targetId: attached.sourceId,
@@ -929,7 +928,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
 
     installQuoteAffordance({
       nodeType: parentType,
-      nodeId: parentId,
+      nodeId: root.dataset.parentId!,
       title: root.dataset.nodeTitle!,
       href: root.dataset.nodeHref!,
       proposeHref: root.dataset.proposeHref!,
