@@ -2094,3 +2094,100 @@ Reversed: the pre-moderation design of 2026-08-15 (`public.practices` born `pend
 (`/account/edit-submission/`, which survives with a different job). The `pending` and
 `proposed` status values are kept rather than dropped from their enums — the audit log and
 two backfilled feeds refer to a world in which they existed, and rows may still carry them.
+
+## 2026-08-19 — Two private.log_activity()s, and every write on the site failing
+
+The post-moderation migration reissued `private.log_activity()` to add one branch to its
+classification CASE. It reissued it with the seven-parameter signature the function had when
+it was created — and `20260818140000_activity_backfill.sql` had dropped that signature two
+migrations earlier and replaced it with an eight-parameter one carrying `p_created_at`.
+
+`create or replace function` does not replace across a signature change. It created a second
+overload. Every trigger on the site calls this function with seven arguments, the eighth
+parameter has a default, and so every one of those calls became:
+
+```
+ERROR: function private.log_activity(uuid, unknown, uuid, unknown, uuid, unknown, text)
+       is not unique
+```
+
+**Everything that writes content stopped working**: posting a report, a debate or a network
+entry, commenting, rating, confirming, flagging, citing. Reading was untouched, because
+reading is served from static files and never goes near the database — so the deploy was
+green, the site was up, and nothing about it looked wrong.
+
+Three things went wrong at once and each is worth separating.
+
+**The mistake.** Reissuing a function without reading the latest migration that touched it.
+The definition that was copied was the one in the file that *created* the function, which is
+the file you find first when you go looking for it. Two migrations later it was not the
+definition in the database. The rule is now in CLAUDE.md.
+
+**The gate that did not gate.** `test-db.yml` failed on the branch, twice, before the merge.
+It was merged anyway, and `migrate.yml` — which runs on the same push to `main` as
+`test-db.yml`, in parallel, not after it — applied the migration to production while the
+suite was going red beside it. CLAUDE.md said the suite "gates production rather than
+reporting after it"; that is true only if a red branch run stops the merge. Also recorded in
+CLAUDE.md, next to the trap itself.
+
+**Why it was invisible for a day.** The corpus is empty and the site is pre-launch, so
+nothing tried to write. The read/write split that makes the free tier viable also means a
+totally broken write path shows no symptom at all until somebody submits something. That is
+worth knowing rather than fixing: it is the same property that keeps the site readable when
+Supabase is down.
+
+The fix drops the seven-argument overload and reissues the eight-argument one with the
+branch it was supposed to get. `018_activity.test.sql` now asserts that
+`private.log_activity` and `private.log_moderation` have exactly one overload each — by
+count, not by signature, because any second one is the bug whatever shape it has.
+
+One thing was tidied at the same time rather than left. The same migration had inlined a
+copy of the moderation-to-feed mapping into `private.activity_on_moderation()`, which
+`20260818140000` had deliberately moved out into `private.log_moderation()` so that the
+trigger and `private.backfill_activity()` could not drift. Nothing was broken by that — the
+trigger is what fires — but the copy the backfill reads was the pre-moderation one, so a
+backfill run would have written notifications from a mapping two weeks out of date. The
+mapping is back in `log_moderation()`, with the dismissal's second row in it, and the trigger
+is a wrapper again.
+
+## 2026-08-19 — "Has anybody answered this?" is a column, because as a subquery it recurses
+
+The editing rule from the post-moderation change — a report is editable while it is hidden,
+and until somebody else has confirmed or commented on it — was written as two `not exists`
+subqueries inside `reports_update_own_editable`. It raised on the first update anybody tried:
+
+```
+ERROR: infinite recursion detected in policy for relation "reports"
+```
+
+A policy **on** `public.reports` that reads `public.comments` calls the comment policy, which
+reads `public.reports` to check the parent is published, which calls the reports policy.
+`report_confirmations_select_with_parent` closes the same loop. Each of those policies is
+correct on its own; the cycle only exists when something asks the question from inside the
+table both of them point at.
+
+The rule stays and the answer moves. `public.reports.answered_at` is stamped by a trigger the
+first time a confirmation or a comment arrives from **somebody other than the author**, and
+every policy that needs the rule now reads `status = 'hidden' or answered_at is null`.
+
+Three things this is better at than the subqueries would have been even if they had worked:
+
+- One indexable comparison per row instead of two correlated scans, on a table whose UPDATE
+  policy is evaluated on every author edit.
+- The same phrase in the policy, in the guard trigger, and in the four policies on
+  `report_tools` and `report_tags` — one rule written five times rather than a ten-line
+  predicate written five times.
+- The browser stops asking. `loadOwnReports()` had to run two extra queries to decide whether
+  to offer an author the edit link; it now reads a column it was already selecting the row
+  for.
+
+The trigger is `SECURITY DEFINER` for the same reason `private.log_activity()` is: somebody
+posting a comment has no privilege on the report they are commenting on, and must not need
+one to leave a mark on it. `answered_at` has no INSERT or UPDATE column grant, and the guard
+trigger reverts it as well.
+
+Rejected: a `SECURITY DEFINER` helper function in `public` returning the same boolean, which
+is the usual way out of recursive RLS. It works, and it would have added a seventh
+`security_definer_function_executable` warning to the six accepted in CLAUDE.md — where the
+note says a seventh means something new. A column is cheaper at read time and needs no
+exception written next to it.

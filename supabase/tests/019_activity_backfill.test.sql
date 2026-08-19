@@ -160,10 +160,13 @@ select is(
 -- It writes its own feed row on insert, exactly as it would in production, and the backfill
 -- then walks straight over it.
 
-insert into public.debates (id, author_id, statement, area, status)
+-- Named without a status, so it takes the default the site now writes. Naming `proposed`
+-- here used to be harmless and is not: `activated_at` defaults to now() since
+-- 20260818180000, and debates_activated_iff_active refuses the pair.
+insert into public.debates (id, author_id, statement, area)
 values
   ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001',
-   'Posted while the triggers were live.', 'writing', 'proposed');
+   'Posted while the triggers were live.', 'writing');
 
 select is(
   (select count(*)::int from public.activity

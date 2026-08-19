@@ -1,16 +1,16 @@
 {
-  "exportedAt": "2026-08-18T03:58:01.996Z",
+  "exportedAt": "2026-08-19T03:58:24.705Z",
   "generator": "scripts/export.mjs",
   "licence": "CC BY 4.0",
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
   "files": {
     "reports.json": {
-      "rows": 1,
-      "bytes": 3567
+      "rows": 2,
+      "bytes": 5353
     },
     "debates.json": {
       "rows": 1,
-      "bytes": 589
+      "bytes": 609
     },
     "debate-ratings.json": {
       "rows": 1,
@@ -21,12 +21,12 @@
       "bytes": 5122
     },
     "profiles.json": {
-      "rows": 1,
-      "bytes": 411
+      "rows": 2,
+      "bytes": 746
     },
     "comments.json": {
-      "rows": 0,
-      "bytes": 3
+      "rows": 1,
+      "bytes": 612
     },
     "citations.json": {
       "rows": 0,
@@ -37,12 +37,12 @@
       "bytes": 3
     },
     "csv/reports.csv": {
-      "rows": 1,
-      "bytes": 2956
+      "rows": 2,
+      "bytes": 3964
     },
     "csv/report-tools.csv": {
-      "rows": 1,
-      "bytes": 113
+      "rows": 2,
+      "bytes": 181
     },
     "csv/report-tags.csv": {
       "rows": 1,
