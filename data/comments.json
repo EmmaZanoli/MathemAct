@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "id": "a327f6a2-4840-465c-ac9f-c0e136fc0c08",
+    "parentType": "debate",
+    "parentId": "e5b0335c-06eb-47d0-a515-f8d080c021b7",
+    "inReplyTo": null,
+    "body": "yay",
+    "createdAt": "2026-08-18T10:07:43.698Z",
+    "updatedAt": "2026-08-18T10:07:43.698Z",
+    "deletedAt": null,
+    "author": {
+      "id": "acef3dbd-202c-47fa-806a-3c32522f315e",
+      "displayName": "Anna Zanoli",
+      "isPseudonym": false,
+      "institution": {
+        "name": "Institute of Science and Technology Austria",
+        "country": "Austria",
+        "verifiedAt": "2026-08-17T10:39:33.352Z"
+      }
+    }
+  }
+]

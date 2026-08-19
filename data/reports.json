@@ -1,5 +1,46 @@
 [
   {
+    "id": "4fe8cee6-82e0-42af-8f90-ad7a183f5bb9",
+    "title": "Check a lemma in additive combinatorics with a proof assistant",
+    "area": "research",
+    "taskType": "proof_drafting",
+    "aim": "I had a lemma I believed but could not see a clean proof of, and wanted to know whether it was true before spending a week on it.",
+    "method": "1. Stated the lemma in Lean 4 with Mathlib. 2. Asked the model for a proof sketch. 3. It suggested induction on the size of the sumset. 4. Translated the sketch into tactics and closed three of five goals. 5. Did the remaining two by hand.",
+    "outcome": "partial",
+    "outcomeNotes": "The induction was the right idea but the base case it gave was for the wrong statement. Two of the five goals closed directly; the others needed a hypothesis it had silently assumed.",
+    "verification": "Lean accepted the final proof, so the formal statement is verified. I checked separately that the formal statement says what I meant by rederiving the informal version by hand.",
+    "transcriptExcerpt": null,
+    "transcriptUrl": null,
+    "caveats": null,
+    "timeSpentMinutes": null,
+    "wasPublished": null,
+    "wasDisclosed": null,
+    "authorConfidence": null,
+    "createdAt": "2026-08-18T10:06:16.624Z",
+    "author": {
+      "id": "1bfffb42-711c-4d92-9e28-cb7cc1fc4eb6",
+      "displayName": "AdminEmma",
+      "isPseudonym": true,
+      "institution": null
+    },
+    "tools": [
+      {
+        "name": "Lean",
+        "version": "4.9.0",
+        "usedOn": "2026-08-18"
+      }
+    ],
+    "tags": [],
+    "staleness": {
+      "latestToolUse": "2026-08-18",
+      "latestVerdict": null,
+      "latestConfirmationAt": null,
+      "confirmationCount": 0,
+      "tombstoneStatus": "unverified",
+      "isVerified": false
+    }
+  },
+  {
     "id": "0022d629-a3a7-490b-892d-12566ab3bca6",
     "title": "Read a paper",
     "area": "learning",
