@@ -242,9 +242,23 @@ const groups = [
   import { areaLabel, taskTypeLabel, outcomeLabel } from '../../lib/report-schema';
   import { OUTCOME, tombstoneName } from '../../lib/status';
 
-  const filters = document.querySelector<HTMLFormElement>('[data-filters]');
+  const filterForm = document.querySelector<HTMLFormElement>('[data-filters]');
 
-  if (filters) {
+  if (filterForm) {
+    /**
+     * The same form, aliased so the null check above survives into everything below.
+     *
+     * TypeScript keeps a `const` narrowing inside arrow functions but drops it inside hoisted
+     * `function` declarations, so every `filters.` inside `injectGroup()` and `injectOption()`
+     * was an error while the identical use in `filters.addEventListener` a few lines further
+     * down was fine. The file had six `filters!` assertions from working around that one use at
+     * a time, and three places where it had not been worked around. Aliasing settles it once.
+     *
+     * The nullable check itself stays: `[data-filters]` genuinely is absent on an empty corpus,
+     * which is what the `if (!filterForm)` branch at the foot of this script is for.
+     */
+    const filters = filterForm;
+
     const results = document.querySelector<HTMLElement>('[data-results]')!;
     const count = document.querySelector<HTMLElement>('[data-count]')!;
     const chips = document.querySelector<HTMLElement>('[data-chips]')!;
@@ -279,7 +293,7 @@ const groups = [
 
       for (const dimension of DIMENSIONS) {
         chosen[dimension] = [
-          ...filters!.querySelectorAll<HTMLInputElement>(
+          ...filters.querySelectorAll<HTMLInputElement>(
             `input[name="${dimension}"]:checked`,
           ),
         ].map((input) => input.value);
@@ -359,7 +373,7 @@ const groups = [
 
       for (const dimension of DIMENSIONS) {
         for (const value of chosen[dimension]) {
-          const input = filters!.querySelector<HTMLInputElement>(
+          const input = filters.querySelector<HTMLInputElement>(
             `input[name="${dimension}"][value="${CSS.escape(value)}"]`,
           );
           const label = input?.nextElementSibling?.textContent ?? value;
@@ -394,13 +408,13 @@ const groups = [
      *  the corpus stays visible. */
     function paintTallies(chosen: Record<Dimension, string[]>): void {
       for (const dimension of DIMENSIONS) {
-        for (const input of filters!.querySelectorAll<HTMLInputElement>(
+        for (const input of filters.querySelectorAll<HTMLInputElement>(
           `input[name="${dimension}"]`,
         )) {
           const probe = { ...chosen, [dimension]: [input.value] };
           const total = cards.filter((card) => matches(card, probe)).length;
 
-          const tally = filters!.querySelector<HTMLElement>(
+          const tally = filters.querySelector<HTMLElement>(
             `[data-tally="${dimension}:${CSS.escape(input.value)}"]`,
           );
           if (tally) tally.textContent = String(total);
@@ -460,7 +474,7 @@ const groups = [
         const values = (params.get(dimension) ?? '').split(',').filter(Boolean);
         const offered = new Set<string>();
 
-        for (const input of filters!.querySelectorAll<HTMLInputElement>(
+        for (const input of filters.querySelectorAll<HTMLInputElement>(
           `input[name="${dimension}"]`,
         )) {
           offered.add(input.value);
@@ -574,7 +588,7 @@ const groups = [
     filters.addEventListener('change', () => apply(true));
     sort.addEventListener('change', () => apply(true));
     clear.addEventListener('click', () => {
-      filters!.reset();
+      filters.reset();
       apply(true);
     });
 
@@ -605,7 +619,7 @@ const groups = [
   // error message about a database, on a page that is showing its content, would teach
   // readers this site depends on something it does not.
 
-  if (!filters) {
+  if (!filterForm) {
     // The empty corpus. Nothing to filter, so the fresh cards go into their own container
     // and the "nothing has been published yet" message steps aside.
     void overlay(() => {
