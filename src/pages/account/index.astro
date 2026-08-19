@@ -315,7 +315,6 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     bio.value = profile.bio;
 
     const institution = profile.institution;
-    institutionalBadge.hidden = institution === null;
     unmatched.hidden = institution !== null;
 
     if (institution) {
@@ -324,9 +323,9 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
         `(${verificationMonth(institution.verifiedAt)})`;
 
       stale.hidden = Date.now() - new Date(institution.verifiedAt).getTime() < YEAR_IN_MS;
+      institutionalBadge.hidden = false;
+      badges.hidden = false;
     }
-
-    badges.hidden = false;
   }
 
   /**

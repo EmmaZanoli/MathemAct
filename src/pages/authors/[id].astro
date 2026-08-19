@@ -53,11 +53,6 @@ export async function getStaticPaths() {
 
 const { author, reports, debates, entries } = Astro.props;
 
-const outcomes = {
-  worked: reports.filter((report) => report.outcome === 'worked').length,
-  partial: reports.filter((report) => report.outcome === 'partial').length,
-  failed: reports.filter((report) => report.outcome === 'failed').length,
-};
 ---
 
 <Base
@@ -94,14 +89,6 @@ const outcomes = {
           <span class="meta">
             {reports.length} published {reports.length === 1 ? 'report' : 'reports'}
           </span>
-          {
-            reports.length > 0 && (
-              <span class="author__breakdown">
-                {' '}— {outcomes.worked} worked, {outcomes.partial} partly worked,{' '}
-                {outcomes.failed} did not
-              </span>
-            )
-          }
         </li>
         {
           debates.length > 0 && (

@@ -61,7 +61,6 @@ import { path } from '../../lib/paths';
         <ul class="author__summary" role="list">
           <li>
             <span class="meta" data-count></span>
-            <span class="author__breakdown" data-breakdown hidden></span>
           </li>
           <li data-debate-count-item hidden>
             <span class="meta" data-debate-count></span>
@@ -266,10 +265,8 @@ import { path } from '../../lib/paths';
       document.querySelector<HTMLElement>('[data-pseudonym]')!.hidden = false;
     }
 
-    // The badge block, filled exactly as the account page fills it: Registered is already
-    // in the markup, and the institutional line is revealed only when there is one. What it
-    // claims is settled in Badges.astro; this only supplies the detail string.
-    const badges = document.querySelector<HTMLElement>('[data-badges]')!;
+    // Fill and reveal the badge block only when there is an institution to show.
+    // What the badge claims is settled in Badges.astro; this only supplies the detail string.
     if (author.institution) {
       const { name, country, verifiedAt } = author.institution;
       setText(
@@ -277,8 +274,8 @@ import { path } from '../../lib/paths';
         `${name}, ${country} (${verificationMonth(verifiedAt)})`,
       );
       document.querySelector<HTMLElement>('[data-badge="institutional"]')!.hidden = false;
+      document.querySelector<HTMLElement>('[data-badges]')!.hidden = false;
     }
-    badges.hidden = false;
 
     // All three at once. A debate author and an entry submitter are contributors
     // whether or not they have ever posted a report, which is why /authors/<id>/ exists
@@ -320,14 +317,6 @@ import { path } from '../../lib/paths';
       contentEl.hidden = false;
       return;
     }
-
-    const worked = reports.filter((report) => report.outcome === 'worked').length;
-    const partial = reports.filter((report) => report.outcome === 'partial').length;
-    const failed = reports.filter((report) => report.outcome === 'failed').length;
-
-    const breakdown = document.querySelector<HTMLElement>('[data-breakdown]')!;
-    breakdown.textContent = `— ${worked} worked, ${partial} partly worked, ${failed} did not`;
-    breakdown.hidden = false;
 
     // One request for every tombstone on the page, keyed by report. A report nobody has
     // confirmed has no row in the aggregate for the same reason it has an open square, so a

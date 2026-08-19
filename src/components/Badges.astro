@@ -1,20 +1,17 @@
 ---
 /**
- * The verification badges: what was checked about an account, and nothing more.
+ * The institutional verification badge.
  *
- * Two signals, and Institutional stacks on top of Registered rather than replacing it. A
- * person with an institutional badge is still a registered member; showing only the higher
- * one would imply the two are ranks on one ladder, and they are not — they are two
- * different facts, one of which some people cannot have and should not be made to feel
- * short of.
+ * One signal only: an address at a recognised institution's domain was confirmed to work,
+ * on the date shown. No "Registered" / confirmed-email badge — that fact is implied for
+ * anyone who has posted and is not worth surfacing to readers.
  *
  * What the wording is doing
  * -------------------------
- * "Institutional email verified — Universität Bonn (Aug 2026)" is the whole claim. An
- * address at that institution's domain was confirmed to work, on that date. It is not a
- * claim that the person is faculty, holds any position, or still works there, and every
- * word here is chosen to avoid implying otherwise: no "member of", no "affiliated with",
- * no job titles, and never the bare institution name on its own.
+ * "Institutional email verified — Universität Bonn (Aug 2026)" is the whole claim. It is
+ * not a claim that the person is faculty, holds any position, or still works there, and
+ * every word here is chosen to avoid implying otherwise: no "member of", no "affiliated
+ * with", no job titles, and never the bare institution name on its own.
  *
  * The date is not decoration and is never omitted. A badge from three years ago and one
  * from last week attest to different things, and hiding which is which would make the
@@ -36,13 +33,10 @@ interface Props {
   /** Render hidden, for a page that fills the details in from the browser. */
   pending?: boolean;
   /**
-   * One line, institutional only, for a comment header.
-   *
-   * Registered is omitted in this form because in a discussion it is implied — you cannot
-   * post without a confirmed address — and a bordered card repeated down every comment
-   * would be the loudest thing on the page. The wording is identical, which is the whole
-   * reason this is a variant of this component rather than a line written somewhere else:
-   * what a badge claims is settled in exactly one file.
+   * One line, for a comment header — same claim, no card. A bordered card repeated down
+   * every comment would be the loudest thing on the page. The wording is identical, which
+   * is the whole reason this is a variant of this component rather than a line written
+   * somewhere else: what a badge claims is settled in exactly one file.
    */
   compact?: boolean;
 }
@@ -63,17 +57,14 @@ const detail = institution
       </p>
     )
   ) : (
-    <ul class="badges" role="list" data-badges hidden={pending}>
-      <li class="badge">
-        <span class="badge__tier">Registered</span>
-        <span class="badge__detail">Email address confirmed</span>
-      </li>
-
-      <li class="badge" data-badge="institutional" hidden={!institution}>
-        <span class="badge__tier">Institutional email verified</span>
-        <span class="badge__detail badge__detail--mono" data-badge-detail>{detail}</span>
-      </li>
-    </ul>
+    (pending || institution) && (
+      <ul class="badges" role="list" data-badges hidden={pending}>
+        <li class="badge" data-badge="institutional" hidden={!institution}>
+          <span class="badge__tier">Institutional email verified</span>
+          <span class="badge__detail" data-badge-detail>{detail}</span>
+        </li>
+      </ul>
+    )
   )
 }
 
@@ -114,14 +105,8 @@ const detail = institution
     color: var(--ink-muted);
   }
 
+  /* An institution name, a country, and a date are all things a machine could parse. */
   .badge__detail {
-    font-size: var(--size-2);
-  }
-
-  /* An institution name, a country, and a date are all things a machine could parse, and
-     mono is how this site says so. The registered badge's line is a sentence, so it is
-     not. */
-  .badge__detail--mono {
     font-family: var(--font-mono);
     font-size: var(--size-1);
   }
