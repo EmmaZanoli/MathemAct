@@ -98,6 +98,10 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
       </fieldset>
     </form>
 
+    <p class="search-people-hint">
+      Looking for a contributor? <a href={path('/network/people/')}>Browse people</a>
+    </p>
+
     <div class="search-status" data-search-status role="status" aria-live="polite">
       {q ? 'Searching…' : 'Enter a search term above.'}
     </div>
@@ -370,6 +374,12 @@ const filterTask = Astro.url.searchParams.get('task') ?? '';
   .filter-chip:focus-within {
     outline: var(--focus-ring);
     outline-offset: 1px;
+  }
+
+  .search-people-hint {
+    font-size: var(--size-2);
+    color: var(--ink-muted);
+    margin-block-end: var(--space-lg);
   }
 
   .search-status {

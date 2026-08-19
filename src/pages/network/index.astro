@@ -35,6 +35,11 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
       </p>
     </header>
 
+    <nav class="network-nav" aria-label="Network sections">
+      <a class="network-nav__link network-nav__link--active" href={path('/network/')} aria-current="page">Entries</a>
+      <a class="network-nav__link" href={path('/network/people/')} hidden data-people-link>Find people</a>
+    </nav>
+
     {/* Above the listing and outside the branch, so it is in the same place whether
         anything has been published or not. It used to be at the foot of the page, below a
         list that grows without limit. */}
@@ -161,6 +166,15 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
     </template>
   </div>
 </Base>
+
+<script>
+  // Reveal the "Find people" nav link only for signed-in users.
+  void import('../../lib/session-hint').then(({ readSessionHint }) => {
+    if (readSessionHint() === 'in') {
+      document.querySelector('[data-people-link]')?.removeAttribute('hidden');
+    }
+  });
+</script>
 
 <script>
   /**
@@ -304,6 +318,34 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 <style>
   .network-corpus {
     padding-block: var(--space-2xl);
+  }
+
+  .network-nav {
+    display: flex;
+    gap: var(--space-sm);
+    margin-block-end: var(--space-lg);
+    border-block-end: var(--border);
+    padding-block-end: var(--space-sm);
+  }
+
+  .network-nav__link {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+    text-decoration: none;
+    padding-block-end: var(--space-2xs);
+    border-block-end: 2px solid transparent;
+    margin-block-end: -1px;
+  }
+
+  .network-nav__link:hover {
+    color: var(--ink);
+  }
+
+  .network-nav__link--active {
+    color: var(--ink);
+    border-block-end-color: var(--accent);
   }
 
   .corpus__empty {
