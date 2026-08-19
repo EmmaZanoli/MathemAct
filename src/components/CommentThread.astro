@@ -280,9 +280,25 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
   } from '../lib/quote';
   import { startSession, subscribeToSession } from '../lib/session';
 
-  const root = document.querySelector<HTMLElement>('[data-thread]');
+  const threadRoot = document.querySelector<HTMLElement>('[data-thread]');
 
-  if (root) {
+  if (threadRoot) {
+    /**
+     * The same element, aliased so that the null check above survives into everything below.
+     *
+     * TypeScript keeps a `const` narrowing inside arrow functions but drops it inside hoisted
+     * `function` declarations — the declaration is lifted to the top of the block, so the
+     * compiler will not assume the `if` has run. Every `root.` inside `showAttachment()` and
+     * `overlay()` was therefore an error, and the file had picked up four `root!` assertions
+     * where somebody had hit one and silenced it, plus two places where they had not. Aliasing
+     * fixes all six at the declaration instead of at each use.
+     *
+     * Do not turn this into `const parentId = root.dataset.parentId`. On a view page the id is
+     * written after a fetch and read at call time on purpose; capturing it here is a bug this
+     * component has already had.
+     */
+    const root = threadRoot;
+
     const parentType = root.dataset.parentType as ParentType;
 
     const list = query<HTMLElement>('[data-thread-list]', root);
@@ -449,7 +465,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       let added = 0;
 
       for (const comment of result.value) {
-        if (root!.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) continue;
+        if (root.querySelector(`[data-comment-id="${CSS.escape(comment.id)}"]`)) continue;
         place(render(comment, true));
         added += 1;
       }
@@ -463,7 +479,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
     /** The element for a comment id, or null. Ids are unique, so a plain lookup is right
      *  here — the `:scope >` care is only needed once you have the element. */
     function itemFor(id: string): HTMLElement | null {
-      return root!.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(id)}"]`);
+      return root.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(id)}"]`);
     }
 
     function place(item: HTMLLIElement): void {
@@ -625,7 +641,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
       replyingTo = top?.dataset.commentId ?? null;
 
       if (!top) {
-        root!.append(composer);
+        root.append(composer);
         label.textContent = 'Add to the discussion';
         submit.textContent = 'Post';
         cancel.hidden = true;
@@ -904,7 +920,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
     // ── Odds and ends ─────────────────────────────────────────────────────────────────
 
     function updateCounter(): void {
-      const counter = root!.querySelector<HTMLElement>('[data-counter-for="comment-body"]');
+      const counter = root.querySelector<HTMLElement>('[data-counter-for="comment-body"]');
       if (!counter) return;
 
       const max = Number(counter.dataset.max);

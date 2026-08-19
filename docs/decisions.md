@@ -2191,3 +2191,62 @@ is the usual way out of recursive RLS. It works, and it would have added a seven
 `security_definer_function_executable` warning to the six accepted in CLAUDE.md — where the
 note says a seventh means something new. A column is cheaper at read time and needs no
 exception written next to it.
+
+## 2026-08-19 — Five `astro check` errors that were one mistake, papered over ten times
+
+`npm run check` had been reporting five errors for some time, all `ts(18047) 'x' is possibly
+null`, two in `CommentThread.astro` and three in `reports/index.astro`. They survived because
+`astro build` does not see them — the same asymmetry as the `.select()` trap — so nothing that
+gates a deploy was red.
+
+Both files have the same shape, and it is the ordinary shape for a script that may or may not
+have an element to work on:
+
+```ts
+const filters = document.querySelector<HTMLFormElement>('[data-filters]');
+
+if (filters) {
+  // … several hundred lines, including helper function declarations
+}
+```
+
+**TypeScript keeps a `const` narrowing inside arrow functions and drops it inside hoisted
+`function` declarations.** A `function foo()` is lifted to the top of the block it is written
+in, so the compiler will not assume the `if` has run by the time it is called. The consequence
+is that `filters.querySelectorAll(…)` is fine in `filters.addEventListener('change', …)` on
+line 574 and an error inside `injectOption()` on line 528 — the same expression, the same
+block, twenty lines apart.
+
+That is what made it accumulate rather than get fixed. Each error looks local, the obvious
+silencer is a `!`, and a `!` works. Between them the two files had **ten** non-null assertions
+on those two variables and five uses where one had been forgotten. The five errors were not
+five problems; they were the five places nobody had got round to yet.
+
+The fix is to alias the narrowed value once at the top of the block:
+
+```ts
+const filterForm = document.querySelector<HTMLFormElement>('[data-filters]');
+
+if (filterForm) {
+  const filters = filterForm;
+  // every use below, in any kind of function, needs no assertion
+}
+```
+
+Ten assertions came out, five errors went, and the emitted JavaScript is unchanged: `!` is
+erased at compile time and the alias is a rename. `check` is now 0 errors, 0 warnings, 0 hints.
+
+Two things deliberately not done:
+
+- **The nullable check stays.** `[data-filters]` genuinely is absent when the corpus is empty —
+  the `if (!filterForm)` branch at the foot of that script is the empty-corpus overlay path.
+  Replacing the check with `query()`, which throws, would turn an expected state into an error.
+- **The remaining six assertions in the project were left alone.** They are
+  `template.content.firstElementChild!` and `option.dataset.search!`, which assert things about
+  markup authored in the same file that TypeScript cannot see. Those are claims about the
+  document, not workarounds for a lost narrowing, and collapsing the two categories would lose
+  the distinction that makes the first kind suspicious.
+
+Recorded in CLAUDE.md as a trap, because the tell is subtle: an assertion that works is not
+evidence that the code was wrong, and the honest signal — the same expression failing in one
+function and not another — is only visible if you look at both.
