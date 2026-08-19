@@ -206,7 +206,7 @@ production rather than a report after it.
 
 ### Database tests
 
-510 pgTAP assertions across twenty files in `supabase/tests/`, covering domain matching, the
+511 pgTAP assertions across twenty files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the
