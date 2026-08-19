@@ -421,10 +421,14 @@ select throws_ok(
   'and neither can a moderator by hand: that would be a decision with no record of itself'
 );
 
+-- Dismissed rather than resolved, because what this flag named is still on the site and
+-- resolve_flag refuses that by design: upholding a flag against visible content is a hide,
+-- which closes every flag against it in the same transaction. What is asserted below — that
+-- closing a flag records a hand and a time — is true of either answer.
 select lives_ok(
   $$ select public.moderate('flag', (select id from public.flags limit 1),
-                            'resolve_flag', 'The comment has been hidden.') $$,
-  'a moderator closes it through the audited path'
+                            'dismiss_flag', 'A sharp comment is not an off-topic one.') $$,
+  'a moderator answers it through the audited path'
 );
 
 reset role;
