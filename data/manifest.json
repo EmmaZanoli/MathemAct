@@ -1,12 +1,12 @@
 {
-  "exportedAt": "2026-08-19T03:58:24.705Z",
+  "exportedAt": "2026-08-20T03:58:23.238Z",
   "generator": "scripts/export.mjs",
   "licence": "CC BY 4.0",
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
   "files": {
     "reports.json": {
-      "rows": 2,
-      "bytes": 5353
+      "rows": 3,
+      "bytes": 7146
     },
     "debates.json": {
       "rows": 1,
@@ -25,8 +25,8 @@
       "bytes": 746
     },
     "comments.json": {
-      "rows": 1,
-      "bytes": 612
+      "rows": 4,
+      "bytes": 2031
     },
     "citations.json": {
       "rows": 0,
@@ -37,12 +37,12 @@
       "bytes": 3
     },
     "csv/reports.csv": {
-      "rows": 2,
-      "bytes": 3964
+      "rows": 3,
+      "bytes": 4975
     },
     "csv/report-tools.csv": {
-      "rows": 2,
-      "bytes": 181
+      "rows": 3,
+      "bytes": 253
     },
     "csv/report-tags.csv": {
       "rows": 1,
