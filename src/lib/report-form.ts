@@ -168,7 +168,6 @@ export class ReportForm {
       kind: (row.querySelector<HTMLSelectElement>('[data-reference-kind]')?.value ??
         'other') as SubmissionReference['kind'],
       url: row.querySelector<HTMLInputElement>('[data-reference-url]')?.value ?? '',
-      label: row.querySelector<HTMLInputElement>('[data-reference-label]')?.value ?? '',
     };
   }
 
@@ -208,7 +207,7 @@ export class ReportForm {
     const area = this.checked('area') as Area;
     const taskType = this.checked('task_type') as TaskType;
     const taskSecondary = this.taskSecondary();
-    const published = this.tristate('was_published');
+    const published = this.checked('was_published') || null;
 
     return {
       title: this.value('title'),
@@ -239,12 +238,12 @@ export class ReportForm {
       // The CHECK refuses a disclosure answer without a publication, so this is not
       // defensive: "not published, not disclosed" reads as a failure to disclose and is
       // actually a question that did not apply.
-      wasDisclosed: published === true ? this.tristate('was_disclosed') : null,
+      wasDisclosed: published === 'yes' ? this.tristate('was_disclosed') : null,
       authorConfidence: this.checked('author_confidence')
         ? Number(this.checked('author_confidence'))
         : null,
       ratings: ratingsFor(this.ratingAnswers(), area, taskType, taskSecondary),
-      costMoreTimeThanSaved: this.box('cost_more_time_than_saved'),
+      timeSaved: this.checked('time_saved') || null,
       generalises: (this.checked('generalises') ?? '') as Generalises | '',
       tagCodes: this.chosenTags(),
     };
@@ -428,7 +427,7 @@ export class ReportForm {
     const row = this.clone(this.referenceTemplate);
     this.sequence += 1;
 
-    for (const part of ['kind', 'url', 'label'] as const) {
+    for (const part of ['kind', 'url'] as const) {
       this.bind(row, part, `reference-${part}-${this.sequence}`, `[data-reference-${part}]`);
     }
 
@@ -436,7 +435,6 @@ export class ReportForm {
       const kind = row.querySelector<HTMLSelectElement>('[data-reference-kind]');
       if (kind) kind.value = values.kind;
       this.put(row, '[data-reference-url]', values.url);
-      this.put(row, '[data-reference-label]', values.label);
     }
 
     row.querySelector<HTMLButtonElement>('[data-reference-remove]')?.addEventListener(
@@ -761,7 +759,7 @@ export class ReportForm {
       const message = reference.url.trim()
         ? validateReference(
             reference,
-            { url: REPORT_LIMITS.referenceUrl, label: REPORT_LIMITS.referenceLabel },
+            { url: REPORT_LIMITS.referenceUrl },
             REFERENCE_KIND_VALUES,
           )
         : null;
@@ -831,13 +829,9 @@ export class ReportForm {
       if (input) input.checked = true;
     }
 
-    // was_published: boolean | null back to the three-way radio.
-    this.pick(
-      'was_published',
-      report.wasPublished === true ? 'yes' : report.wasPublished === false ? 'no' : 'notyet',
-    );
+    this.pick('was_published', report.wasPublished ?? '');
 
-    if (report.wasPublished === true) {
+    if (report.wasPublished === 'yes') {
       this.pick(
         'was_disclosed',
         report.wasDisclosed === true ? 'yes' : report.wasDisclosed === false ? 'no' : '',
@@ -853,7 +847,7 @@ export class ReportForm {
       if (answer !== null) this.pick(scale.key, String(answer));
     }
 
-    this.tick('cost_more_time_than_saved', report.costMoreTimeThanSaved);
+    this.pick('time_saved', report.timeSaved ?? '');
     this.tick('third_party_confirmed', report.thirdPartyMaterialConfirmed);
 
     for (const tool of report.tools) {
@@ -870,7 +864,6 @@ export class ReportForm {
       this.addReference({
         kind: reference.kind,
         url: reference.url,
-        label: reference.label ?? '',
       });
     }
 

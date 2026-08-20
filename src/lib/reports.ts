@@ -115,11 +115,11 @@ export interface Report {
   readonly caveats: string | null;
   readonly references: readonly CorpusReference[];
   readonly timeSpentMinutes: number | null;
-  readonly wasPublished: boolean | null;
+  readonly wasPublished: string | null;
   readonly wasDisclosed: boolean | null;
   readonly authorConfidence: number | null;
   readonly ratings: Ratings;
-  readonly costMoreTimeThanSaved: boolean;
+  readonly timeSaved: string | null;
   readonly generalises: Generalises | null;
   readonly createdAt: string;
   /** Null when the account was erased. The contribution stays; the name goes. */
@@ -286,7 +286,6 @@ export interface SubmissionTool {
 export interface SubmissionReference {
   kind: ReferenceKind;
   url: string;
-  label: string;
 }
 
 export interface Submission {
@@ -312,14 +311,14 @@ export interface Submission {
   references: readonly SubmissionReference[];
   thirdPartyMaterialConfirmed: boolean;
   timeSpentMinutes: number | null;
-  wasPublished: boolean | null;
+  wasPublished: string | null;
   wasDisclosed: boolean | null;
   authorConfidence: number | null;
   /** Every scale, including the two conditional ones. A conditional scale that does not
    *  apply is null here, whatever a stale radio somewhere in the DOM says — see
    *  `ratingsFor()`, which is the one place that decides. */
   ratings: Ratings;
-  costMoreTimeThanSaved: boolean;
+  timeSaved: string | null;
   generalises: Generalises | '';
   tagCodes: readonly string[];
 }
@@ -407,18 +406,13 @@ function rpcArguments(submission: Submission): Record<string, unknown> {
     p_references: submission.references.map((reference) => ({
       kind: reference.kind,
       url: reference.url.trim(),
-      // Absent rather than null when empty. The column's validator only looks at a label
-      // that is there, and an explicit null in the stored jsonb would appear in the export
-      // as a key nobody set.
-      ...(reference.label.trim() ? { label: reference.label.trim() } : {}),
     })),
     p_time_spent_minutes: submission.timeSpentMinutes,
     p_was_published: submission.wasPublished,
     p_was_disclosed: submission.wasDisclosed,
     p_author_confidence: submission.authorConfidence,
     p_rating_helpfulness: submission.ratings.rating_helpfulness,
-    p_rating_time_saved: submission.ratings.rating_time_saved,
-    p_cost_more_time_than_saved: submission.costMoreTimeThanSaved,
+    p_time_saved: submission.timeSaved,
     p_rating_trust_before_checking: submission.ratings.rating_trust_before_checking,
     p_rating_verification_effort: submission.ratings.rating_verification_effort,
     p_rating_novelty: submission.ratings.rating_novelty,
@@ -558,11 +552,11 @@ export interface EditableReportForEdit {
   readonly references: readonly CorpusReference[];
   readonly thirdPartyMaterialConfirmed: boolean;
   readonly timeSpentMinutes: number | null;
-  readonly wasPublished: boolean | null;
+  readonly wasPublished: string | null;
   readonly wasDisclosed: boolean | null;
   readonly authorConfidence: number | null;
   readonly ratings: Ratings;
-  readonly costMoreTimeThanSaved: boolean;
+  readonly timeSaved: string | null;
   readonly generalises: Generalises | null;
   readonly tools: readonly {
     id: string;
@@ -609,16 +603,15 @@ interface EditableReportRow {
   references: CorpusReference[] | null;
   third_party_material_confirmed: boolean;
   time_spent_minutes: number | null;
-  was_published: boolean | null;
+  was_published: string | null;
   was_disclosed: boolean | null;
   author_confidence: number | null;
   rating_helpfulness: number | null;
-  rating_time_saved: number | null;
+  time_saved: string | null;
   rating_trust_before_checking: number | null;
   rating_verification_effort: number | null;
   rating_novelty: number | null;
   rating_understanding_gained: number | null;
-  cost_more_time_than_saved: boolean;
   generalises: Generalises | null;
   report_tools: {
     id: string;
@@ -659,9 +652,9 @@ export async function loadEditableReport(
         'prompts, transcript_excerpt, transcript_url, references, caveats,' +
         'third_party_material_confirmed,' +
         'time_spent_minutes, was_published, was_disclosed, author_confidence,' +
-        'rating_helpfulness, rating_time_saved, rating_trust_before_checking,' +
+        'rating_helpfulness, time_saved, rating_trust_before_checking,' +
         'rating_verification_effort, rating_novelty, rating_understanding_gained,' +
-        'cost_more_time_than_saved, generalises,' +
+        'generalises,' +
         'report_tools(id, tool_name, tool_version, used_on, role),' +
         'report_tags(tags(code))',
       )
@@ -709,13 +702,12 @@ export async function loadEditableReport(
         authorConfidence: data.author_confidence,
         ratings: {
           rating_helpfulness: data.rating_helpfulness,
-          rating_time_saved: data.rating_time_saved,
           rating_trust_before_checking: data.rating_trust_before_checking,
           rating_verification_effort: data.rating_verification_effort,
           rating_novelty: data.rating_novelty,
           rating_understanding_gained: data.rating_understanding_gained,
         },
-        costMoreTimeThanSaved: data.cost_more_time_than_saved,
+        timeSaved: data.time_saved,
         generalises: data.generalises,
         tools: tools.map((tool) => ({
           id: tool.id,

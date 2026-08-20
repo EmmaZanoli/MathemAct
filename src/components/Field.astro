@@ -16,6 +16,8 @@ interface Props {
   /** Also the control's name. Used to derive the hint and error element ids. */
   id: string;
   label: string;
+  /** Extra class on the label element, e.g. "visually-hidden" when the section title already names the field. */
+  labelClass?: string;
   type?: 'text' | 'email' | 'password' | 'textarea';
   /** Plain-text hint. For anything longer, use the `hint` slot instead. */
   hint?: string;
@@ -38,6 +40,7 @@ interface Props {
 const {
   id,
   label,
+  labelClass,
   type = 'text',
   hint,
   required = false,
@@ -61,7 +64,7 @@ const describedBy = [hasHint ? hintId : null, errorId].filter(Boolean).join(' ')
 ---
 
 <div class="field">
-  <label class="field__label" for={id}>
+  <label class={`field__label${labelClass ? ' ' + labelClass : ''}`} for={id}>
     {label}
     {!required && <span class="field__optional">optional</span>}
   </label>

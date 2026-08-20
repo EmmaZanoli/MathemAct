@@ -33,7 +33,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(50);
+select plan(51);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -73,6 +73,11 @@ select ok(
 select ok(
   'example_counterexample' = any (enum_range(null::public.report_task_type)::text[]),
   'and example_counterexample: a distinct mathematical goal, not reducible to computation'
+);
+
+select ok(
+  'brainstorming' = any (enum_range(null::public.report_task_type)::text[]),
+  'and brainstorming: free-form idea generation before a formal claim is committed to'
 );
 
 -- ── The two derived columns ─────────────────────────────────────────────────────────
@@ -213,13 +218,13 @@ select lives_ok(
   $$ insert into public.reports
        (id, author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed,
-        rating_helpfulness, rating_time_saved, cost_more_time_than_saved,
+        rating_helpfulness, time_saved,
         rating_trust_before_checking, rating_verification_effort, rating_novelty,
         rating_understanding_gained, generalises, career_stage)
      values ('cccc0000-0000-0000-0000-000000000003',
              'bbbbbbbb-0000-0000-0000-000000000001', 'Fully counted', 'learning',
              'comprehension', 'a', 'b', 'partial', 'c', 'd', true,
-             0, 3, true, 7, 10, 2, 9, 'similar_tasks', 'doctoral') $$,
+             0, 'few_hours', 7, 10, 2, 9, 'similar_tasks', 'doctoral') $$,
   'a report may answer every scale, including a 0, which is a finding rather than a blank'
 );
 
@@ -539,14 +544,14 @@ select lives_ok(
        true,
        'user: is this lemma true as stated?', null,
        'I would state the hypotheses in full first.',
-       120, false, null, 7,
+       120, null, null, 7,
        array['math.NT'],
        null,
        array['proof_checking', 'formalisation', 'proof_drafting'],
        'postdoctoral',
        'Let A be a finite subset of Z with |A+A| <= 3|A|. Is A contained in a short AP?',
        '[{"kind":"formalisation","url":"https://github.com/example/lemma","label":"The Lean file"}]'::jsonb,
-       8, 5, false, 4, 6, 9, null,
+       8, 'few_hours', 4, 6, 9, null,
        'similar_tasks'
      ) $$,
   'a version 2 submission goes through in one call, with roles, prompts, links and scales'

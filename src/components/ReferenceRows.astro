@@ -59,20 +59,6 @@ import { REFERENCE_KINDS, REPORT_LIMITS } from '../lib/report-schema';
           <button class="button button--quiet tool-row__remove" type="button" data-reference-remove>
             Remove
           </button>
-
-          <div class="field refs__wide">
-            <label class="field__label" data-label-for="label">
-              Shown instead of the bare link <span class="field__optional">optional</span>
-            </label>
-            <input
-              class="field__control"
-              type="text"
-              data-reference-label
-              maxlength={REPORT_LIMITS.referenceLabel}
-              placeholder="The preprint this came out of"
-              autocomplete="off"
-            />
-          </div>
         </div>
 
         {/* Advice, not an error. Separate elements so a row can carry both at once and
@@ -86,13 +72,7 @@ import { REFERENCE_KINDS, REPORT_LIMITS } from '../lib/report-schema';
   <div class="actions">
     <button class="button" type="button" data-reference-add>Add a link</button>
   </div>
-
-  <p class="field__hint">
-    Links only, and only to things that are publicly readable — check the link works while
-    signed out. {REPORT_LIMITS.references} is the most. For a paper, a DOI or an arXiv
-    <span class="meta">abs</span> link outlives a departmental URL, which is the point of
-    putting it here at all.
-  </p>
+  
 </div>
 
 <style>

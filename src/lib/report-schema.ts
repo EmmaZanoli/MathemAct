@@ -50,7 +50,6 @@ export const REPORT_LIMITS = {
   toolVersion: 40,
   toolRole: 60,
   referenceUrl: 500,
-  referenceLabel: 80,
   /** Roughly seventy days. High enough never to reject an honest answer. */
   timeSpentMinutes: 100000,
   /** Six rows already describe one session unusually carefully. Past that the rows stop
@@ -112,6 +111,11 @@ export const TASK_TYPES = [
     hint: 'Working through a paper, or filling in background you lacked.',
   },
   {
+    value: 'brainstorming',
+    label: 'Brainstorming',
+    hint: 'Generating ideas, approaches, or framings without yet committing to a formal claim.',
+  },
+  {
     value: 'conjecture_generation',
     label: 'Conjecture generation',
     hint: 'Proposing statements, or approaches, to try.',
@@ -167,6 +171,37 @@ export const CAREER_STAGES = [
 ] as const satisfies readonly Choice<string>[];
 
 export type CareerStage = (typeof CAREER_STAGES)[number]['value'];
+
+export const WAS_PUBLISHED = [
+  { value: 'yes',            label: 'Yes' },
+  { value: 'not_yet',        label: 'Not yet' },
+  { value: 'no',             label: 'No, and I do not expect it to be' },
+  { value: 'not_applicable', label: 'Not applicable' },
+] as const satisfies readonly Choice<string>[];
+
+export type WasPublished = (typeof WAS_PUBLISHED)[number]['value'];
+
+export function wasPublishedLabel(value: string): string {
+  return WAS_PUBLISHED.find((c) => c.value === value)?.label ?? value;
+}
+
+export const TIME_SAVED = [
+  { value: 'none',         label: 'No time saved' },
+  { value: 'few_minutes',  label: 'A few minutes' },
+  { value: 'about_an_hour', label: 'About an hour' },
+  { value: 'few_hours',    label: 'A few hours' },
+  { value: 'about_a_day',  label: 'About a day' },
+  { value: 'few_days',     label: 'A few days' },
+  { value: 'about_a_week', label: 'About a week' },
+  { value: 'more',         label: 'More' },
+  { value: 'cost_more',    label: 'It cost me more time than it saved' },
+] as const satisfies readonly Choice<string>[];
+
+export type TimeSaved = (typeof TIME_SAVED)[number]['value'];
+
+export function timeSavedLabel(value: string): string {
+  return TIME_SAVED.find((c) => c.value === value)?.label ?? value;
+}
 
 /**
  * The three outcomes, in the order they appear on the form.
@@ -321,7 +356,6 @@ export interface RatingScaleSpec {
 
 export type RatingKey =
   | 'rating_helpfulness'
-  | 'rating_time_saved'
   | 'rating_trust_before_checking'
   | 'rating_verification_effort'
   | 'rating_novelty'
@@ -334,13 +368,6 @@ export const RATING_SCALES: readonly RatingScaleSpec[] = [
     short: 'Helpfulness',
     low: 'no help at all',
     high: 'did the task',
-  },
-  {
-    key: 'rating_time_saved',
-    prompt: 'How much time did it save you?',
-    short: 'Time saved',
-    low: 'none',
-    high: 'days of work',
   },
   {
     key: 'rating_trust_before_checking',
@@ -409,21 +436,18 @@ export function scaleApplies(
 
 export const FIELD_COPY = {
   title: {
-    hint: 'One line, saying what you did. Imperative where it reads naturally.',
+    hint: 'Imperative where it reads naturally.',
     example: 'Check a lemma in additive combinatorics with a proof assistant',
   },
   aim: {
-    hint: 'The problem, not the session. What were you actually trying to find out?',
     example:
       'I had a lemma I believed but could not see a clean proof of, and wanted to know whether it was true before spending a week on it.',
   },
   method: {
-    hint: 'Stepwise. Enough that somebody could try the same thing.',
     example:
       '1. Stated the lemma in Lean 4 with Mathlib.\n2. Asked the model for a proof sketch.\n3. It suggested induction on the size of the sumset.\n4. Translated the sketch into tactics and closed three of five goals.\n5. Did the remaining two by hand.',
   },
   outcomeNotes: {
-    hint: 'A few sentences on what actually happened. Specifics beat adjectives.',
     example:
       'The induction was the right idea but the base case it gave was for the wrong statement. Two of the five goals closed directly; the others needed a hypothesis it had silently assumed.',
   },
@@ -433,12 +457,10 @@ export const FIELD_COPY = {
       'Lean accepted the final proof, so the formal statement is verified. I checked separately that the formal statement says what I meant by rederiving the informal version by hand.',
   },
   prompts: {
-    hint: 'One per line, or separated by a blank line. Include the failed ones.',
     example:
       'Let A be a finite subset of Z with |A+A| ≤ 3|A|. Is it true that A is contained in an arithmetic progression of length at most C|A|? Give a proof or a counterexample, and state any hypothesis you add.',
   },
   transcriptExcerpt: {
-    hint: 'You can cut out unnecessary parts - just paste the part that matters.',
     example: '',
   },
   transcriptUrl: {
@@ -446,7 +468,6 @@ export const FIELD_COPY = {
     example: '',
   },
   caveats: {
-    hint: 'What you would do differently, and what a reader attempting the same thing should be careful about.',
     example:
       'I would state the hypotheses in full before asking. Most of the wasted time came from it filling in an assumption I had left implicit.',
   },
@@ -495,10 +516,10 @@ export interface CountedInput {
   readonly careerStage: string | null;
   readonly timeSpentMinutes: number | null;
   readonly ratings: Readonly<Record<RatingKey, number | null>>;
-  readonly costMoreTimeThanSaved: boolean;
+  readonly timeSaved: string | null;
   readonly authorConfidence: number | null;
   readonly generalises: string | null;
-  readonly wasPublished: boolean | null;
+  readonly wasPublished: string | null;
   readonly wasDisclosed: boolean | null;
 }
 
@@ -532,10 +553,8 @@ export function countedFacts(input: CountedInput): Fact[] {
     }
   }
 
-  // Only when true. "Cost more time than it saved: no" is the ordinary case and saying it
-  // out loud on every report would bury the reports where it is the finding.
-  if (input.costMoreTimeThanSaved) {
-    facts.push({ term: 'Net time', value: 'cost more than it saved' });
+  if (input.timeSaved) {
+    facts.push({ term: 'Time saved', value: timeSavedLabel(input.timeSaved) });
   }
 
   if (input.authorConfidence !== null) {
@@ -546,8 +565,8 @@ export function countedFacts(input: CountedInput): Fact[] {
     facts.push({ term: 'Generalises', value: generalisesLabel(input.generalises) });
   }
 
-  if (input.wasPublished !== null) {
-    facts.push({ term: 'Published', value: input.wasPublished ? 'yes' : 'no' });
+  if (input.wasPublished) {
+    facts.push({ term: 'Published', value: wasPublishedLabel(input.wasPublished) });
   }
 
   if (input.wasDisclosed !== null) {

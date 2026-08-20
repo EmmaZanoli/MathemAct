@@ -214,7 +214,7 @@ const PRIVATE_HOST =
 
 export function validateReference(
   reference: ReferenceInput,
-  limits: { url: number; label: number },
+  limits: { url: number },
   kinds: readonly string[],
 ): string | null {
   const url = reference.url.trim();
@@ -233,10 +233,6 @@ export function validateReference(
   const host = (/^https:\/\/([^/?#]+)/.exec(url)?.[1] ?? '').toLowerCase();
   if (PRIVATE_HOST.test(host)) {
     return 'That link points at a private address, so it works from one machine only. Link to something publicly readable.';
-  }
-
-  if ((reference.label ?? '').trim().length > limits.label) {
-    return `Shorten this link's label to ${limits.label} characters or fewer.`;
   }
 
   return null;

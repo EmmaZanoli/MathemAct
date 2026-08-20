@@ -39,6 +39,7 @@ import {
   RATING_SCALES,
   REPORT_LIMITS,
   TASK_TYPES,
+  TIME_SAVED,
 } from '../lib/report-schema';
 import { LICENCE } from '../lib/site';
 
@@ -63,7 +64,7 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     produced it rather than at the foot of the page. */}
 <slot name="after-title" />
 
-<FormSection id="area" number={2} title="Area" lead="Why you were working. What the tool was asked to do is the next question.">
+<FormSection id="area" number={2} title="Area" lead="How you would classify the work you were doing.">
   <fieldset class="choices">
     <legend class="visually-hidden">What kind of work was this</legend>
     {
@@ -102,7 +103,7 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   id="task-type"
   number={3}
   title="Task type"
-  lead="What the tool was asked to do. This is the axis the corpus is most often grouped by, so it is worth a moment."
+  lead="What the tool was asked to do."
 >
   <fieldset class="choices">
     <legend class="visually-hidden">What the tool was asked to do</legend>
@@ -158,7 +159,7 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   id="tools"
   number={4}
   title="Tools used"
-  lead="Name, version, and the date you used it. At least one. The date is what lets a listing show that an account has gone stale."
+  lead="Type any tool name — the suggestions are common choices, not a fixed list."
 >
   <ToolRows />
 </FormSection>
@@ -168,23 +169,16 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   number={5}
   title="About you"
   optional
-  lead="One question, coarse on purpose. It is what lets somebody ask whether these tools work differently for a doctoral student and for a professor."
+  lead="Your career stage. You can skip it if it would identify you."
 >
   <div class="field">
-    <label class="field__label" for="career_stage">
-      Career stage <span class="field__optional">optional</span>
+    <label class="field__label visually-hidden" for="career_stage">
+      Career stage
     </label>
-    <p class="field__hint" id="career_stage-hint">
-      Skip it if it would identify you. Nothing else about you is collected here — not
-      institution, not country, not year of birth. A report is permanent and published
-      under {LICENCE.name}, and career stage plus a subject area plus a date is already
-      close to identifying in a small field.
-    </p>
     <select
       class="field__control field__control--narrow"
       id="career_stage"
       name="career_stage"
-      aria-describedby="career_stage-hint"
     >
       <option value="">Not saying</option>
       {CAREER_STAGES.map((stage) => <option value={stage.value}>{stage.label}</option>)}
@@ -201,7 +195,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     rows={4}
     maxlength={REPORT_LIMITS.aim}
     counter
-    hint={FIELD_COPY.aim.hint}
     example={FIELD_COPY.aim.example}
   />
 </FormSection>
@@ -215,7 +208,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     rows={10}
     maxlength={REPORT_LIMITS.method}
     counter
-    hint={FIELD_COPY.method.hint}
     example={FIELD_COPY.method.example}
   />
 </FormSection>
@@ -232,7 +224,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     rows={5}
     maxlength={REPORT_LIMITS.outcomeNotes}
     counter
-    hint={FIELD_COPY.outcomeNotes.hint}
     example={FIELD_COPY.outcomeNotes.example}
   />
 </FormSection>
@@ -262,16 +253,16 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   number={10}
   title="Prompts"
   optional
-  lead="The prompts that did the work."
+  lead="One per line, or separated by a blank line. Include the failed ones."
 >
   <Field
     id="prompts"
-    label="Verbatim"
+    label="Prompts"
+    labelClass="visually-hidden"
     type="textarea"
     rows={6}
     maxlength={REPORT_LIMITS.prompts}
     counter
-    hint={FIELD_COPY.prompts.hint}
     example={FIELD_COPY.prompts.example}
   />
 </FormSection>
@@ -290,7 +281,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     rows={8}
     maxlength={REPORT_LIMITS.transcriptExcerpt}
     counter
-    hint={FIELD_COPY.transcriptExcerpt.hint}
   />
 
   <Field
@@ -298,7 +288,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     label="Share link"
     type="text"
     maxlength={REPORT_LIMITS.transcriptUrl}
-    hint="Optional, and only alongside an excerpt. Never on its own."
   />
 
   {/* Shown when there is something pasted — a transcript or a prompt — and hidden when
@@ -315,12 +304,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     <label class="checkbox__label" for="third_party_confirmed">
       I have removed other people's unpublished material from what I pasted
     </label>
-    <p class="checkbox__hint">
-      Transcripts and prompts pick things up. A referee report you were discussing, a
-      preprint somebody sent you, a student's draft, an unpublished argument from a seminar
-      — none of that is yours to post, and everything here is published under {LICENCE.name}
-      for anyone to copy. Read back over what you pasted before you tick this.
-    </p>
     <p class="field__error" id="third_party_confirmed-error" hidden></p>
   </div>
 </FormSection>
@@ -338,7 +321,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     rows={4}
     maxlength={REPORT_LIMITS.caveats}
     counter
-    hint={FIELD_COPY.caveats.hint}
     example={FIELD_COPY.caveats.example}
   />
 </FormSection>
@@ -362,35 +344,31 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   number={15}
   title="So this can be counted"
   optional
-  lead="This section attempts to quantify a number of metrics. Every one is skippable, and a blank is more useful than a guess."
 >
   <Field
     id="time_spent_minutes"
     label="Time spent, in minutes"
     type="text"
-    hint="Roughly. 90 for an hour and a half. Counting the checking, not only the asking."
+    hint="Your estimate - counting the checking, not only the asking."
   />
 
   <fieldset class="choices">
-    <legend class="field__label">Did this work end up published?</legend>
+    <legend class="field__label">Did this work end up published? <span class="field__optional">optional</span></legend>
     <label class="choice" for="published-yes">
       <input class="choice__input" type="radio" id="published-yes" name="was_published" value="yes" />
       <span>Yes</span>
     </label>
-    <label class="choice" for="published-notyet">
-      <input
-        class="choice__input"
-        type="radio"
-        id="published-notyet"
-        name="was_published"
-        value="notyet"
-        checked
-      />
-      <span>Not yet, or not applicable</span>
+    <label class="choice" for="published-not_yet">
+      <input class="choice__input" type="radio" id="published-not_yet" name="was_published" value="not_yet" />
+      <span>Not yet</span>
     </label>
     <label class="choice" for="published-no">
       <input class="choice__input" type="radio" id="published-no" name="was_published" value="no" />
       <span>No, and I do not expect it to be</span>
+    </label>
+    <label class="choice" for="published-not_applicable">
+      <input class="choice__input" type="radio" id="published-not_applicable" name="was_published" value="not_applicable" />
+      <span>Not applicable</span>
     </label>
   </fieldset>
 
@@ -425,24 +403,6 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
       unconditional.map((scale) => (
         <div class="scales__row">
           <Scale name={scale.key} prompt={scale.prompt} low={scale.low} high={scale.high} />
-
-          {/* Directly under "how much time did it save you", because it is the answer that
-              row cannot hold. A 0-to-10 scale has no negative, so without this a wasted
-              afternoon and a mild disappointment both score 0 — and the wasted afternoon is
-              one of the most useful facts this corpus can record. */}
-          {scale.key === 'rating_time_saved' && (
-            <div class="checkbox scales__aside">
-              <input
-                class="checkbox__input"
-                type="checkbox"
-                id="cost_more_time_than_saved"
-                name="cost_more_time_than_saved"
-              />
-              <label class="checkbox__label" for="cost_more_time_than_saved">
-                It cost me more time than it saved.
-              </label>
-            </div>
-          )}
         </div>
       ))
     }
@@ -468,16 +428,34 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
         prompt="How confident are you in the result?"
         low="no confidence"
         high="complete confidence"
-        hint="Your own judgement, not a claim about the tool. It is what lets a reader weigh an account against one from somebody who was sure."
       />
     </div>
   </div>
+
+  <fieldset class="choices">
+    <legend class="field__label">
+      How much time did it save you? <span class="field__optional">optional</span>
+    </legend>
+    {
+      TIME_SAVED.map((choice) => (
+        <label class="choice" for={`time_saved-${choice.value}`}>
+          <input
+            class="choice__input"
+            type="radio"
+            id={`time_saved-${choice.value}`}
+            name="time_saved"
+            value={choice.value}
+          />
+          <span>{choice.label}</span>
+        </label>
+      ))
+    }
+  </fieldset>
 
   <fieldset class="choices" data-generalises>
     <legend class="field__label">
       How far do you think this carries? <span class="field__optional">optional</span>
     </legend>
-    <p class="field__hint" id="generalises-hint">Your guess. It is a guess for everyone.</p>
     {
       GENERALISATIONS.map((choice) => (
         <label class="choice" for={`generalises-${choice.value}`}>

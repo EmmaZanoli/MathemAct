@@ -30,7 +30,7 @@ import { SECTION_COUNT } from '../../lib/report-schema';
 <Account
   title="Post a report"
   description="Record how you used an AI tool in mathematical work, in a form that can be read as evidence."
-  lead={`${SECTION_COUNT} sections, and everything after the account itself is optional. If you have the session in front of you it takes ten to twelve minutes, and your draft is saved as you go.`}
+  lead={`${SECTION_COUNT} sections. It takes ten to twelve minutes, and your draft is saved as you go.`}
   gate="required"
 >
   {/* Shown instead of the form when the account may not post. The same three conditions as
@@ -107,8 +107,8 @@ import { SECTION_COUNT } from '../../lib/report-schema';
       </div>
 
       <p class="field__hint">
-        This publishes straight away — nobody reads it first. If a reader thinks something
-        is wrong with it they can flag it, and a moderator will decide, in writing, to you.
+        This publishes straight away. If a reader thinks something
+        is wrong with it, they can flag it. A moderator will decide and you will be informed.<br>
         Everything published here is licensed
         <a href={LICENCE.url} rel="license">{LICENCE.name}</a>; you keep copyright and are
         credited.
@@ -218,7 +218,7 @@ import { SECTION_COUNT } from '../../lib/report-schema';
    *  a scale added to the schema is saved in a draft without anybody remembering to. */
   const RADIO_GROUPS = [
     'area', 'task_type', 'outcome', 'was_published', 'was_disclosed', 'author_confidence',
-    'generalises', ...RATING_SCALES.map((scale) => scale.key),
+    'generalises', 'time_saved', ...RATING_SCALES.map((scale) => scale.key),
   ];
 
   function collectDraft(): Draft {
@@ -230,7 +230,6 @@ import { SECTION_COUNT } from '../../lib/report-schema';
       fields: values,
       checks: {
         third_party_confirmed: box('third_party_confirmed'),
-        cost_more_time_than_saved: box('cost_more_time_than_saved'),
       },
       multi: { task_secondary: fields.taskSecondary() },
       tools: fields.readTools(),

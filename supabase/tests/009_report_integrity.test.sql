@@ -131,7 +131,7 @@ select throws_ok(
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
         verification, third_party_material_confirmed, was_published, was_disclosed)
      values ('33333333-0000-0000-0000-000000000001', 'Undisclosed', 'research', 'other',
-             'a', 'b', 'worked', 'c', 'd', true, false, false) $$,
+             'a', 'b', 'worked', 'c', 'd', true, 'not_yet', false) $$,
   '23514'::text, null::text,
   'disclosure cannot be answered about a paper that was never published'
 );

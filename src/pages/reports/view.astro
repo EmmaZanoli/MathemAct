@@ -403,10 +403,10 @@ import { path } from '../../lib/paths';
     readonly createdAt: string;
     readonly timeSpentMinutes: number | null;
     readonly authorConfidence: number | null;
-    readonly wasPublished: boolean | null;
+    readonly wasPublished: string | null;
     readonly wasDisclosed: boolean | null;
     readonly ratings: Readonly<Record<RatingKey, number | null>>;
-    readonly costMoreTimeThanSaved: boolean;
+    readonly timeSaved: string | null;
     readonly generalises: string | null;
     readonly tools: readonly {
       name: string;
@@ -432,9 +432,9 @@ import { path } from '../../lib/paths';
       'prompts,transcript_excerpt,transcript_url,references,caveats',
       'area,area_other,task_type,task_secondary,career_stage,created_at',
       'time_spent_minutes,author_confidence,was_published,was_disclosed',
-      'rating_helpfulness,rating_time_saved,rating_trust_before_checking',
+      'rating_helpfulness,time_saved,rating_trust_before_checking',
       'rating_verification_effort,rating_novelty,rating_understanding_gained',
-      'cost_more_time_than_saved,generalises',
+      'generalises',
       'report_tools(tool_name,tool_version,used_on,role)',
       'report_tags(tags(code))',
       'author:profiles!reports_author_id_fkey(id,display_name,is_pseudonym)',
@@ -480,13 +480,12 @@ import { path } from '../../lib/paths';
         wasDisclosed: row.was_disclosed ?? null,
         ratings: {
           rating_helpfulness: row.rating_helpfulness ?? null,
-          rating_time_saved: row.rating_time_saved ?? null,
           rating_trust_before_checking: row.rating_trust_before_checking ?? null,
           rating_verification_effort: row.rating_verification_effort ?? null,
           rating_novelty: row.rating_novelty ?? null,
           rating_understanding_gained: row.rating_understanding_gained ?? null,
         },
-        costMoreTimeThanSaved: row.cost_more_time_than_saved ?? false,
+        timeSaved: row.time_saved ?? null,
         generalises: row.generalises ?? null,
         tools: (row.report_tools ?? []).map(
           (t: {
