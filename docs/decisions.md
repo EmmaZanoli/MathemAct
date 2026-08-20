@@ -2280,8 +2280,10 @@ overstate themselves.
 What arrived: two areas (`outreach`, `administration`), two task types (`comprehension`,
 `programming`), a secondary task list, career stage, a Prompts section separate from the
 Transcript, a Supporting material section, five 0-to-10 scales, a net-time-cost checkbox, a
-generalisation question, and `role` on a tool row. Forty-four migrations, 562 assertions across
-twenty-one files.
+generalisation question, and `role` on a tool row. Four more migrations followed the same day —
+two task types, `was_published` as text, `time_saved` as an ordered choice in place of the sixth
+scale and the checkbox — for six in all, taking the branch to forty-nine migrations and 565
+assertions across twenty-one files.
 
 Ten decisions inside it are worth the space.
 
@@ -2317,7 +2319,7 @@ cardinality cap is the only hard rule, and it sees the tidied array because the 
 
 **Two scales are conditional, and a hidden scale stores null rather than 0.** Novelty is a
 meaningless question about a teaching-prep session and understanding gained is a meaningless
-question about a literature search, and seven rows of radios is an invitation to straight-line
+question about a literature search, and six rows of radios is an invitation to straight-line
 the lot. The subtlety is what happens when somebody answers novelty and then changes the area:
 the radio keeps its value and the row goes away. `ratingsFor()` in `src/lib/reports.ts` is the
 one place that decides, and it nulls anything that no longer applies — the form hides a row, and
@@ -2328,6 +2330,12 @@ because it is the mistake an analysis will make.
 **`cost_more_time_than_saved` is a column because a 0-to-10 scale has no negative.** Without it,
 "the tool wasted my afternoon" and "the tool was mildly disappointing" both score 0, and the
 first is one of the most useful things this corpus can record.
+
+> Superseded later the same day. The scale-plus-boolean pair became a single ordered
+> `time_saved`, and `cost_more` is one of its values rather than a column beside it — the
+> reasoning above is why the value exists, and the entry *Time saved is an ordered list of
+> durations* below is why it stopped being a boolean. Neither `rating_time_saved` nor
+> `cost_more_time_than_saved` exists any more.
 
 **The ratings are sort keys and not filters.** "Reports where helpfulness ≥ 8" reads as a
 measurement; an ordering is honest about being rough. Three sorts were added — most helpful,
@@ -2385,18 +2393,94 @@ onto a reading page to settle two yes-or-no questions — on the one query in th
 reading page is allowed to make, and only because it is small. Two generated booleans are the
 cheaper answer, and they are absent from the export, which carries the text itself.
 
-**Column-level grants do not survive a dropped column, and re-adding it does not bring them
-back.** INSERT and UPDATE on `public.reports` are granted per column — deliberately, so that a
-caller cannot name `status` or `created_at` at all — which means a column added by a later
-migration arrives with no privilege and a column dropped and re-added loses the privilege it had.
-Both happened in this schema version: `20260820120000` drops and re-adds `was_published` to
-change it from boolean to text, and `20260820130000` adds `time_saved` in place of two columns it
-drops. Neither regranted, and the whole submission path stopped working. What makes it worth
-writing down is how it presents: the column is there, the CHECK is there, the policy matches, and
-`public.submit_report()` — which is SECURITY INVOKER *precisely* so that the grants still apply
-through it — dies with `permission denied for table reports`, so every count after it reads as a
-policy that stopped matching rather than as a missing grant. The same reading as the long-standing
-rule that grants control whether the endpoint exists and policies control which rows it returns:
-check the grants first. `021_report_schema_v2.test.sql` now asserts both columns on both commands,
-because the four-way `has_column_privilege` check is the only thing between this and the next
-schema version repeating it.
+## 2026-08-20 — `was_published` is four answers, and a boolean held three
+
+"Was the work published?" has four honest answers and a boolean has three states for them. `true`
+and `false` were fine; `null` was carrying both *not yet* — a paper the author still expects to
+submit — and *not applicable*, a teaching session that was never going to be published at all.
+Those are not the same fact, and collapsing them makes the most common follow-on question
+("of the work that could have been published, how much was?") unanswerable. `20260820120000`
+makes the column `text` over `yes` / `not_yet` / `no` / `not_applicable`, and the disclosure
+constraint reads `was_disclosed is null or was_published = 'yes'` — disclosure is a question about
+a paper that exists, so it stays refused on the other three.
+
+Two implementation notes, both of which cost a CI cycle. `alter column ... using` does not work
+here: the Postgres this project runs evaluates the USING expression with the column already at the
+new type, so `was_published is true` inside it fails with *argument of IS TRUE must be type
+boolean, not type text*. The corpus was emptied by `20260820100000`, so the migration drops and
+re-adds the column instead and loses nothing. And the constraint to drop first is
+`reports_disclosure_needs_publication`, **not** `practices_disclosure_needs_publication` — the
+rename on 2026-08-17 rewrote every constraint name containing `practice`, so the name in the
+migration that created it is not the name it has.
+
+## 2026-08-20 — Time saved is an ordered list of durations, not a 0-to-10 score
+
+`rating_time_saved` (0 to 10) and `cost_more_time_than_saved` (boolean) are replaced by one
+`time_saved` text column. Two things were wrong with the number. A 0-to-10 scale has no negative,
+so the single most useful answer here — the tool cost more time than it saved — needed a checkbox
+beside the scale, and the pair had to be read *together* to mean anything; either one alone was
+misleading. And "8 out of 10 for time saved" is not comparable between two people, while "about a
+day" is. The corpus exists so that durations can be compared across reports, so it now records a
+duration.
+
+The vocabulary is `none`, `few_minutes`, `about_an_hour`, `few_hours`, `about_a_day`, `few_days`,
+`about_a_week`, `more`, `cost_more` — and `cost_more` is deliberately **last** rather than first,
+even though it is the only value below `none`. It is the answer this project most wants and the
+one an author is most reluctant to give, and putting it at the end of the list rather than at the
+top means the reluctant answer is not also the first thing a reader of the form is asked to rule
+out. The ordering lives in `TIME_SAVED` in `src/lib/report-schema.ts`; the CHECK constraint is a
+membership test and says nothing about order, which is the usual split in this project between
+what the database refuses and what the form means. `20260820150000` revised the list once, adding
+`about_an_hour` and renaming `full_day` to `about_a_day` — an hour was the gap everybody's first
+example fell into, and `full_day` read as a claim about a working day rather than an approximation.
+
+The consequence for the dataset is that this is **the one v2 field that is not a scale**: five
+`rating_*` columns are still 0-to-10 integers and `time_saved` is categorical. Anything computed
+against `rating_time_saved` has to be rewritten, and `data/README.md` says so where a reader of
+the CSV will meet it.
+
+## 2026-08-20 — A supporting link no longer carries a label
+
+The Supporting material section asked for a label — *shown instead of the bare link* — and it is
+gone. It was the only optional field in a repeating row, which is the worst place for one: eight
+rows times two fields is sixteen inputs to get through, the label adds nothing a reader cannot get
+from the URL and the `kind`, and a field most people skip in a repeater teaches them to skip the
+row. The `kind` is what actually does the work of telling a reader what they are about to open.
+
+The field is removed from the form only. `reports."references"` is jsonb, the trigger still
+accepts and length-checks a `label`, `/reports/<id>/` still renders `reference.label ?? reference.url`,
+and the export still carries the key. That asymmetry is on purpose — nothing had to be migrated,
+and a future form could ask again without a schema change — but it means the column is null on
+every row rather than null when an author declined, which is a different fact and is the version
+`data/README.md` now states.
+
+## 2026-08-20 — Two task types added after the schema landed, in their own migrations
+
+`example_counterexample` (`20260820110000`) and `brainstorming` (`20260820140000`) join the task
+type enum. Both are things people actually do first and neither had a home: "find me a
+counterexample" is not proof checking, and free-form idea generation before there is a claim to
+state is not conjecture generation. They are separate one-line migrations rather than additions to
+`20260820100000` for a reason worth remembering — a new enum label cannot be *used* in the same
+transaction that adds it, so an enum value and a constraint or default that names it belong in
+different migrations. Adding them after the fact costs one file each and sidesteps the question
+entirely.
+
+## 2026-08-20 — A dropped column takes its column grant with it, and every submission failed
+
+INSERT and UPDATE on `public.reports` are granted per column — deliberately, so that a caller
+cannot name `status` or `created_at` at all — which means a column added by a later migration
+arrives with no privilege and a column dropped and re-added loses the privilege it had. Both
+happened in this schema version: `20260820120000` drops and re-adds `was_published` to change it
+from boolean to text, and `20260820130000` adds `time_saved` in place of two columns it drops.
+Neither regranted, and the whole submission path stopped working.
+
+What makes it worth writing down is how it presents. The column is there, the CHECK is there, the
+policy matches, and `public.submit_report()` — which is SECURITY INVOKER *precisely* so that the
+grants still apply through it — dies with `permission denied for table reports`, so all twelve
+failures in `012_submit_report.test.sql` and four in `021` read as a policy that had stopped
+matching rather than as one missing grant. It is the long-standing rule again: grants decide
+whether the endpoint exists, policies decide which rows it returns, **check the grants first**.
+Any migration that adds, drops or retypes a column on a per-column-granted table issues the
+`grant` in the same file, and `021_report_schema_v2.test.sql` now asserts both columns on both
+commands, because that four-way `has_column_privilege` check is the only thing standing between
+this and the next schema version repeating it.

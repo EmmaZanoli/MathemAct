@@ -62,10 +62,11 @@ is present on every row.
 | `transcriptExcerpt` | The canonical artifact, pasted by the author. Nullable |
 | `transcriptUrl` | A share link, if there was one. Supplementary — links expire, get revoked, and may breach a provider's terms, so they are never the only record |
 | `caveats` | What they would tell somebody trying the same thing. Nullable |
-| `references` | `{ kind, url, label }`, up to eight. `kind` is one of `paper`, `code`, `notebook`, `formalisation`, `overleaf`, `dataset`, `figure`, `slides`, `other`. `https` only; `label` is null when the author gave none. Also `csv/report-references.csv` |
-| `timeSpentMinutes`, `wasPublished`, `wasDisclosed`, `authorConfidence` | Structured metadata, all nullable. `wasDisclosed` is only ever set when `wasPublished` is true — the database refuses the other combination, because "not published, not disclosed" reads as a failure to disclose and is actually a question that did not apply |
-| `ratings` | Five 0-to-10 answers, all nullable: `rating_helpfulness`, `rating_time_saved`, `rating_trust_before_checking`, `rating_verification_effort`, `rating_novelty`, `rating_understanding_gained`. See below |
-| `costMoreTimeThanSaved` | Boolean, default false. The fact `rating_time_saved` cannot hold, because a 0-to-10 scale has no negative |
+| `references` | `{ kind, url, label }`, up to eight. `kind` is one of `paper`, `code`, `notebook`, `formalisation`, `overleaf`, `dataset`, `figure`, `slides`, `other`. `https` only, and links only — the site is static, so nothing is uploaded. **`label` is null on every row**: the schema and the export keep the field and the report page will show one if it is ever there, but the form stopped asking for it on 2026-08-20, so treat it as absent rather than as "the author gave none". Also `csv/report-references.csv` |
+| `timeSpentMinutes`, `wasDisclosed`, `authorConfidence` | Structured metadata, all nullable |
+| `wasPublished` | `yes`, `not_yet`, `no`, `not_applicable`, or null. **A string since 2026-08-20, and it used to be a boolean** — "not yet" and "not applicable" are different answers, and a boolean had three states for four. `wasDisclosed` is only ever set when this is `yes`; the database refuses the other combinations, because "not published, not disclosed" reads as a failure to disclose and is actually a question that did not apply |
+| `timeSaved` | An ordered choice, nullable: `none`, `few_minutes`, `about_an_hour`, `few_hours`, `about_a_day`, `few_days`, `about_a_week`, `more`, `cost_more`. **Ordered, not numeric** — do not map it to a number and average it. `cost_more` is last in the list and is *below* `none`: it is the one answer a 0-to-10 scale could not express, and "the tool wasted my afternoon" is among the most useful facts here. Replaced a 0-to-10 `rating_time_saved` and a `cost_more_time_than_saved` boolean on 2026-08-20; neither column exists any more |
+| `ratings` | Five 0-to-10 answers, all nullable: `rating_helpfulness`, `rating_trust_before_checking`, `rating_verification_effort`, `rating_novelty`, `rating_understanding_gained`. See below |
 | `generalises` | `task_specific`, `similar_tasks`, `broadly`, or null. The author's guess about how far it carries, and it is a guess for all of them |
 | `createdAt` | When it was submitted, not when the tool was used |
 | `author` | `null` when the account has since been erased. The account goes; the contribution stays, unattributed |
@@ -84,13 +85,17 @@ the area is `research` or a task type is `conjecture_generation`, `proof_draftin
 `computation`; `rating_understanding_gained` is only asked when the area is `learning`,
 `teaching` or `outreach` or a task type is `comprehension`, `exposition` or `literature_search`.
 Novelty is a meaningless question about a teaching-prep session and understanding gained is a
-meaningless question about a literature search, and seven rows of radio buttons is an invitation
+meaningless question about a literature search, and six rows of radio buttons is an invitation
 to straight-line the lot. **A null on one of these two usually means the question was never put**,
 so treating it as a non-response will bias whatever you compute.
 
-`costMoreTimeThanSaved` is the companion to `rating_time_saved` and is the only way the schema
-can express a negative. Without it, "the tool wasted my afternoon" and "the tool was mildly
-disappointing" both score 0.
+**Time saved is not one of these five.** It was, until 2026-08-20, and it is now `timeSaved`
+above: an ordered list of durations rather than a 0-to-10 score. Two things were wrong with the
+number. A scale has no negative, so "it cost me more time than it saved" needed a boolean
+alongside it and the pair had to be read together to mean anything; and "8 out of 10" for time
+saved is not comparable between two people the way "about a day" is. Anything you computed
+against `rating_time_saved` or `cost_more_time_than_saved` has to be rewritten against a
+categorical, and neither column is in this export any more.
 
 These are self-reported single numbers from one person about one session. They are ordinal at
 best. The site uses them to sort a listing and does not aggregate them, which is the honest
