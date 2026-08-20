@@ -386,6 +386,14 @@ declare
   v_url  text;
   v_kind text;
 begin
+  -- Checked here as well as by reports_references_shape, because jsonb_array_elements on an
+  -- object raises 22023 -- "cannot extract elements from an object" -- and this trigger runs
+  -- before the constraint that would have said something a person can act on.
+  if jsonb_typeof(new."references") <> 'array' then
+    raise exception 'The supporting links have to be a list, even when there is one of them.'
+      using errcode = '23514';
+  end if;
+
   for v_item in select * from jsonb_array_elements(new."references")
   loop
     if jsonb_typeof(v_item) <> 'object' then
@@ -753,7 +761,11 @@ begin
       using errcode = '23514';
   end if;
 
-  if p_references is not null and jsonb_array_length(p_references) > 8 then
+  -- jsonb_typeof first, because jsonb_array_length on an object raises 22023 rather than
+  -- anything a caller can read. The trigger says the same thing; this says it earlier.
+  if p_references is not null
+     and jsonb_typeof(p_references) = 'array'
+     and jsonb_array_length(p_references) > 8 then
     raise exception 'Eight supporting links is the most. Pick the ones a reader would actually follow.'
       using errcode = '23514';
   end if;
@@ -870,7 +882,11 @@ begin
       using errcode = '23514';
   end if;
 
-  if p_references is not null and jsonb_array_length(p_references) > 8 then
+  -- jsonb_typeof first, because jsonb_array_length on an object raises 22023 rather than
+  -- anything a caller can read. The trigger says the same thing; this says it earlier.
+  if p_references is not null
+     and jsonb_typeof(p_references) = 'array'
+     and jsonb_array_length(p_references) > 8 then
     raise exception 'Eight supporting links is the most. Pick the ones a reader would actually follow.'
       using errcode = '23514';
   end if;
