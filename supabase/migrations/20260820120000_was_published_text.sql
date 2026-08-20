@@ -10,22 +10,24 @@
 -- 20260820100000 deleted all rows), so the USING clause is informational rather than a
 -- real data migration.
 
+-- Drop the old table constraint first: it references was_published as boolean and cannot
+-- survive a column drop. Postgres would drop it automatically along with the column, but
+-- naming it here makes the migration easier to read and is consistent with adding its
+-- replacement explicitly below.
 alter table public.reports
-  alter column was_published type text
-  using case was_published
-    when true  then 'yes'
-    when false then 'no'
-    else null
-  end;
+  drop constraint practices_disclosure_needs_publication;
+
+-- Drop and re-add the column. ALTER COLUMN ... USING does not work here because the local
+-- Postgres version evaluates the USING expression with the column already cast to the new
+-- type, which means boolean predicates inside it fail. Since the corpus is empty at this
+-- point (20260820100000 deleted all rows), dropping and re-adding loses no data.
+alter table public.reports
+  drop column was_published,
+  add column was_published text;
 
 alter table public.reports
   add constraint reports_was_published_values
     check (was_published in ('yes', 'not_yet', 'no', 'not_applicable'));
-
--- The old constraint compared a boolean; it still holds logically but the expression is now
--- wrong. Drop it and re-add it against the text value.
-alter table public.reports
-  drop constraint practices_disclosure_needs_publication;
 
 alter table public.reports
   add constraint reports_disclosure_needs_publication
