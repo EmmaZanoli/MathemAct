@@ -37,8 +37,8 @@ update public.profiles set is_banned = true
 select ok(
   not has_function_privilege('anon', 'public.submit_report(text, public.report_area, '
     'public.report_task_type, jsonb, text, text, public.report_outcome, text, text, '
-    'boolean, text, text, text, integer, boolean, boolean, integer, text[], '
-    'text, text[], text, text, jsonb, integer, integer, boolean, integer, integer, '
+    'boolean, text, text, text, integer, text, boolean, integer, text[], '
+    'text, text[], text, text, jsonb, integer, text, integer, integer, '
     'integer, integer, text)', 'EXECUTE'),
   'anon cannot execute submit_report'
 );
@@ -46,8 +46,8 @@ select ok(
 select ok(
   has_function_privilege('authenticated', 'public.submit_report(text, public.report_area, '
     'public.report_task_type, jsonb, text, text, public.report_outcome, text, text, '
-    'boolean, text, text, text, integer, boolean, boolean, integer, text[], '
-    'text, text[], text, text, jsonb, integer, integer, boolean, integer, integer, '
+    'boolean, text, text, text, integer, text, boolean, integer, text[], '
+    'text, text[], text, text, jsonb, integer, text, integer, integer, '
     'integer, integer, text)', 'EXECUTE'),
   'authenticated can'
 );
@@ -93,7 +93,7 @@ select lives_ok(
        'user: is this lemma true as stated?',
        'https://example.org/transcript',
        'I would state the hypotheses first next time.',
-       95, true, true, 8,
+       95, 'yes', true, 8,
        array['math.NT', 'math.LO']
      ) $$,
   'a confirmed member can submit a report, its tools and its tags in one call'
