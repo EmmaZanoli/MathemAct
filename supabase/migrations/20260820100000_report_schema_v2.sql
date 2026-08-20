@@ -85,6 +85,30 @@ delete from public.comments where parent_type = 'report';
 -- report_tools, report_tags and report_confirmations cascade from here.
 delete from public.reports;
 
+-- Flush the deferred events that cascade just queued, or section 8's `alter table
+-- public.report_tools` fails with 55006, *cannot ALTER TABLE "report_tools" because it has
+-- pending trigger events*. `report_tools_keep_at_least_one` is DEFERRABLE INITIALLY DEFERRED
+-- and fires `after delete`, so every tool row the cascade removed is an event sitting in the
+-- queue until COMMIT -- and Postgres will not alter a table with events pending against it.
+--
+-- Note which table the error names, because it is the diagnosis: `alter table public.reports`
+-- a hundred lines below this succeeds, since `reports_require_a_tool` is `after insert` and a
+-- delete queues nothing on the parent.
+--
+-- Firing them here is safe rather than merely expedient. Every queued event is a tool row
+-- whose report has just gone, and `private.assert_report_has_tool()` returns null in exactly
+-- that case -- "a report that no longer exists has no invariant left to violate" is the
+-- comment on it in 20260817130000, which is the migration that currently defines the
+-- function rather than the one that created it. The check that would fail is the one for an
+-- orphan, and the cascade left none.
+set constraints all immediate;
+
+-- Put the mode back. `SET CONSTRAINTS ALL IMMEDIATE` is not scoped to the statement that
+-- needed it, and a migration that leaves the transaction in immediate mode makes every
+-- constraint trigger after this point fire early -- which is a different bug, in a file that
+-- has already gone wrong once.
+set constraints all deferred;
+
 -- ── 2. The two axes, straightened ───────────────────────────────────────────────────
 --
 -- Area is *why you were working*. `outreach` and `administration` are the two kinds of
