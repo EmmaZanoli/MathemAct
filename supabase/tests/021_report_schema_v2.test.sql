@@ -33,7 +33,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(49);
+select plan(50);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -68,6 +68,11 @@ select ok(
 select ok(
   'programming' = any (enum_range(null::public.report_task_type)::text[]),
   'and programming: code that is not a formal proof was inflating formalisation'
+);
+
+select ok(
+  'example_counterexample' = any (enum_range(null::public.report_task_type)::text[]),
+  'and example_counterexample: a distinct mathematical goal, not reducible to computation'
 );
 
 -- ── The two derived columns ─────────────────────────────────────────────────────────

@@ -251,14 +251,7 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
     <Fragment slot="hint">
       <p>{FIELD_COPY.verification.hint}</p>
       <p>
-        <strong>This one has no skip and no "not applicable".</strong> An account without it
-        records that something felt right, which is not a finding. With it, a reader knows
-        what standard of checking was actually applied — and that is the thing a
-        mathematician needs in order to judge whether to trust the rest.
-      </p>
-      <p>
-        If the answer is that you did not check, say so. That is a real and useful answer,
-        and considerably more useful than a plausible-sounding one.
+        If the answer is that you did not check, say so.
       </p>
     </Fragment>
   </Field>
@@ -269,7 +262,7 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   number={10}
   title="Prompts"
   optional
-  lead="The prompts that did the work. This is the part of a report a reader copies, which is why it is not folded into the transcript."
+  lead="The prompts that did the work."
 >
   <Field
     id="prompts"
@@ -288,7 +281,7 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   number={11}
   title="Transcript"
   optional
-  lead="The excerpt is the record. A share link is supplementary — links expire, are revoked, and may breach the provider's terms."
+  lead="The excerpt is the record. A share link is supplementary."
 >
   <Field
     id="transcript_excerpt"
@@ -369,7 +362,7 @@ const unconditional = RATING_SCALES.filter((scale) => !scale.when);
   number={15}
   title="So this can be counted"
   optional
-  lead="Researchers studying how mathematicians use these tools will read this corpus as data. These answers are what let them. Every one is skippable, and a blank is more useful than a guess."
+  lead="This section attempts to quantify a number of metrics. Every one is skippable, and a blank is more useful than a guess."
 >
   <Field
     id="time_spent_minutes"

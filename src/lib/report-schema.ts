@@ -121,6 +121,11 @@ export const TASK_TYPES = [
   { value: 'formalisation', label: 'Formalisation', hint: 'Stating mathematics in a proof assistant.' },
   { value: 'computation', label: 'Computation', hint: 'Calculating, searching, or generating examples.' },
   {
+    value: 'example_counterexample',
+    label: 'Produce example or counterexample',
+    hint: 'Constructing an instance satisfying given conditions, or a counterexample to a statement.',
+  },
+  {
     value: 'programming',
     label: 'Programming',
     hint: 'Writing or debugging code that is not a formal proof.',
@@ -428,12 +433,12 @@ export const FIELD_COPY = {
       'Lean accepted the final proof, so the formal statement is verified. I checked separately that the formal statement says what I meant by rederiving the informal version by hand.',
   },
   prompts: {
-    hint: 'Verbatim, not a description of them. One per line, or separated by a blank line. Include the failed ones — a prompt that had to be rewritten three times is more instructive than the one that finally worked. Leave out system prompts you cannot share.',
+    hint: 'One per line, or separated by a blank line. Include the failed ones.',
     example:
       'Let A be a finite subset of Z with |A+A| ≤ 3|A|. Is it true that A is contained in an arithmetic progression of length at most C|A|? Give a proof or a counterexample, and state any hypothesis you add.',
   },
   transcriptExcerpt: {
-    hint: 'Paste the part that matters. Trim the rest.',
+    hint: 'You can cut out unnecessary parts - just paste the part that matters.',
     example: '',
   },
   transcriptUrl: {
