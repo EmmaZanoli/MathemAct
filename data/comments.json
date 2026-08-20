@@ -18,53 +18,5 @@
         "verifiedAt": "2026-08-17T10:39:33.352Z"
       }
     }
-  },
-  {
-    "id": "2d0c9d21-40ae-4365-8b18-6d5d78173e5d",
-    "parentType": "report",
-    "parentId": "0022d629-a3a7-490b-892d-12566ab3bca6",
-    "inReplyTo": null,
-    "body": "Trying to comment",
-    "createdAt": "2026-08-19T10:21:22.986Z",
-    "updatedAt": "2026-08-19T10:21:22.986Z",
-    "deletedAt": null,
-    "author": {
-      "id": "1bfffb42-711c-4d92-9e28-cb7cc1fc4eb6",
-      "displayName": "AdminEmma",
-      "isPseudonym": true,
-      "institution": null
-    }
-  },
-  {
-    "id": "5c348560-ab09-4b35-ba14-1f1fcc91652c",
-    "parentType": "report",
-    "parentId": "a9b3d4d8-3317-463e-91cc-d28a1c832e2f",
-    "inReplyTo": null,
-    "body": "Checkin a comment",
-    "createdAt": "2026-08-19T16:08:35.061Z",
-    "updatedAt": "2026-08-19T16:08:35.061Z",
-    "deletedAt": null,
-    "author": {
-      "id": "1bfffb42-711c-4d92-9e28-cb7cc1fc4eb6",
-      "displayName": "AdminEmma",
-      "isPseudonym": true,
-      "institution": null
-    }
-  },
-  {
-    "id": "e7e9d4a3-fdbf-45a4-b7f1-2d0c16c4ce00",
-    "parentType": "report",
-    "parentId": "a9b3d4d8-3317-463e-91cc-d28a1c832e2f",
-    "inReplyTo": null,
-    "body": "Checking comments",
-    "createdAt": "2026-08-19T16:09:36.140Z",
-    "updatedAt": "2026-08-19T16:09:36.140Z",
-    "deletedAt": null,
-    "author": {
-      "id": "1bfffb42-711c-4d92-9e28-cb7cc1fc4eb6",
-      "displayName": "AdminEmma",
-      "isPseudonym": true,
-      "institution": null
-    }
   }
 ]

@@ -38,7 +38,7 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | ROR loader, 132,706 institutions, 116,985 domains |
 | ✅ | Sign up, confirm, sign in, reset, profile, erasure request |
 | ✅ | Reports schema: RLS, tags, confirmations, staleness, rate limits |
-| ✅ | The submission form: twelve sections, draft autosave, one-transaction submit |
+| ✅ | The submission form: fifteen sections, draft autosave, one-transaction submit |
 | ✅ | Reading: listing with linkable filters, report pages, author pages |
 | ✅ | Debates, the agreement scale, and the histogram — median, never a mean |
 | ✅ | Network: submission, moderation, and a monthly link check |
@@ -206,14 +206,19 @@ production rather than a report after it.
 
 ### Database tests
 
-511 pgTAP assertions across twenty files in `supabase/tests/`, covering domain matching, the
+565 pgTAP assertions across twenty-one files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the
 tombstone rule, the rate limits, the submission RPC, the agreement scale, every comment
 policy including the nesting limit and what soft deletion destroys, the citation and
-flag queues, the activity feed and its backfill, and account bans — the eight write paths a
-ban closes, asserted one by one, and the notice it sends.
+flag queues, the activity feed and its backfill, account bans — the eight write paths a
+ban closes, asserted one by one, and the notice it sends — and schema version 2 of a report:
+the two widened vocabularies, the secondary task types and how they are normalised, the
+supporting links and every URL they refuse, the five scales and the two bounds on each, the
+ordered `time_saved` vocabulary that replaced a sixth scale, the guard's freeze list, reached
+by the one route that gets past the policy, and the column grants on the two columns this
+version retyped — which are per column, so a `drop column` silently revokes one.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
 the feature works and says nothing about whether it is a door.

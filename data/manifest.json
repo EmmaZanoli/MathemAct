@@ -5,8 +5,8 @@
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
   "files": {
     "reports.json": {
-      "rows": 3,
-      "bytes": 7146
+      "rows": 0,
+      "bytes": 3
     },
     "debates.json": {
       "rows": 1,
@@ -25,8 +25,8 @@
       "bytes": 746
     },
     "comments.json": {
-      "rows": 4,
-      "bytes": 2031
+      "rows": 1,
+      "bytes": 612
     },
     "citations.json": {
       "rows": 0,
@@ -37,20 +37,24 @@
       "bytes": 3
     },
     "csv/reports.csv": {
-      "rows": 3,
-      "bytes": 4975
+      "rows": 0,
+      "bytes": 604
     },
     "csv/report-tools.csv": {
-      "rows": 3,
-      "bytes": 253
+      "rows": 0,
+      "bytes": 46
     },
     "csv/report-tags.csv": {
-      "rows": 1,
-      "bytes": 96
+      "rows": 0,
+      "bytes": 30
     },
     "csv/network.csv": {
       "rows": 0,
       "bytes": 215
+    },
+    "csv/report-references.csv": {
+      "rows": 0,
+      "bytes": 26
     }
   }
 }

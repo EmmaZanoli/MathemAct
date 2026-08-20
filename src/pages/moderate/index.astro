@@ -790,7 +790,7 @@ import { path } from '../../lib/paths';
     if (report.authorConfidence !== null) {
       counting.push(`confidence ${report.authorConfidence}/10`);
     }
-    if (report.wasPublished === true) {
+    if (report.wasPublished === 'yes') {
       counting.push(
         report.wasDisclosed === true
           ? 'published, use disclosed'
@@ -798,7 +798,7 @@ import { path } from '../../lib/paths';
             ? 'published, use not disclosed'
             : 'published',
       );
-    } else if (report.wasPublished === false) {
+    } else if (report.wasPublished === 'no') {
       counting.push('not published');
     }
     counting.push(

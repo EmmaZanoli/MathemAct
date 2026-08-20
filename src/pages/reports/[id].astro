@@ -24,7 +24,13 @@ import { referencesFrom, referencesTo } from '../../lib/citations';
 import { threadFor } from '../../lib/comments';
 import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
-import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/report-schema';
+import {
+  areaLabel,
+  countedFacts,
+  outcomeLabel,
+  referenceKindLabel,
+  taskTypeLabel,
+} from '../../lib/report-schema';
 import { getReport, listReports } from '../../lib/reports';
 import { findRelated } from '../../lib/related';
 import { LICENCE, SITE } from '../../lib/site';
@@ -63,20 +69,10 @@ const citation =
   `${authorName}. "${report.title}". ${SITE.name}, ` +
   `${longDate(report.createdAt)}. ${canonical}. ${LICENCE.name}.`;
 
-const metadata = [
-  report.timeSpentMinutes !== null
-    ? { term: 'Time spent', value: `${report.timeSpentMinutes} min` }
-    : null,
-  report.authorConfidence !== null
-    ? { term: 'Author confidence', value: `${report.authorConfidence} / 10` }
-    : null,
-  report.wasPublished !== null
-    ? { term: 'Published', value: report.wasPublished ? 'yes' : 'no' }
-    : null,
-  report.wasDisclosed !== null
-    ? { term: 'Disclosed in the paper', value: report.wasDisclosed ? 'yes' : 'no' }
-    : null,
-].filter((entry) => entry !== null);
+/* The structured answers, assembled by the one function that holds their words. Nulls are
+   skipped rather than shown as "not answered": every one of these is optional and a blank is
+   a real answer. */
+const metadata = countedFacts(report);
 ---
 
 <Base title={report.title} description={report.aim}>
@@ -101,8 +97,19 @@ const metadata = [
           </div>
 
           <ul class="card__facts report__facts" role="list">
+            {/* The Pagefind filter reads the element's text content, so the qualifier goes
+                in a sibling: "Other — reviewing a grant panel's workload" as a filter value
+                would be a facet of one. */}
             <li data-pagefind-filter="area">{areaLabel(report.area)}</li>
+            {report.area === 'other' && report.areaOther && <li>{report.areaOther}</li>}
             <li data-pagefind-filter="task_type">{taskTypeLabel(report.taskType)}</li>
+            {
+              report.taskSecondary.length > 0 && (
+                <li>
+                  also {report.taskSecondary.map((task) => taskTypeLabel(task)).join(', ')}
+                </li>
+              )
+            }
             <li><span class="meta">Posted {longDate(report.createdAt)}</span></li>
           </ul>
         </header>
@@ -138,6 +145,9 @@ const metadata = [
                 <th scope="col">Tool</th>
                 <th scope="col">Version</th>
                 <th scope="col">Date used</th>
+                {/* Only when at least one row has one. A column of empty cells is worse
+                    than no column: it reads as data that failed to load. */}
+                {report.tools.some((tool) => tool.role) && <th scope="col">What it did</th>}
               </tr>
             </thead>
             <tbody>
@@ -147,12 +157,34 @@ const metadata = [
                     <td>{tool.name}</td>
                     <td>{tool.version}</td>
                     <td>{tool.usedOn}</td>
+                    {report.tools.some((other) => other.role) && <td>{tool.role ?? ''}</td>}
                   </tr>
                 ))
               }
             </tbody>
           </table>
         </section>
+
+        {/* The prompts, above the transcript and outside its disclosure, because this is the
+            part of a report a reader copies. Escaped, monospace, `white-space: pre-wrap`,
+            and no Markdown or TeX — the whole point of the field is that it is verbatim, and
+            rendering `$x$` here would show the reader something other than what was typed. */}
+        {
+          report.prompts && (
+            <section class="field-block">
+              <span class="field-block__label">Prompts</span>
+              <div class="verbatim">
+                <div class="verbatim__head">
+                  <p class="field__hint">
+                    As the author typed them, including any that had to be rewritten.
+                  </p>
+                  <CopyButton text={report.prompts} label="Copy prompts" />
+                </div>
+                <div class="verbatim__body">{report.prompts}</div>
+              </div>
+            </section>
+          )
+        }
 
         {
           report.transcriptExcerpt && (
@@ -189,8 +221,28 @@ const metadata = [
         {
           report.caveats && (
             <section class="field-block">
-              <span class="field-block__label">Caveats, and what they would do differently</span>
+              <span class="field-block__label">What they would tell someone trying this</span>
               <p class="field-block__body">{report.caveats}</p>
+            </section>
+          )
+        }
+
+        {/* Supporting material. `rel="nofollow noopener"` for the same reason the transcript
+            link carries it: these are links an author chose, not links this site endorses. */}
+        {
+          report.references.length > 0 && (
+            <section class="field-block">
+              <span class="field-block__label">Supporting material</span>
+              <ul class="links" role="list">
+                {report.references.map((reference) => (
+                  <li class="links__item">
+                    <span class="links__kind">{referenceKindLabel(reference.kind)}</span>
+                    <a href={reference.url} rel="nofollow noopener">
+                      {reference.label ?? reference.url}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </section>
           )
         }

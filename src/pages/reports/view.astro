@@ -51,7 +51,9 @@ import { path } from '../../lib/paths';
 
           <ul class="card__facts report__facts" role="list">
             <li data-pagefind-filter="area" data-area></li>
+            <li data-area-other hidden></li>
             <li data-pagefind-filter="task_type" data-task></li>
+            <li data-task-secondary hidden></li>
             <li><span class="meta" data-date></span></li>
           </ul>
         </header>
@@ -87,10 +89,23 @@ import { path } from '../../lib/paths';
                 <th scope="col">Tool</th>
                 <th scope="col">Version</th>
                 <th scope="col">Date used</th>
+                <th scope="col" data-tools-role-head hidden>What it did</th>
               </tr>
             </thead>
             <tbody data-tools-body></tbody>
           </table>
+        </section>
+
+        <section class="field-block" data-prompts-section hidden>
+          <span class="field-block__label">Prompts</span>
+          <div class="verbatim">
+            <div class="verbatim__head">
+              <p class="field__hint">
+                As the author typed them, including any that had to be rewritten.
+              </p>
+            </div>
+            <div class="verbatim__body" data-prompts></div>
+          </div>
         </section>
 
         <section class="field-block" data-transcript-section hidden>
@@ -112,8 +127,13 @@ import { path } from '../../lib/paths';
         </section>
 
         <section class="field-block" data-caveats-section hidden>
-          <span class="field-block__label">Caveats, and what they would do differently</span>
+          <span class="field-block__label">What they would tell someone trying this</span>
           <p class="field-block__body" data-caveats></p>
+        </section>
+
+        <section class="field-block" data-references-section hidden>
+          <span class="field-block__label">Supporting material</span>
+          <ul class="links" role="list" data-references-list></ul>
         </section>
       </div>
 
@@ -152,7 +172,14 @@ import { path } from '../../lib/paths';
 
 <script>
   import { longDate } from '../../lib/format';
-  import { areaLabel, outcomeLabel, taskTypeLabel } from '../../lib/report-schema';
+  import {
+    areaLabel,
+    countedFacts,
+    outcomeLabel,
+    referenceKindLabel,
+    taskTypeLabel,
+  } from '../../lib/report-schema';
+  import type { RatingKey } from '../../lib/report-schema';
   import { path } from '../../lib/paths';
 
   const params = new URLSearchParams(window.location.search);
@@ -191,14 +218,44 @@ import { path } from '../../lib/paths';
     setText('[data-aim]', report.aim);
     setText('[data-method]', report.method);
 
+    if (report.area === 'other' && report.areaOther) {
+      setText('[data-area-other]', report.areaOther);
+      reveal('[data-area-other]');
+    }
+
+    if (report.taskSecondary.length > 0) {
+      setText(
+        '[data-task-secondary]',
+        `also ${report.taskSecondary.map((task) => taskTypeLabel(task)).join(', ')}`,
+      );
+      reveal('[data-task-secondary]');
+    }
+
+    // The role column appears only when a row has one. A column of empty cells reads as data
+    // that failed to load, which on a page that fetches at runtime is the wrong thing to
+    // suggest.
+    const showRole = report.tools.some((tool) => tool.role);
+    if (showRole) reveal('[data-tools-role-head]');
+
     const tbody = document.querySelector<HTMLElement>('[data-tools-body]')!;
     for (const tool of report.tools) {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td></td><td></td><td></td>`;
-      (tr.cells[0] as HTMLTableCellElement).textContent = tool.name;
-      (tr.cells[1] as HTMLTableCellElement).textContent = tool.version;
-      (tr.cells[2] as HTMLTableCellElement).textContent = tool.usedOn ?? '';
+      for (const text of [tool.name, tool.version, tool.usedOn ?? '']) {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.appendChild(td);
+      }
+      if (showRole) {
+        const td = document.createElement('td');
+        td.textContent = tool.role ?? '';
+        tr.appendChild(td);
+      }
       tbody.appendChild(tr);
+    }
+
+    if (report.prompts) {
+      setText('[data-prompts]', report.prompts);
+      reveal('[data-prompts-section]');
     }
 
     if (report.transcriptExcerpt) {
@@ -263,19 +320,32 @@ import { path } from '../../lib/paths';
       block.hidden = false;
     }
 
-    // Metadata (time, confidence, published, disclosed).
-    const entries: { term: string; value: string }[] = [];
-    if (report.timeSpentMinutes !== null)
-      entries.push({ term: 'Time spent', value: `${report.timeSpentMinutes} min` });
-    if (report.authorConfidence !== null)
-      entries.push({ term: 'Author confidence', value: `${report.authorConfidence} / 10` });
-    if (report.wasPublished !== null)
-      entries.push({ term: 'Published', value: report.wasPublished ? 'yes' : 'no' });
-    if (report.wasDisclosed !== null)
-      entries.push({
-        term: 'Disclosed in the paper',
-        value: report.wasDisclosed ? 'yes' : 'no',
-      });
+    // Supporting links.
+    if (report.references.length > 0) {
+      const list = document.querySelector<HTMLElement>('[data-references-list]')!;
+      for (const reference of report.references) {
+        const li = document.createElement('li');
+        li.className = 'links__item';
+
+        const kind = document.createElement('span');
+        kind.className = 'links__kind';
+        kind.textContent = referenceKindLabel(reference.kind);
+
+        const link = document.createElement('a');
+        link.href = reference.url;
+        link.rel = 'nofollow noopener';
+        link.textContent = reference.label ?? reference.url;
+
+        li.append(kind, link);
+        list.appendChild(li);
+      }
+      reveal('[data-references-section]');
+    }
+
+    // The structured answers, from the one function that holds their words — the same call
+    // the static page makes, so a reader who arrives here the day something is posted and
+    // again the day after sees the same terms in the same order.
+    const entries = countedFacts(report);
     if (entries.length > 0) {
       const block = document.querySelector<HTMLElement>('[data-metadata-block]')!;
       const dl = document.querySelector<HTMLElement>('[data-metadata-dl]')!;
@@ -305,6 +375,11 @@ import { path } from '../../lib/paths';
     if (el) el.textContent = text;
   }
 
+  function reveal(selector: string): void {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (el) el.hidden = false;
+  }
+
   // ── Data fetch ────────────────────────────────────────────────────────────────────────
 
   interface FetchedReport {
@@ -315,17 +390,30 @@ import { path } from '../../lib/paths';
     readonly outcome: 'worked' | 'partial' | 'failed';
     readonly outcomeNotes: string | null;
     readonly verification: string;
+    readonly prompts: string | null;
     readonly transcriptExcerpt: string | null;
     readonly transcriptUrl: string | null;
     readonly caveats: string | null;
+    readonly references: readonly { kind: string; url: string; label: string | null }[];
     readonly area: string;
+    readonly areaOther: string | null;
     readonly taskType: string;
+    readonly taskSecondary: readonly string[];
+    readonly careerStage: string | null;
     readonly createdAt: string;
     readonly timeSpentMinutes: number | null;
     readonly authorConfidence: number | null;
-    readonly wasPublished: boolean | null;
+    readonly wasPublished: string | null;
     readonly wasDisclosed: boolean | null;
-    readonly tools: readonly { name: string; version: string; usedOn: string | null }[];
+    readonly ratings: Readonly<Record<RatingKey, number | null>>;
+    readonly timeSaved: string | null;
+    readonly generalises: string | null;
+    readonly tools: readonly {
+      name: string;
+      version: string;
+      usedOn: string | null;
+      role: string | null;
+    }[];
     readonly tags: readonly string[];
     readonly author: {
       readonly id: string;
@@ -341,9 +429,13 @@ import { path } from '../../lib/paths';
 
     const select = [
       'id,title,aim,method,outcome,outcome_notes,verification',
-      'transcript_excerpt,transcript_url,caveats,area,task_type,created_at',
+      'prompts,transcript_excerpt,transcript_url,references,caveats',
+      'area,area_other,task_type,task_secondary,career_stage,created_at',
       'time_spent_minutes,author_confidence,was_published,was_disclosed',
-      'report_tools(tool_name,tool_version,used_on)',
+      'rating_helpfulness,time_saved,rating_trust_before_checking',
+      'rating_verification_effort,rating_novelty,rating_understanding_gained',
+      'generalises',
+      'report_tools(tool_name,tool_version,used_on,role)',
       'report_tags(tags(code))',
       'author:profiles!reports_author_id_fkey(id,display_name,is_pseudonym)',
     ].join(',');
@@ -371,21 +463,41 @@ import { path } from '../../lib/paths';
         outcome: row.outcome,
         outcomeNotes: row.outcome_notes ?? null,
         verification: row.verification,
+        prompts: row.prompts ?? null,
         transcriptExcerpt: row.transcript_excerpt ?? null,
         transcriptUrl: row.transcript_url ?? null,
         caveats: row.caveats ?? null,
+        references: row.references ?? [],
         area: row.area,
+        areaOther: row.area_other ?? null,
         taskType: row.task_type,
+        taskSecondary: row.task_secondary ?? [],
+        careerStage: row.career_stage ?? null,
         createdAt: row.created_at,
         timeSpentMinutes: row.time_spent_minutes ?? null,
         authorConfidence: row.author_confidence ?? null,
         wasPublished: row.was_published ?? null,
         wasDisclosed: row.was_disclosed ?? null,
+        ratings: {
+          rating_helpfulness: row.rating_helpfulness ?? null,
+          rating_trust_before_checking: row.rating_trust_before_checking ?? null,
+          rating_verification_effort: row.rating_verification_effort ?? null,
+          rating_novelty: row.rating_novelty ?? null,
+          rating_understanding_gained: row.rating_understanding_gained ?? null,
+        },
+        timeSaved: row.time_saved ?? null,
+        generalises: row.generalises ?? null,
         tools: (row.report_tools ?? []).map(
-          (t: { tool_name: string; tool_version: string; used_on: string | null }) => ({
+          (t: {
+            tool_name: string;
+            tool_version: string;
+            used_on: string | null;
+            role: string | null;
+          }) => ({
             name: t.tool_name,
             version: t.tool_version,
             usedOn: t.used_on ?? null,
+            role: t.role ?? null,
           }),
         ),
         tags: (row.report_tags ?? []).flatMap(

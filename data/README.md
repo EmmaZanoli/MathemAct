@@ -29,6 +29,7 @@ Suggested citation:
 | `csv/reports.csv` | The same corpus, flattened, for people who would rather not parse JSON |
 | `csv/report-tools.csv` | One row per tool per report |
 | `csv/report-tags.csv` | One row per tag per report |
+| `csv/report-references.csv` | One row per supporting link per report |
 
 Two naming conventions, on purpose. **The JSON is camelCase**, because the site deserialises
 it straight into its own types and one snake_case field would be a trap for whoever added the
@@ -45,23 +46,60 @@ is present on every row.
 | Field | Notes |
 |---|---|
 | `id` | Stable. The page is at `/reports/<id>/` |
+| `schemaVersion` | Which version of the reporting standard the row answers. `2` since 2026-08-20. **Read this before averaging anything**: a version 1 row was never asked about career stage, prompts, supporting links, or any of the five scales, so a null there means "not asked" rather than "declined" |
 | `title` | One line |
-| `area` | `research`, `learning`, `teaching`, `writing`, `other` |
-| `taskType` | `literature_search`, `conjecture_generation`, `proof_drafting`, `proof_checking`, `formalisation`, `computation`, `exposition`, `translation`, `referee_work`, `other` |
+| `area` | `research`, `learning`, `teaching`, `writing`, `outreach`, `administration`, `other`. Why the work was being done |
+| `areaOther` | Set when and only when `area` is `other`. The database enforces both directions |
+| `taskType` | `literature_search`, `comprehension`, `conjecture_generation`, `proof_drafting`, `proof_checking`, `formalisation`, `computation`, `programming`, `exposition`, `translation`, `referee_work`, `other`. What the tool was asked to do — a different axis from `area`, and the one the corpus is most often grouped by |
+| `taskSecondary` | Up to three more of the same vocabulary: anything else the tool was asked to do in the same session. Never contains `taskType`, never contains a duplicate. **A query for "reports that did proof drafting" has to look here too**, or it will understate the corpus |
+| `careerStage` | `undergraduate`, `masters`, `doctoral`, `postdoctoral`, `faculty`, `researcher_outside_academia`, `teacher`, `independent`, `other`. Optional and coarse on purpose; frequently null, and a null is a refusal to say rather than a missing value |
 | `aim` | What the author was trying to do. Capped at 600 characters, so it is the problem rather than the session |
 | `method` | What they actually did, stepwise |
 | `outcome` | `worked`, `partial`, `failed` |
 | `outcomeNotes` | What happened, in prose |
 | `verification` | **How correctness was established.** Never empty, and there is no "not applicable": this field is what separates the corpus from anecdote |
+| `prompts` | The prompts, verbatim, including any that had to be rewritten. Nullable. Not Markdown and not TeX — the point of the field is that it is what was typed |
 | `transcriptExcerpt` | The canonical artifact, pasted by the author. Nullable |
 | `transcriptUrl` | A share link, if there was one. Supplementary — links expire, get revoked, and may breach a provider's terms, so they are never the only record |
-| `caveats` | What they would do differently. Nullable |
-| `timeSpentMinutes`, `wasPublished`, `wasDisclosed`, `authorConfidence` | Structured metadata, all nullable. `wasDisclosed` is only ever set when `wasPublished` is true — the database refuses the other combination, because "not published, not disclosed" reads as a failure to disclose and is actually a question that did not apply |
+| `caveats` | What they would tell somebody trying the same thing. Nullable |
+| `references` | `{ kind, url, label }`, up to eight. `kind` is one of `paper`, `code`, `notebook`, `formalisation`, `overleaf`, `dataset`, `figure`, `slides`, `other`. `https` only, and links only — the site is static, so nothing is uploaded. **`label` is null on every row**: the schema and the export keep the field and the report page will show one if it is ever there, but the form stopped asking for it on 2026-08-20, so treat it as absent rather than as "the author gave none". Also `csv/report-references.csv` |
+| `timeSpentMinutes`, `wasDisclosed`, `authorConfidence` | Structured metadata, all nullable |
+| `wasPublished` | `yes`, `not_yet`, `no`, `not_applicable`, or null. **A string since 2026-08-20, and it used to be a boolean** — "not yet" and "not applicable" are different answers, and a boolean had three states for four. `wasDisclosed` is only ever set when this is `yes`; the database refuses the other combinations, because "not published, not disclosed" reads as a failure to disclose and is actually a question that did not apply |
+| `timeSaved` | An ordered choice, nullable: `none`, `few_minutes`, `about_an_hour`, `few_hours`, `about_a_day`, `few_days`, `about_a_week`, `more`, `cost_more`. **Ordered, not numeric** — do not map it to a number and average it. `cost_more` is last in the list and is *below* `none`: it is the one answer a 0-to-10 scale could not express, and "the tool wasted my afternoon" is among the most useful facts here. Replaced a 0-to-10 `rating_time_saved` and a `cost_more_time_than_saved` boolean on 2026-08-20; neither column exists any more |
+| `ratings` | Five 0-to-10 answers, all nullable: `rating_helpfulness`, `rating_trust_before_checking`, `rating_verification_effort`, `rating_novelty`, `rating_understanding_gained`. See below |
+| `generalises` | `task_specific`, `similar_tasks`, `broadly`, or null. The author's guess about how far it carries, and it is a guess for all of them |
 | `createdAt` | When it was submitted, not when the tool was used |
 | `author` | `null` when the account has since been erased. The account goes; the contribution stays, unattributed |
-| `tools` | `{ name, version, usedOn }`. At least one, always. `usedOn` is a date, `YYYY-MM-DD` |
+| `tools` | `{ name, version, usedOn, role }`. At least one and at most six. `usedOn` is a date, `YYYY-MM-DD`; `role` is what that tool did and is nullable. One tool may appear twice on one day in two roles |
 | `tags` | `{ code, label }` |
 | `staleness` | Derived, see below |
+
+### The five scales, and how not to misread them
+
+Each is an integer 0 to 10 or null, and every one of them is optional. Nothing on the form has
+a default: an unanswered scale is null, never 0, and the difference matters — a report scored 0
+for helpfulness is a finding, and a report nobody scored is not.
+
+**Two of them are conditional and are null on most rows.** `rating_novelty` is only asked when
+the area is `research` or a task type is `conjecture_generation`, `proof_drafting` or
+`computation`; `rating_understanding_gained` is only asked when the area is `learning`,
+`teaching` or `outreach` or a task type is `comprehension`, `exposition` or `literature_search`.
+Novelty is a meaningless question about a teaching-prep session and understanding gained is a
+meaningless question about a literature search, and six rows of radio buttons is an invitation
+to straight-line the lot. **A null on one of these two usually means the question was never put**,
+so treating it as a non-response will bias whatever you compute.
+
+**Time saved is not one of these five.** It was, until 2026-08-20, and it is now `timeSaved`
+above: an ordered list of durations rather than a 0-to-10 score. Two things were wrong with the
+number. A scale has no negative, so "it cost me more time than it saved" needed a boolean
+alongside it and the pair had to be read together to mean anything; and "8 out of 10" for time
+saved is not comparable between two people the way "about a day" is. Anything you computed
+against `rating_time_saved` or `cost_more_time_than_saved` has to be rewritten against a
+categorical, and neither column is in this export any more.
+
+These are self-reported single numbers from one person about one session. They are ordinal at
+best. The site uses them to sort a listing and does not aggregate them, which is the honest
+ceiling on what they support.
 
 ### Staleness, and why it is in the data rather than computed by you
 
@@ -149,6 +187,14 @@ you did not anticipate.
 **This is a snapshot, not a stream.** The site itself shows anything posted since the last
 export by asking the database directly, but these files only move when the nightly job runs.
 Check `exportedAt` in `manifest.json` before concluding something is missing.
+
+**The corpus was emptied on 2026-08-20, on purpose.** Schema version 2 added career stage, the
+secondary task types, the prompts, the supporting links and the five scales, and the three
+reports in the corpus at the time were examples the moderators had written to see the pages
+render. Migrating them would have put three rows in a citable dataset that answer none of the
+new questions and that nobody can complete, because a report's text fixes itself the moment
+somebody else confirms or comments on it. So they were deleted rather than backfilled. If you
+are holding an earlier copy of `reports.json`, those three rows are the difference.
 
 ## Reproducing it
 

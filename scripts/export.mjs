@@ -36,6 +36,9 @@
  *   institution_source    which of the three domain layers issued a badge. Never displayed;
  *                         the surest way to keep that true is for it never to leave the
  *                         database.
+ *   has_prompts,          two generated booleans that exist so the freshness overlay can
+ *   has_transcript        answer a filter without fetching a transcript. Not a leak, just
+ *                         redundant here: this file carries the text itself.
  *
  * ── Why a direct connection and not the service role key ────────────────────────────
  *
@@ -125,21 +128,36 @@ function valueOf(flag) {
 const REPORTS = `
   select
     p.id,
+    p.schema_version,
     p.title,
     p.area::text,
+    p.area_other,
     p.task_type::text,
+    -- The enum array cast whole rather than element by element: ::text[] on an enum array is
+    -- one cast, and node-postgres hands it back as a JS array of strings.
+    p.task_secondary::text[] as task_secondary,
+    p.career_stage,
     p.aim,
     p.method,
     p.outcome::text,
     p.outcome_notes,
     p.verification,
+    p.prompts,
     p.transcript_excerpt,
     p.transcript_url,
+    p."references",
     p.caveats,
     p.time_spent_minutes,
     p.was_published,
     p.was_disclosed,
     p.author_confidence,
+    p.rating_helpfulness,
+    p.time_saved,
+    p.rating_trust_before_checking,
+    p.rating_verification_effort,
+    p.rating_novelty,
+    p.rating_understanding_gained,
+    p.generalises,
     p.created_at,
 
     a.id                      as author_id,
@@ -173,7 +191,8 @@ const REPORTS = `
   left join lateral (
     select json_agg(
              json_build_object('name', t.tool_name, 'version', t.tool_version,
-                               'usedOn', to_char(t.used_on, 'YYYY-MM-DD'))
+                               'usedOn', to_char(t.used_on, 'YYYY-MM-DD'),
+                               'role', t.role)
              order by t.used_on desc, t.tool_name
            ) as rows
       from public.report_tools t
@@ -443,24 +462,55 @@ function reportAuthor(row) {
 function toReport(row) {
   return {
     id: row.id,
+    // Carried so an analysis can tell a report that answered a question from one that was
+    // never asked it. Anything written before 2026-08-20 is version 1 and answers none of
+    // the version 2 fields; nothing in the corpus is version 1 today, because the migration
+    // that introduced version 2 deleted the three example reports that were.
+    schemaVersion: row.schema_version,
     title: row.title,
     area: row.area,
+    areaOther: row.area_other,
     taskType: row.task_type,
+    taskSecondary: row.task_secondary ?? [],
+    careerStage: row.career_stage,
     aim: row.aim,
     method: row.method,
     outcome: row.outcome,
     outcomeNotes: row.outcome_notes,
     verification: row.verification,
+    prompts: row.prompts,
     transcriptExcerpt: row.transcript_excerpt,
     transcriptUrl: row.transcript_url,
     caveats: row.caveats,
+    // jsonb comes back parsed. `label` is absent rather than null on a link that has none,
+    // so it is normalised here — the site's type says `string | null`, and a key that is
+    // sometimes missing and sometimes null is two shapes for one fact.
+    references: (row.references ?? []).map((reference) => ({
+      kind: reference.kind,
+      url: reference.url,
+      label: reference.label ?? null,
+    })),
     timeSpentMinutes: row.time_spent_minutes,
     wasPublished: row.was_published,
     wasDisclosed: row.was_disclosed,
     authorConfidence: row.author_confidence,
+    timeSaved: row.time_saved,
+    ratings: {
+      rating_helpfulness: row.rating_helpfulness,
+      rating_trust_before_checking: row.rating_trust_before_checking,
+      rating_verification_effort: row.rating_verification_effort,
+      rating_novelty: row.rating_novelty,
+      rating_understanding_gained: row.rating_understanding_gained,
+    },
+    generalises: row.generalises,
     createdAt: iso(row.created_at),
     author: reportAuthor(row),
-    tools: row.tools,
+    tools: (row.tools ?? []).map((tool) => ({
+      name: tool.name,
+      version: tool.version,
+      usedOn: tool.usedOn,
+      role: tool.role ?? null,
+    })),
     tags: row.tags,
     staleness: {
       latestToolUse: row.latest_tool_use ?? null,
@@ -620,6 +670,12 @@ function csv(columns, rows) {
     if (value instanceof Date) return `"${value.toISOString()}"`;
     if (typeof value === 'boolean') return value ? 'true' : 'false';
     if (typeof value === 'number') return String(value);
+    // A Postgres array, which node-postgres hands back as a JS array. Joined with a
+    // semicolon rather than left to String(), which uses a comma — inside a quoted field
+    // that is legal and still reads, to anybody scanning the file, as a column boundary
+    // that got away. Only `task_secondary` reaches this, and its values are bare enum
+    // labels with no separator of their own.
+    if (Array.isArray(value)) return `"${value.join(';').replaceAll('"', '""')}"`;
     return `"${String(value).replaceAll('"', '""')}"`;
   };
 
@@ -631,14 +687,22 @@ function csv(columns, rows) {
 
 const REPORT_CSV_COLUMNS = [
   'id',
+  'schema_version',
   'title',
   'area',
+  'area_other',
   'task_type',
+  // The one repeated value that stays in this file rather than getting a file of its own.
+  // It is capped at three and every value is a bare enum label with no separator in it, so
+  // `proof_drafting;computation` is parseable without a decision; a tool name is not.
+  'task_secondary',
+  'career_stage',
   'aim',
   'method',
   'outcome',
   'outcome_notes',
   'verification',
+  'prompts',
   'transcript_excerpt',
   'transcript_url',
   'caveats',
@@ -646,6 +710,13 @@ const REPORT_CSV_COLUMNS = [
   'was_published',
   'was_disclosed',
   'author_confidence',
+  'time_saved',
+  'rating_helpfulness',
+  'rating_trust_before_checking',
+  'rating_verification_effort',
+  'rating_novelty',
+  'rating_understanding_gained',
+  'generalises',
   'created_at',
   'author_id',
   'author_display_name',
@@ -661,7 +732,9 @@ const REPORT_CSV_COLUMNS = [
 
 // The rows go in as Postgres returned them: `cell()` already renders a Date as ISO, and the
 // one-to-many parts are their own files rather than a comma-joined cell. A cell containing
-// "Lean|ChatGPT" is a parsing problem handed to every person who opens this.
+// "Lean|ChatGPT" is a parsing problem handed to every person who opens this. `references` is
+// absent from the columns above for the same reason and is `csv/report-references.csv`
+// instead — a cell of JSON in a CSV is the worst of both formats.
 
 // ══ Running ═══════════════════════════════════════════════════════════════════════════
 
@@ -740,17 +813,29 @@ async function main() {
 
   const toolRows = [];
   const tagRows = [];
+  const referenceRows = [];
   for (const row of datasets.reports.rows) {
-    for (const tool of row.tools) {
+    for (const tool of row.tools ?? []) {
       toolRows.push({
         report_id: row.id,
         tool_name: tool.name,
         tool_version: tool.version,
         used_on: tool.usedOn,
+        role: tool.role ?? null,
       });
     }
     for (const tag of row.tags) {
       tagRows.push({ report_id: row.id, tag_code: tag.code, tag_label: tag.label });
+    }
+    // Its own file rather than a jsonb cell inside csv/reports.csv. A cell of JSON in a CSV
+    // is the worst of both formats: too structured to read and too embedded to parse.
+    for (const reference of row.references ?? []) {
+      referenceRows.push({
+        report_id: row.id,
+        kind: reference.kind,
+        url: reference.url,
+        label: reference.label ?? null,
+      });
     }
   }
 
@@ -776,9 +861,13 @@ async function main() {
     ['csv/reports.csv', csv(REPORT_CSV_COLUMNS, datasets.reports.rows)],
     [
       'csv/report-tools.csv',
-      csv(['report_id', 'tool_name', 'tool_version', 'used_on'], toolRows),
+      csv(['report_id', 'tool_name', 'tool_version', 'used_on', 'role'], toolRows),
     ],
     ['csv/report-tags.csv', csv(['report_id', 'tag_code', 'tag_label'], tagRows)],
+    [
+      'csv/report-references.csv',
+      csv(['report_id', 'kind', 'url', 'label'], referenceRows),
+    ],
     ['csv/network.csv', csv(NETWORK_CSV_COLUMNS, datasets.entries.rows)],
   ]);
 

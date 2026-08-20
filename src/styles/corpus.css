@@ -474,6 +474,65 @@
     overflow-wrap: break-word;
   }
 
+  /* ── Prompts, verbatim ──────────────────────────────────────────────────────────── */
+  /* Same treatment as a transcript body and deliberately not inside a disclosure. A prompt
+     is short, is the part of a report with instructional value, and is what a reader copies
+     — so it is on the page rather than behind "show the excerpt".
+
+     Escaped, monospace, `pre-wrap`, and never rendered as Markdown or TeX. The field exists
+     to hold what was typed; running `$x$` through KaTeX here would show a reader something
+     other than the thing they are being asked to reuse. */
+
+  .verbatim__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2xs);
+    margin-block-end: var(--space-2xs);
+  }
+
+  .verbatim__body {
+    max-height: 30rem;
+    overflow: auto;
+    padding: var(--space-sm);
+    border: var(--border);
+    background-color: var(--surface);
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    line-height: var(--leading-normal);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+
+  /* ── Supporting links ───────────────────────────────────────────────────────────── */
+  /* The kind is a machine-parseable classification, so it is mono like every other one on
+     this site, and it sits above the link rather than beside it: a URL wraps, and a kind
+     chip on the same line as a wrapped link ends up alone on the first row. */
+
+  .links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .links__item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    overflow-wrap: anywhere;
+  }
+
+  .links__kind {
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+  }
+
   /* ── Aside ──────────────────────────────────────────────────────────────────────── */
 
   .aside > * + * {

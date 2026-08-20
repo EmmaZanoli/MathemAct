@@ -17,6 +17,7 @@
 import StalenessNote from './StalenessNote.astro';
 import { path } from '../lib/paths';
 import { areaLabel, taskTypeLabel } from '../lib/report-schema';
+import { hasRunnableReference, recencyBands, sortValue, timeBand } from '../lib/report-facets';
 import type { Report } from '../lib/reports';
 
 interface Props {
@@ -33,8 +34,27 @@ const interactions = interactionCount ?? report.staleness.confirmationCount;
 // Data attributes drive the listing's filtering and sorting, which run in the browser over
 // already-rendered cards. Keeping the filterable values on the element means the filter
 // logic never has to re-parse the text a reader is looking at.
+//
+// The derived ones — the recency bands, the time band, the three "has" flags — come from
+// src/lib/report-facets.ts, which the freshness overlay also calls. A card built by the
+// overlay with a bucket computed a second way is a card that quietly fails a filter it
+// should match.
 const toolNames = [...new Set(report.tools.map((tool) => tool.name.trim().toLowerCase()))];
 const tagCodes = report.tags.map((tag) => tag.code);
+
+// Primary and secondary together: the task filter asks "did this session do X", and a
+// session whose second task was proof drafting did proof drafting.
+const tasks = [report.taskType, ...report.taskSecondary];
+const bands = recencyBands(report.staleness.latestToolUse, new Date());
+
+// The three toggles are one attribute and one filter dimension, and that dimension is AND'd
+// rather than OR'd — "has prompts" and "has code" together means both, which is the question
+// somebody ticking two of them is asking. Every other dimension ORs within itself.
+const has = [
+  report.prompts ? 'prompts' : null,
+  report.transcriptExcerpt ? 'transcript' : null,
+  hasRunnableReference(report.references.map((reference) => reference.kind)) ? 'code' : null,
+].filter((flag) => flag !== null);
 ---
 
 <article
@@ -42,9 +62,18 @@ const tagCodes = report.tags.map((tag) => tag.code);
   data-report
   data-area={report.area}
   data-task-type={report.taskType}
+  data-tasks={tasks.join('|')}
   data-outcome={report.outcome}
   data-tools={toolNames.join('|')}
   data-tags={tagCodes.join('|')}
+  data-career={report.careerStage ?? ''}
+  data-generalises={report.generalises ?? ''}
+  data-recency={bands.join('|')}
+  data-time={timeBand(report.timeSpentMinutes)}
+  data-has={has.join('|')}
+  data-helpfulness={sortValue(report.ratings.rating_helpfulness)}
+  data-effort={sortValue(report.ratings.rating_verification_effort)}
+  data-novelty={sortValue(report.ratings.rating_novelty)}
   data-created={report.createdAt}
   data-confirmed={report.staleness.latestConfirmationAt ?? ''}
   data-confirmations={report.staleness.confirmationCount}

@@ -125,7 +125,7 @@ export interface QueueReport {
   readonly caveats: string | null;
   readonly thirdPartyMaterialConfirmed: boolean;
   readonly timeSpentMinutes: number | null;
-  readonly wasPublished: boolean | null;
+  readonly wasPublished: string | null;
   readonly wasDisclosed: boolean | null;
   readonly authorConfidence: number | null;
   readonly createdAt: string;
@@ -1202,7 +1202,7 @@ const FLAGGED_REPORT: QueueReport = {
     'I would state all the hypotheses in full before asking. Most of the wasted time came from it filling in an assumption I had left implicit, and then being confident about it.',
   thirdPartyMaterialConfirmed: true,
   timeSpentMinutes: 260,
-  wasPublished: false,
+  wasPublished: 'no',
   wasDisclosed: null,
   authorConfidence: 8,
   createdAt: '2026-08-11T09:14:00Z',
