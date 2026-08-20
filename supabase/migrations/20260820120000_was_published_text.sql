@@ -36,6 +36,14 @@ alter table public.reports
   add constraint reports_disclosure_needs_publication
     check (was_disclosed is null or was_published = 'yes');
 
+-- INSERT and UPDATE on public.reports are granted per column, so dropping the column took
+-- its grants with it and re-adding it does not bring them back. Nothing warns you: the
+-- column is there, the constraint is there, the policy matches, and submit_report -- which
+-- is SECURITY INVOKER precisely so that the grants still apply through it -- dies with
+-- "permission denied for table reports" on every submission. Regrant the one column.
+grant insert (was_published) on public.reports to authenticated;
+grant update (was_published) on public.reports to authenticated;
+
 -- Both RPCs carry p_was_published boolean. Changing a parameter type is a signature change:
 -- create or replace would leave the old signature as a second overload and every call
 -- would then be ambiguous. Drop and recreate.

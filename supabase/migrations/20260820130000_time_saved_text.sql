@@ -20,6 +20,14 @@ alter table public.reports
       'full_day', 'few_days', 'about_a_week', 'more'
     ));
 
+-- INSERT and UPDATE on public.reports are granted per column, so a new column arrives with
+-- no privilege at all and the two it replaces took theirs with them. Without this,
+-- submit_report -- SECURITY INVOKER, so the grants apply through it -- fails every
+-- submission with "permission denied for table reports", which reads as a policy problem
+-- and is not one.
+grant insert (time_saved) on public.reports to authenticated;
+grant update (time_saved) on public.reports to authenticated;
+
 -- The freeze list names every column an author may not change once somebody else has
 -- answered the report. A column missing from the list can be rewritten after a
 -- confirmation has attested to a version. Reissue the whole function rather than patching:

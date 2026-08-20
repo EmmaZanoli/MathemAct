@@ -2384,3 +2384,19 @@ the export, and the honest alternative was fetching up to twenty-four thousand c
 onto a reading page to settle two yes-or-no questions — on the one query in this project that a
 reading page is allowed to make, and only because it is small. Two generated booleans are the
 cheaper answer, and they are absent from the export, which carries the text itself.
+
+**Column-level grants do not survive a dropped column, and re-adding it does not bring them
+back.** INSERT and UPDATE on `public.reports` are granted per column — deliberately, so that a
+caller cannot name `status` or `created_at` at all — which means a column added by a later
+migration arrives with no privilege and a column dropped and re-added loses the privilege it had.
+Both happened in this schema version: `20260820120000` drops and re-adds `was_published` to
+change it from boolean to text, and `20260820130000` adds `time_saved` in place of two columns it
+drops. Neither regranted, and the whole submission path stopped working. What makes it worth
+writing down is how it presents: the column is there, the CHECK is there, the policy matches, and
+`public.submit_report()` — which is SECURITY INVOKER *precisely* so that the grants still apply
+through it — dies with `permission denied for table reports`, so every count after it reads as a
+policy that stopped matching rather than as a missing grant. The same reading as the long-standing
+rule that grants control whether the endpoint exists and policies control which rows it returns:
+check the grants first. `021_report_schema_v2.test.sql` now asserts both columns on both commands,
+because the four-way `has_column_privilege` check is the only thing between this and the next
+schema version repeating it.

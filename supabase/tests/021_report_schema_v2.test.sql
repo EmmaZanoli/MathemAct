@@ -33,7 +33,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(51);
+select plan(52);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -528,6 +528,20 @@ select ok(
 -- ── Through the RPC ─────────────────────────────────────────────────────────────────
 -- The form's only entry point. Everything above is reachable another way; this is the path a
 -- browser takes, and it is SECURITY INVOKER so every policy and trigger above still applies.
+
+-- INSERT on public.reports is granted per column, so a column added by a later migration
+-- arrives with no privilege and a column dropped and re-added loses the one it had. Both
+-- happened here: was_published was re-added as text by 20260820120000 and time_saved was
+-- new in 20260820130000. The failure is worth an assertion of its own because of how it
+-- presents -- submit_report dies with "permission denied for table reports" and every
+-- count below it reads as a policy that stopped matching.
+select ok(
+  has_column_privilege('authenticated', 'public.reports', 'was_published', 'INSERT')
+    and has_column_privilege('authenticated', 'public.reports', 'time_saved', 'INSERT')
+    and has_column_privilege('authenticated', 'public.reports', 'was_published', 'UPDATE')
+    and has_column_privilege('authenticated', 'public.reports', 'time_saved', 'UPDATE'),
+  'the columns this schema version replaced carry their own column grants, which a drop takes with it'
+);
 
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}';
