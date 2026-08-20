@@ -12,9 +12,9 @@
 
 alter table public.reports
   alter column was_published type text
-  using case
-    when was_published is true  then 'yes'
-    when was_published is false then 'no'
+  using case was_published
+    when true  then 'yes'
+    when false then 'no'
     else null
   end;
 
