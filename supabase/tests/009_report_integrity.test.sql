@@ -15,7 +15,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(21);
+select plan(22);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -74,15 +74,34 @@ select throws_ok(
   'and so is a title of whitespace'
 );
 
+-- The affirmation is required when there is pasted material and meaningless when there is
+-- not, which is what 20260820100000 changed and why both directions are asserted. It used to
+-- be required unconditionally; that read as the stronger rule and was the weaker one, since a
+-- tick every submission needs carries no information about any of them.
 select throws_ok(
   $$ insert into public.reports
        (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
-        verification, third_party_material_confirmed)
-     values ('33333333-0000-0000-0000-000000000001', 'Unconfirmed material', 'research',
-             'other', 'a', 'b', 'worked', 'c', 'd', false) $$,
+        verification, transcript_excerpt, third_party_material_confirmed)
+     values ('33333333-0000-0000-0000-000000000001', 'Unconfirmed transcript', 'research',
+             'other', 'a', 'b', 'worked', 'c', 'd', 'user: is this true?', false) $$,
   '23514'::text, null::text,
-  'the third-party material confirmation must be true, not merely answered'
+  'a transcript with no third-party affirmation is refused'
 );
+
+select throws_ok(
+  $$ insert into public.reports
+       (author_id, title, area, task_type, aim, method, outcome, outcome_notes,
+        verification, prompts, third_party_material_confirmed)
+     values ('33333333-0000-0000-0000-000000000001', 'Unconfirmed prompts', 'research',
+             'other', 'a', 'b', 'worked', 'c', 'd', 'Prove that every finite group…', false) $$,
+  '23514'::text, null::text,
+  'and so are prompts: a prompt quotes other people''s material as readily as a transcript'
+);
+
+-- The permitted direction — nothing pasted, no affirmation needed — is asserted in
+-- 021_report_schema_v2.test.sql rather than here. It has to *succeed*, and a report that
+-- succeeds in this file is a report with no tool rows sitting in the transaction when the
+-- deferred at-least-one-tool check is forced immediate forty lines below.
 
 select throws_ok(
   $$ insert into public.reports

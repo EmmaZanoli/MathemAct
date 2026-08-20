@@ -5,8 +5,8 @@
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
   "files": {
     "reports.json": {
-      "rows": 2,
-      "bytes": 5353
+      "rows": 0,
+      "bytes": 3
     },
     "debates.json": {
       "rows": 1,
@@ -37,20 +37,24 @@
       "bytes": 3
     },
     "csv/reports.csv": {
-      "rows": 2,
-      "bytes": 3964
+      "rows": 0,
+      "bytes": 605
     },
     "csv/report-tools.csv": {
-      "rows": 2,
-      "bytes": 181
+      "rows": 0,
+      "bytes": 47
     },
     "csv/report-tags.csv": {
-      "rows": 1,
-      "bytes": 96
+      "rows": 0,
+      "bytes": 30
     },
     "csv/network.csv": {
       "rows": 0,
       "bytes": 215
+    },
+    "csv/report-references.csv": {
+      "rows": 0,
+      "bytes": 26
     }
   }
 }

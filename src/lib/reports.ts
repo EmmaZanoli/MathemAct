@@ -23,7 +23,15 @@
  * only adds to one.
  */
 import { getSupabase } from './supabase';
-import type { Area, TaskType } from './report-schema';
+import { RATING_SCALES, scaleApplies } from './report-schema';
+import type {
+  Area,
+  CareerStage,
+  Generalises,
+  RatingKey,
+  ReferenceKind,
+  TaskType,
+} from './report-schema';
 import type { Outcome, TombstoneStatus } from './status';
 
 // ── What a page gets ──────────────────────────────────────────────────────────────────
@@ -43,7 +51,27 @@ export interface CorpusTool {
   readonly name: string;
   readonly version: string;
   readonly usedOn: string;
+  /** What this one did. Null on every row written before schema version 2, and on any row
+   *  whose author did not say — which is most of them, and fine. */
+  readonly role: string | null;
 }
+
+/** One supporting link. Stored as jsonb on the report rather than in a child table: unlike a
+ *  tool, a reference has no date to go stale and nothing joins to it. */
+export interface CorpusReference {
+  readonly kind: ReferenceKind;
+  readonly url: string;
+  readonly label: string | null;
+}
+
+/**
+ * The five scales plus the confidence question, as they come out of the corpus.
+ *
+ * Null means unanswered, and for the two conditional ones it means the question was never
+ * asked. Never 0 for either — a 0 would put "no help at all" into an analysis for a report
+ * whose author was never shown the row.
+ */
+export type Ratings = Readonly<Record<RatingKey, number | null>>;
 
 export interface CorpusTag {
   readonly code: string;
@@ -63,21 +91,36 @@ export interface Staleness {
 
 export interface Report {
   readonly id: string;
+  /** Which version of the reporting standard this row answers. 1 for anything written
+   *  before 2026-08-20; nothing in the corpus is version 1 today, because the three example
+   *  reports that were went with the migration that introduced version 2. */
+  readonly schemaVersion: number;
   readonly title: string;
   readonly area: Area;
+  /** Set only when `area` is `other`, and always set when it is. */
+  readonly areaOther: string | null;
   readonly taskType: TaskType;
+  /** Anything else the tool was asked to do in the same session. Never contains
+   *  `taskType`, never contains a duplicate: the database sees to both. */
+  readonly taskSecondary: readonly TaskType[];
+  readonly careerStage: CareerStage | null;
   readonly aim: string;
   readonly method: string;
   readonly outcome: Outcome;
   readonly outcomeNotes: string;
   readonly verification: string;
+  readonly prompts: string | null;
   readonly transcriptExcerpt: string | null;
   readonly transcriptUrl: string | null;
   readonly caveats: string | null;
+  readonly references: readonly CorpusReference[];
   readonly timeSpentMinutes: number | null;
   readonly wasPublished: boolean | null;
   readonly wasDisclosed: boolean | null;
   readonly authorConfidence: number | null;
+  readonly ratings: Ratings;
+  readonly costMoreTimeThanSaved: boolean;
+  readonly generalises: Generalises | null;
   readonly createdAt: string;
   /** Null when the account was erased. The contribution stays; the name goes. */
   readonly author: CorpusAuthor | null;
@@ -235,27 +278,74 @@ export interface SubmissionTool {
   name: string;
   version: string;
   usedOn: string;
+  /** Optional, and part of the uniqueness key — the same tool can appear twice on one day
+   *  in two roles, which is the account the field exists for. */
+  role: string;
+}
+
+export interface SubmissionReference {
+  kind: ReferenceKind;
+  url: string;
+  label: string;
 }
 
 export interface Submission {
   title: string;
   area: Area;
+  /** Required when `area` is `other`, refused otherwise. The database enforces both
+   *  directions, so an `areaOther` left behind by changing the area back is a rejection
+   *  rather than a stray column. */
+  areaOther: string;
   taskType: TaskType;
+  taskSecondary: readonly TaskType[];
+  careerStage: CareerStage | '';
   tools: readonly SubmissionTool[];
   aim: string;
   method: string;
   outcome: Outcome;
   outcomeNotes: string;
   verification: string;
+  prompts: string;
   transcriptExcerpt: string;
   transcriptUrl: string;
   caveats: string;
+  references: readonly SubmissionReference[];
   thirdPartyMaterialConfirmed: boolean;
   timeSpentMinutes: number | null;
   wasPublished: boolean | null;
   wasDisclosed: boolean | null;
   authorConfidence: number | null;
+  /** Every scale, including the two conditional ones. A conditional scale that does not
+   *  apply is null here, whatever a stale radio somewhere in the DOM says — see
+   *  `ratingsFor()`, which is the one place that decides. */
+  ratings: Ratings;
+  costMoreTimeThanSaved: boolean;
+  generalises: Generalises | '';
   tagCodes: readonly string[];
+}
+
+/**
+ * The ratings as they should be *stored*, given the answers the rest of the form holds.
+ *
+ * A conditional scale is hidden when it does not apply, and a hidden radio group keeps
+ * whatever was selected before it was hidden — so somebody who picks Research, answers
+ * novelty, then changes the area to Teaching would otherwise submit a novelty score against
+ * a question that is no longer on their screen. This nulls those, and it is deliberately not
+ * the form's job: the form hides a row, and this decides what a hidden row means.
+ */
+export function ratingsFor(
+  answers: Ratings,
+  area: string | undefined,
+  taskPrimary: string | undefined,
+  taskSecondary: readonly string[],
+): Ratings {
+  const out: Record<RatingKey, number | null> = { ...answers };
+
+  for (const scale of RATING_SCALES) {
+    if (!scaleApplies(scale, area, taskPrimary, taskSecondary)) out[scale.key] = null;
+  }
+
+  return out;
 }
 
 /**
@@ -282,6 +372,63 @@ export async function loadTags(): Promise<Result<Tag[]>> {
 }
 
 /**
+ * The RPC arguments, once.
+ *
+ * `submit_report` and `resubmit_report` take the same thirty-one parameters and differ only
+ * in the report id and the return type, so the mapping lives here rather than twice.
+ * Thirty-one names written twice is thirty-one chances for the edit form to send a field the
+ * submission form does not — which is the failure the shared `ReportFields.astro` and this
+ * function exist to prevent.
+ */
+function rpcArguments(submission: Submission): Record<string, unknown> {
+  return {
+    p_title: submission.title.trim(),
+    p_area: submission.area,
+    p_area_other: submission.areaOther.trim() || null,
+    p_task_type: submission.taskType,
+    p_task_secondary: submission.taskSecondary,
+    p_career_stage: submission.careerStage || null,
+    p_tools: submission.tools.map((tool) => ({
+      name: tool.name.trim(),
+      version: tool.version.trim(),
+      used_on: tool.usedOn,
+      role: tool.role.trim() || null,
+    })),
+    p_aim: submission.aim.trim(),
+    p_method: submission.method.trim(),
+    p_outcome: submission.outcome,
+    p_outcome_notes: submission.outcomeNotes.trim(),
+    p_verification: submission.verification.trim(),
+    p_prompts: submission.prompts.trim() || null,
+    p_third_party_material_confirmed: submission.thirdPartyMaterialConfirmed,
+    p_transcript_excerpt: submission.transcriptExcerpt.trim() || null,
+    p_transcript_url: submission.transcriptUrl.trim() || null,
+    p_caveats: submission.caveats.trim() || null,
+    p_references: submission.references.map((reference) => ({
+      kind: reference.kind,
+      url: reference.url.trim(),
+      // Absent rather than null when empty. The column's validator only looks at a label
+      // that is there, and an explicit null in the stored jsonb would appear in the export
+      // as a key nobody set.
+      ...(reference.label.trim() ? { label: reference.label.trim() } : {}),
+    })),
+    p_time_spent_minutes: submission.timeSpentMinutes,
+    p_was_published: submission.wasPublished,
+    p_was_disclosed: submission.wasDisclosed,
+    p_author_confidence: submission.authorConfidence,
+    p_rating_helpfulness: submission.ratings.rating_helpfulness,
+    p_rating_time_saved: submission.ratings.rating_time_saved,
+    p_cost_more_time_than_saved: submission.costMoreTimeThanSaved,
+    p_rating_trust_before_checking: submission.ratings.rating_trust_before_checking,
+    p_rating_verification_effort: submission.ratings.rating_verification_effort,
+    p_rating_novelty: submission.ratings.rating_novelty,
+    p_rating_understanding_gained: submission.ratings.rating_understanding_gained,
+    p_generalises: submission.generalises || null,
+    p_tag_codes: submission.tagCodes,
+  };
+}
+
+/**
  * Returns the new report's id.
  *
  * One RPC rather than three inserts, because the at-least-one-tool constraint is deferred
@@ -293,30 +440,7 @@ export async function submitReport(submission: Submission): Promise<Result<strin
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const { data, error } = await supabase.rpc('submit_report', {
-      p_title: submission.title.trim(),
-      p_area: submission.area,
-      p_task_type: submission.taskType,
-      p_tools: submission.tools.map((tool) => ({
-        name: tool.name.trim(),
-        version: tool.version.trim(),
-        used_on: tool.usedOn,
-      })),
-      p_aim: submission.aim.trim(),
-      p_method: submission.method.trim(),
-      p_outcome: submission.outcome,
-      p_outcome_notes: submission.outcomeNotes.trim(),
-      p_verification: submission.verification.trim(),
-      p_third_party_material_confirmed: submission.thirdPartyMaterialConfirmed,
-      p_transcript_excerpt: submission.transcriptExcerpt.trim() || null,
-      p_transcript_url: submission.transcriptUrl.trim() || null,
-      p_caveats: submission.caveats.trim() || null,
-      p_time_spent_minutes: submission.timeSpentMinutes,
-      p_was_published: submission.wasPublished,
-      p_was_disclosed: submission.wasDisclosed,
-      p_author_confidence: submission.authorConfidence,
-      p_tag_codes: submission.tagCodes,
-    });
+    const { data, error } = await supabase.rpc('submit_report', rpcArguments(submission));
 
     if (error) return { ok: false, message: describe(error) };
     return { ok: true, value: String(data) };
@@ -418,21 +542,35 @@ export interface EditableReportForEdit {
   readonly id: string;
   readonly title: string;
   readonly area: Area;
+  readonly areaOther: string | null;
   readonly taskType: TaskType;
+  readonly taskSecondary: readonly TaskType[];
+  readonly careerStage: CareerStage | null;
   readonly aim: string;
   readonly method: string;
   readonly outcome: Outcome;
   readonly outcomeNotes: string;
   readonly verification: string;
+  readonly prompts: string | null;
   readonly transcriptExcerpt: string | null;
   readonly transcriptUrl: string | null;
   readonly caveats: string | null;
+  readonly references: readonly CorpusReference[];
   readonly thirdPartyMaterialConfirmed: boolean;
   readonly timeSpentMinutes: number | null;
   readonly wasPublished: boolean | null;
   readonly wasDisclosed: boolean | null;
   readonly authorConfidence: number | null;
-  readonly tools: readonly { id: string; name: string; version: string; usedOn: string }[];
+  readonly ratings: Ratings;
+  readonly costMoreTimeThanSaved: boolean;
+  readonly generalises: Generalises | null;
+  readonly tools: readonly {
+    id: string;
+    name: string;
+    version: string;
+    usedOn: string;
+    role: string | null;
+  }[];
   readonly tagCodes: readonly string[];
 }
 
@@ -455,21 +593,40 @@ interface EditableReportRow {
   id: string;
   title: string;
   area: Area;
+  area_other: string | null;
   task_type: TaskType;
+  task_secondary: TaskType[] | null;
+  career_stage: CareerStage | null;
   aim: string;
   method: string;
   outcome: Outcome;
   outcome_notes: string;
   verification: string;
+  prompts: string | null;
   transcript_excerpt: string | null;
   transcript_url: string | null;
   caveats: string | null;
+  references: CorpusReference[] | null;
   third_party_material_confirmed: boolean;
   time_spent_minutes: number | null;
   was_published: boolean | null;
   was_disclosed: boolean | null;
   author_confidence: number | null;
-  report_tools: { id: string; tool_name: string; tool_version: string; used_on: string }[];
+  rating_helpfulness: number | null;
+  rating_time_saved: number | null;
+  rating_trust_before_checking: number | null;
+  rating_verification_effort: number | null;
+  rating_novelty: number | null;
+  rating_understanding_gained: number | null;
+  cost_more_time_than_saved: boolean;
+  generalises: Generalises | null;
+  report_tools: {
+    id: string;
+    tool_name: string;
+    tool_version: string;
+    used_on: string;
+    role: string | null;
+  }[];
   report_tags: { tags: { code: string } | null }[];
 }
 
@@ -497,10 +654,15 @@ export async function loadEditableReport(
     const { data, error } = await supabase
       .from('reports')
       .select(
-        'id, title, area, task_type, aim, method, outcome, outcome_notes, verification,' +
-        'transcript_excerpt, transcript_url, caveats, third_party_material_confirmed,' +
+        'id, title, area, area_other, task_type, task_secondary, career_stage,' +
+        'aim, method, outcome, outcome_notes, verification,' +
+        'prompts, transcript_excerpt, transcript_url, references, caveats,' +
+        'third_party_material_confirmed,' +
         'time_spent_minutes, was_published, was_disclosed, author_confidence,' +
-        'report_tools(id, tool_name, tool_version, used_on),' +
+        'rating_helpfulness, rating_time_saved, rating_trust_before_checking,' +
+        'rating_verification_effort, rating_novelty, rating_understanding_gained,' +
+        'cost_more_time_than_saved, generalises,' +
+        'report_tools(id, tool_name, tool_version, used_on, role),' +
         'report_tags(tags(code))',
       )
       .eq('id', reportId)
@@ -526,25 +688,41 @@ export async function loadEditableReport(
         id: data.id,
         title: data.title,
         area: data.area,
+        areaOther: data.area_other,
         taskType: data.task_type,
+        taskSecondary: data.task_secondary ?? [],
+        careerStage: data.career_stage,
         aim: data.aim,
         method: data.method,
         outcome: data.outcome,
         outcomeNotes: data.outcome_notes,
         verification: data.verification,
+        prompts: data.prompts,
         transcriptExcerpt: data.transcript_excerpt,
         transcriptUrl: data.transcript_url,
         caveats: data.caveats,
+        references: data.references ?? [],
         thirdPartyMaterialConfirmed: data.third_party_material_confirmed,
         timeSpentMinutes: data.time_spent_minutes,
         wasPublished: data.was_published,
         wasDisclosed: data.was_disclosed,
         authorConfidence: data.author_confidence,
+        ratings: {
+          rating_helpfulness: data.rating_helpfulness,
+          rating_time_saved: data.rating_time_saved,
+          rating_trust_before_checking: data.rating_trust_before_checking,
+          rating_verification_effort: data.rating_verification_effort,
+          rating_novelty: data.rating_novelty,
+          rating_understanding_gained: data.rating_understanding_gained,
+        },
+        costMoreTimeThanSaved: data.cost_more_time_than_saved,
+        generalises: data.generalises,
         tools: tools.map((tool) => ({
           id: tool.id,
           name: tool.tool_name,
           version: tool.tool_version,
           usedOn: tool.used_on,
+          role: tool.role,
         })),
         tagCodes: tagLinks.flatMap((link) => (link.tags ? [link.tags.code] : [])),
       },
@@ -575,28 +753,7 @@ export async function resubmitReport(
   try {
     const { error } = await supabase.rpc('resubmit_report', {
       p_report_id: reportId,
-      p_title: submission.title.trim(),
-      p_area: submission.area,
-      p_task_type: submission.taskType,
-      p_tools: submission.tools.map((tool) => ({
-        name: tool.name.trim(),
-        version: tool.version.trim(),
-        used_on: tool.usedOn,
-      })),
-      p_aim: submission.aim.trim(),
-      p_method: submission.method.trim(),
-      p_outcome: submission.outcome,
-      p_outcome_notes: submission.outcomeNotes.trim(),
-      p_verification: submission.verification.trim(),
-      p_third_party_material_confirmed: submission.thirdPartyMaterialConfirmed,
-      p_transcript_excerpt: submission.transcriptExcerpt.trim() || null,
-      p_transcript_url: submission.transcriptUrl.trim() || null,
-      p_caveats: submission.caveats.trim() || null,
-      p_time_spent_minutes: submission.timeSpentMinutes,
-      p_was_published: submission.wasPublished,
-      p_was_disclosed: submission.wasDisclosed,
-      p_author_confidence: submission.authorConfidence,
-      p_tag_codes: submission.tagCodes,
+      ...rpcArguments(submission),
     });
 
     if (error) return { ok: false, message: describe(error) };

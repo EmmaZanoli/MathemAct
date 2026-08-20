@@ -1,0 +1,542 @@
+---
+/**
+ * The fifteen sections of a report, once.
+ *
+ * Two pages ask for a report — /reports/new/ and /account/edit-submission/ — and until
+ * schema version 2 they each carried their own copy of the whole form. That was survivable
+ * at twelve sections of plain fields and stops being survivable the moment the form has
+ * conditional scales in it: a rule written twice is a rule that will disagree with itself,
+ * and the disagreement here would be silent. A scale shown on one page and not the other
+ * stores a number against a question the author never saw on the other.
+ *
+ * So the markup is here and the behaviour is in src/lib/report-form.ts, and the two pages
+ * hold only what genuinely differs: a draft and a duplicate check on one, a moderator's
+ * explanation and a different button on the other.
+ *
+ * Section order is the reporting standard's order, which is why it is not obviously the most
+ * comfortable order to fill in. Two placements are deliberate and worth defending:
+ *
+ *   **The ratings come last**, after the narrative. Numbers given before you have written
+ *   the account are guesses; numbers given after are recollections.
+ *
+ *   **Prompts and Transcript are separate sections.** They are different artefacts with
+ *   different uses — a prompt is short, reusable, and is what a reader copies; a transcript
+ *   is long, one-off, and is evidence nobody reads except to check a claim. One box for both
+ *   buries the prompt where it can be neither indexed nor shown in a listing.
+ */
+import Field from './Field.astro';
+import FormSection from './FormSection.astro';
+import OutcomeChoice from './OutcomeChoice.astro';
+import ReferenceRows from './ReferenceRows.astro';
+import Scale from './Scale.astro';
+import TagPicker from './TagPicker.astro';
+import ToolRows from './ToolRows.astro';
+import {
+  AREAS,
+  CAREER_STAGES,
+  FIELD_COPY,
+  GENERALISATIONS,
+  RATING_SCALES,
+  REPORT_LIMITS,
+  TASK_TYPES,
+} from '../lib/report-schema';
+import { LICENCE } from '../lib/site';
+
+const conditional = RATING_SCALES.filter((scale) => scale.when);
+const unconditional = RATING_SCALES.filter((scale) => !scale.when);
+---
+
+<FormSection id="title" number={1} title="Title">
+  <Field
+    id="title"
+    label="One line saying what you did"
+    required
+    maxlength={REPORT_LIMITS.title}
+    counter
+    hint={FIELD_COPY.title.hint}
+    example={FIELD_COPY.title.example}
+  />
+</FormSection>
+
+{/* /reports/new/ puts its near-duplicate warning here, between the title and the area:
+    it is triggered by the title and the aim, and it belongs next to the field that
+    produced it rather than at the foot of the page. */}
+<slot name="after-title" />
+
+<FormSection id="area" number={2} title="Area" lead="Why you were working. What the tool was asked to do is the next question.">
+  <fieldset class="choices">
+    <legend class="visually-hidden">What kind of work was this</legend>
+    {
+      AREAS.map((choice) => (
+        <label class="choice" for={`area-${choice.value}`}>
+          <input
+            class="choice__input"
+            type="radio"
+            id={`area-${choice.value}`}
+            name="area"
+            value={choice.value}
+          />
+          <span>{choice.label}</span>
+          <span class="choice__hint">{choice.hint}</span>
+        </label>
+      ))
+    }
+  </fieldset>
+  <p class="field__error" id="area-error" hidden></p>
+
+  {/* Required exactly when the area is `other`, which is the only way "other" means
+      anything: an unqualified `other` is a row that has opted out of the axis. Hidden
+      rather than disabled — a disabled control that never becomes enabled reads as
+      broken. */}
+  <div data-area-other hidden>
+    <Field
+      id="area_other"
+      label="Say which"
+      maxlength={REPORT_LIMITS.areaOther}
+      hint="A few words. It is what stops “other” from meaning nothing."
+    />
+  </div>
+</FormSection>
+
+<FormSection
+  id="task-type"
+  number={3}
+  title="Task type"
+  lead="What the tool was asked to do. This is the axis the corpus is most often grouped by, so it is worth a moment."
+>
+  <fieldset class="choices">
+    <legend class="visually-hidden">What the tool was asked to do</legend>
+    {
+      TASK_TYPES.map((choice) => (
+        <label class="choice" for={`task-${choice.value}`}>
+          <input
+            class="choice__input"
+            type="radio"
+            id={`task-${choice.value}`}
+            name="task_type"
+            value={choice.value}
+          />
+          <span>{choice.label}</span>
+          <span class="choice__hint">{choice.hint}</span>
+        </label>
+      ))
+    }
+  </fieldset>
+  <p class="field__error" id="task_type-error" hidden></p>
+
+  {/* The primary is what the corpus groups by; this is what stops a session that drafted
+      *and* checked a proof from having to pick one and lose the other. Whichever option is
+      the primary is disabled here by script, because "also proof drafting" on a report
+      whose task type is proof drafting is not a second answer. */}
+  <fieldset class="choices choices--compact" data-task-secondary>
+    <legend class="field__label">
+      Anything else it was asked to do <span class="field__optional">optional</span>
+    </legend>
+    <p class="field__hint" id="task_secondary-hint">
+      In the same session. Up to {REPORT_LIMITS.taskSecondary}.
+    </p>
+    {
+      TASK_TYPES.map((choice) => (
+        <label class="choice choice--compact" for={`task2-${choice.value}`}>
+          <input
+            class="choice__input"
+            type="checkbox"
+            id={`task2-${choice.value}`}
+            name="task_secondary"
+            value={choice.value}
+            aria-describedby="task_secondary-hint"
+          />
+          <span>{choice.label}</span>
+        </label>
+      ))
+    }
+  </fieldset>
+  <p class="field__error" id="task_secondary-error" hidden></p>
+</FormSection>
+
+<FormSection
+  id="tools"
+  number={4}
+  title="Tools used"
+  lead="Name, version, and the date you used it. At least one. The date is what lets a listing show that an account has gone stale."
+>
+  <ToolRows />
+</FormSection>
+
+<FormSection
+  id="about-you"
+  number={5}
+  title="About you"
+  optional
+  lead="One question, coarse on purpose. It is what lets somebody ask whether these tools work differently for a doctoral student and for a professor."
+>
+  <div class="field">
+    <label class="field__label" for="career_stage">
+      Career stage <span class="field__optional">optional</span>
+    </label>
+    <p class="field__hint" id="career_stage-hint">
+      Skip it if it would identify you. Nothing else about you is collected here — not
+      institution, not country, not year of birth. A report is permanent and published
+      under {LICENCE.name}, and career stage plus a subject area plus a date is already
+      close to identifying in a small field.
+    </p>
+    <select
+      class="field__control field__control--narrow"
+      id="career_stage"
+      name="career_stage"
+      aria-describedby="career_stage-hint"
+    >
+      <option value="">Not saying</option>
+      {CAREER_STAGES.map((stage) => <option value={stage.value}>{stage.label}</option>)}
+    </select>
+  </div>
+</FormSection>
+
+<FormSection id="aim" number={6} title="What you were trying to do">
+  <Field
+    id="aim"
+    label="The problem, in a few sentences"
+    type="textarea"
+    required
+    rows={4}
+    maxlength={REPORT_LIMITS.aim}
+    counter
+    hint={FIELD_COPY.aim.hint}
+    example={FIELD_COPY.aim.example}
+  />
+</FormSection>
+
+<FormSection id="method" number={7} title="What you actually did">
+  <Field
+    id="method"
+    label="Stepwise"
+    type="textarea"
+    required
+    rows={10}
+    maxlength={REPORT_LIMITS.method}
+    counter
+    hint={FIELD_COPY.method.hint}
+    example={FIELD_COPY.method.example}
+  />
+</FormSection>
+
+<FormSection id="outcome" number={8} title="Outcome">
+  <OutcomeChoice name="outcome" />
+  <p class="field__error" id="outcome-error" hidden></p>
+
+  <Field
+    id="outcome_notes"
+    label="What happened"
+    type="textarea"
+    required
+    rows={5}
+    maxlength={REPORT_LIMITS.outcomeNotes}
+    counter
+    hint={FIELD_COPY.outcomeNotes.hint}
+    example={FIELD_COPY.outcomeNotes.example}
+  />
+</FormSection>
+
+<FormSection id="verification" number={9} title="How you verified correctness">
+  <Field
+    id="verification"
+    label="How you checked"
+    type="textarea"
+    required
+    rows={6}
+    maxlength={REPORT_LIMITS.verification}
+    counter
+    example={FIELD_COPY.verification.example}
+  >
+    <Fragment slot="hint">
+      <p>{FIELD_COPY.verification.hint}</p>
+      <p>
+        <strong>This one has no skip and no "not applicable".</strong> An account without it
+        records that something felt right, which is not a finding. With it, a reader knows
+        what standard of checking was actually applied — and that is the thing a
+        mathematician needs in order to judge whether to trust the rest.
+      </p>
+      <p>
+        If the answer is that you did not check, say so. That is a real and useful answer,
+        and considerably more useful than a plausible-sounding one.
+      </p>
+    </Fragment>
+  </Field>
+</FormSection>
+
+<FormSection
+  id="prompts"
+  number={10}
+  title="Prompts"
+  optional
+  lead="The prompts that did the work. This is the part of a report a reader copies, which is why it is not folded into the transcript."
+>
+  <Field
+    id="prompts"
+    label="Verbatim"
+    type="textarea"
+    rows={6}
+    maxlength={REPORT_LIMITS.prompts}
+    counter
+    hint={FIELD_COPY.prompts.hint}
+    example={FIELD_COPY.prompts.example}
+  />
+</FormSection>
+
+<FormSection
+  id="transcript"
+  number={11}
+  title="Transcript"
+  optional
+  lead="The excerpt is the record. A share link is supplementary — links expire, are revoked, and may breach the provider's terms."
+>
+  <Field
+    id="transcript_excerpt"
+    label="Paste the part that matters"
+    type="textarea"
+    rows={8}
+    maxlength={REPORT_LIMITS.transcriptExcerpt}
+    counter
+    hint={FIELD_COPY.transcriptExcerpt.hint}
+  />
+
+  <Field
+    id="transcript_url"
+    label="Share link"
+    type="text"
+    maxlength={REPORT_LIMITS.transcriptUrl}
+    hint="Optional, and only alongside an excerpt. Never on its own."
+  />
+
+  {/* Shown when there is something pasted — a transcript or a prompt — and hidden when
+      there is not. It used to be required unconditionally, which read as the stronger rule
+      and is the weaker one: a tick every submission needs carries no information and
+      teaches people to tick it without re-reading what they pasted. */}
+  <div class="checkbox" data-rights hidden>
+    <input
+      class="checkbox__input"
+      type="checkbox"
+      id="third_party_confirmed"
+      name="third_party_confirmed"
+    />
+    <label class="checkbox__label" for="third_party_confirmed">
+      I have removed other people's unpublished material from what I pasted
+    </label>
+    <p class="checkbox__hint">
+      Transcripts and prompts pick things up. A referee report you were discussing, a
+      preprint somebody sent you, a student's draft, an unpublished argument from a seminar
+      — none of that is yours to post, and everything here is published under {LICENCE.name}
+      for anyone to copy. Read back over what you pasted before you tick this.
+    </p>
+    <p class="field__error" id="third_party_confirmed-error" hidden></p>
+  </div>
+</FormSection>
+
+<FormSection
+  id="caveats"
+  number={12}
+  title="What you would tell someone trying this"
+  optional
+>
+  <Field
+    id="caveats"
+    label="What you would do differently"
+    type="textarea"
+    rows={4}
+    maxlength={REPORT_LIMITS.caveats}
+    counter
+    hint={FIELD_COPY.caveats.hint}
+    example={FIELD_COPY.caveats.example}
+  />
+</FormSection>
+
+<FormSection id="tags" number={13} title="Subject areas" optional>
+  <TagPicker />
+</FormSection>
+
+<FormSection
+  id="references"
+  number={14}
+  title="Supporting material"
+  optional
+  lead="Anything a reader would need to follow this up."
+>
+  <ReferenceRows />
+</FormSection>
+
+<FormSection
+  id="counting"
+  number={15}
+  title="So this can be counted"
+  optional
+  lead="Researchers studying how mathematicians use these tools will read this corpus as data. These answers are what let them. Every one is skippable, and a blank is more useful than a guess."
+>
+  <Field
+    id="time_spent_minutes"
+    label="Time spent, in minutes"
+    type="text"
+    hint="Roughly. 90 for an hour and a half. Counting the checking, not only the asking."
+  />
+
+  <fieldset class="choices">
+    <legend class="field__label">Did this work end up published?</legend>
+    <label class="choice" for="published-yes">
+      <input class="choice__input" type="radio" id="published-yes" name="was_published" value="yes" />
+      <span>Yes</span>
+    </label>
+    <label class="choice" for="published-notyet">
+      <input
+        class="choice__input"
+        type="radio"
+        id="published-notyet"
+        name="was_published"
+        value="notyet"
+        checked
+      />
+      <span>Not yet, or not applicable</span>
+    </label>
+    <label class="choice" for="published-no">
+      <input class="choice__input" type="radio" id="published-no" name="was_published" value="no" />
+      <span>No, and I do not expect it to be</span>
+    </label>
+  </fieldset>
+
+  {/* Only meaningful once something is published, and the database says so too:
+      reports_disclosure_needs_publication refuses a disclosure answer without a
+      publication. */}
+  <fieldset class="choices" data-disclosure hidden>
+    <legend class="field__label">Was the AI use disclosed in the paper?</legend>
+    <label class="choice" for="disclosed-yes">
+      <input class="choice__input" type="radio" id="disclosed-yes" name="was_disclosed" value="yes" />
+      <span>Yes</span>
+    </label>
+    <label class="choice" for="disclosed-no">
+      <input class="choice__input" type="radio" id="disclosed-no" name="was_disclosed" value="no" />
+      <span>No</span>
+    </label>
+    <label class="choice" for="disclosed-none">
+      <input
+        class="choice__input"
+        type="radio"
+        id="disclosed-none"
+        name="was_disclosed"
+        value=""
+        checked
+      />
+      <span>I would rather not say</span>
+    </label>
+  </fieldset>
+
+  <div class="scales">
+    {
+      unconditional.map((scale) => (
+        <div class="scales__row">
+          <Scale name={scale.key} prompt={scale.prompt} low={scale.low} high={scale.high} />
+
+          {/* Directly under "how much time did it save you", because it is the answer that
+              row cannot hold. A 0-to-10 scale has no negative, so without this a wasted
+              afternoon and a mild disappointment both score 0 — and the wasted afternoon is
+              one of the most useful facts this corpus can record. */}
+          {scale.key === 'rating_time_saved' && (
+            <div class="checkbox scales__aside">
+              <input
+                class="checkbox__input"
+                type="checkbox"
+                id="cost_more_time_than_saved"
+                name="cost_more_time_than_saved"
+              />
+              <label class="checkbox__label" for="cost_more_time_than_saved">
+                It cost me more time than it saved.
+              </label>
+            </div>
+          )}
+        </div>
+      ))
+    }
+
+    {/* The two conditional scales. Novelty is meaningless for a teaching-prep session and
+        understanding gained is meaningless for a literature search, and seven rows of
+        radios is an invitation to straight-line the lot. They sit at the end of the block
+        so that appearing moves nothing above them, and the live region says what appeared
+        rather than leaving a screen reader to discover it by arrowing past. */}
+    <div data-conditional-scales aria-live="polite">
+      {
+        conditional.map((scale) => (
+          <div class="scales__row scales__row--conditional" data-scale={scale.key} hidden>
+            <Scale name={scale.key} prompt={scale.prompt} low={scale.low} high={scale.high} />
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="scales__row">
+      <Scale
+        name="author_confidence"
+        prompt="How confident are you in the result?"
+        low="no confidence"
+        high="complete confidence"
+        hint="Your own judgement, not a claim about the tool. It is what lets a reader weigh an account against one from somebody who was sure."
+      />
+    </div>
+  </div>
+
+  <fieldset class="choices" data-generalises>
+    <legend class="field__label">
+      How far do you think this carries? <span class="field__optional">optional</span>
+    </legend>
+    <p class="field__hint" id="generalises-hint">Your guess. It is a guess for everyone.</p>
+    {
+      GENERALISATIONS.map((choice) => (
+        <label class="choice" for={`generalises-${choice.value}`}>
+          <input
+            class="choice__input"
+            type="radio"
+            id={`generalises-${choice.value}`}
+            name="generalises"
+            value={choice.value}
+            aria-describedby="generalises-hint"
+          />
+          <span>{choice.label}</span>
+        </label>
+      ))
+    }
+  </fieldset>
+</FormSection>
+
+<style>
+  .scales {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .scales__row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+  }
+
+  /* Reveal rather than jump. The row is below everything it depends on, so nothing above it
+     moves; the animation is there so the change is noticed at all, and it is off for anybody
+     who has asked for less motion. */
+  .scales__row--conditional {
+    animation: reveal 220ms ease-out;
+  }
+
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .scales__row--conditional {
+      animation: none;
+    }
+  }
+
+  .scales__aside {
+    margin-inline-start: 0;
+  }
+</style>

@@ -498,8 +498,42 @@
     font-size: var(--size-2);
   }
 
+  /* "Tool 1", "Link 2". A repeater of unlabelled boxes reads to a screen reader as one long
+     run of identical fields, and the number is the only thing that tells them apart. Set by
+     the page's script on clone, and renumbered when a row is removed — otherwise a list goes
+     "Tool 1, Tool 3" and the numbers stop being about position. */
+  .tool-row__legend {
+    padding-inline: 0;
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink-muted);
+    text-transform: uppercase;
+  }
+
+  /* The second line of a repeater row: the tool's role, a link's label. Full width, because
+     both are prose and neither belongs in a column sized for a version number. */
+  .tool-row__wide,
+  .refs__wide {
+    grid-column: 1 / -1;
+  }
+
+  .refs__fields {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) 2fr auto;
+    align-items: end;
+    gap: var(--space-2xs) var(--space-sm);
+  }
+
+  .refs__warning {
+    margin-block-start: var(--space-2xs);
+    border-inline-start: var(--border-width-thick) solid var(--accent);
+    padding-inline-start: var(--space-2xs);
+  }
+
   @media (max-width: 40rem) {
-    .tool-row__fields {
+    .tool-row__fields,
+    .refs__fields {
       grid-template-columns: 1fr;
       align-items: stretch;
     }
@@ -551,6 +585,29 @@
     grid-column: 2;
     color: var(--ink-muted);
     font-size: var(--size-2);
+  }
+
+  /* The secondary task types: the same twelve options as the primary, but a second answer
+     to a question already asked, so they get no explanations and pack tighter. Repeating
+     twelve hints would double the height of the section to say nothing new. */
+  .choices--compact {
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  }
+
+  .choices--compact > .field__label,
+  .choices--compact > .field__hint {
+    grid-column: 1 / -1;
+  }
+
+  .choice--compact {
+    padding-block: var(--space-3xs);
+    font-size: var(--size-2);
+  }
+
+  /* A select with nine options does not need the full measure, and a full-width select
+     reads as a text field somebody forgot to make wide enough for a sentence. */
+  .field__control--narrow {
+    max-width: 24rem;
   }
 
   /* ── Turnstile ──────────────────────────────────────────────────────────────────── */

@@ -156,16 +156,17 @@ export interface ToolInput {
   name: string;
   version: string;
   usedOn: string;
+  role?: string;
 }
 
 /**
  * One tool row. Version and date are as required as the name: "GPT" with no version and no
  * date is not a reproducible claim about anything, and the staleness signal on every
- * listing is derived from the date.
+ * listing is derived from the date. `role` is optional and is only length-checked.
  */
 export function validateTool(
   tool: ToolInput,
-  limits: { name: number; version: number },
+  limits: { name: number; version: number; role: number },
   earliest: string,
 ): string | null {
   if (!tool.name.trim()) return 'Name the tool, or remove the row.';
@@ -180,6 +181,10 @@ export function validateTool(
     return `Shorten the version to ${limits.version} characters or fewer.`;
   }
 
+  if ((tool.role ?? '').trim().length > limits.role) {
+    return `Shorten what this tool did to ${limits.role} characters or fewer. A few words is what the field is for.`;
+  }
+
   if (!tool.usedOn) return 'Give the date you used it. Listings sort by it, and it is what makes a report visibly stale later.';
 
   // Compared as strings. Both are ISO yyyy-mm-dd, which sorts lexicographically, and this
@@ -187,6 +192,83 @@ export function validateTool(
   const today = new Date().toISOString().slice(0, 10);
   if (tool.usedOn > today) return 'That date is in the future. Listings sort by recency, so a future date would sit at the top of every page until it arrives.';
   if (tool.usedOn < earliest) return `That date is before ${earliest.slice(0, 4)}, which is almost certainly a mistyped year.`;
+
+  return null;
+}
+
+// ── Supporting links ──────────────────────────────────────────────────────────────────
+// Mirrors private.check_report_references() in
+// supabase/migrations/20260820100000_report_schema_v2.sql, including the messages: the
+// trigger raises finished sentences precisely so that a caller who reaches PostgREST some
+// other way gets the same answer this form gives.
+
+export interface ReferenceInput {
+  kind: string;
+  url: string;
+  label?: string;
+}
+
+/** Hosts that resolve for one machine only. Kept in step with the trigger's regex. */
+const PRIVATE_HOST =
+  /^(localhost|127\.|0\.0\.0\.0|10\.|169\.254\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|\[::1\])/;
+
+export function validateReference(
+  reference: ReferenceInput,
+  limits: { url: number; label: number },
+  kinds: readonly string[],
+): string | null {
+  const url = reference.url.trim();
+
+  if (!url) return 'Give a link, or remove the row.';
+  if (!kinds.includes(reference.kind)) return 'Choose what kind of thing this link is.';
+
+  if (url.length > limits.url) {
+    return `That link is longer than ${limits.url} characters. Check it is the link you meant.`;
+  }
+
+  if (!/^https:\/\/\S+$/.test(url)) {
+    return 'Supporting links have to start with https://. A link nobody can open from outside is not a reference.';
+  }
+
+  const host = (/^https:\/\/([^/?#]+)/.exec(url)?.[1] ?? '').toLowerCase();
+  if (PRIVATE_HOST.test(host)) {
+    return 'That link points at a private address, so it works from one machine only. Link to something publicly readable.';
+  }
+
+  if ((reference.label ?? '').trim().length > limits.label) {
+    return `Shorten this link's label to ${limits.label} characters or fewer.`;
+  }
+
+  return null;
+}
+
+/**
+ * Advice about a link that is probably not readable by a stranger. Never blocking, and
+ * deliberately not enforced in the database: plenty of Overleaf and Drive links are shared
+ * correctly, and a rule that refused them would refuse those too.
+ *
+ * The `paper` case is a different kind of advice — a DOI or an arXiv `abs` link outlives a
+ * departmental URL, and this corpus is meant to be read in five years.
+ */
+export function referenceWarning(
+  reference: ReferenceInput,
+  loginWalledHosts: readonly string[],
+): string | null {
+  const url = reference.url.trim().toLowerCase();
+  if (!url.startsWith('https://')) return null;
+
+  const host = /^https:\/\/([^/?#]+)/.exec(url)?.[1] ?? '';
+
+  if (loginWalledHosts.some((walled) => host === walled || host.endsWith(`.${walled}`))) {
+    return 'Check this is readable without signing in. Most links to these are not.';
+  }
+
+  if (
+    reference.kind === 'paper' &&
+    !/(^|\.)(doi\.org|arxiv\.org|zenodo\.org|hal\.science)$/.test(host)
+  ) {
+    return 'A DOI or an arXiv abs link outlives a departmental URL. This one will still be saved.';
+  }
 
   return null;
 }

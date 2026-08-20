@@ -11,7 +11,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(18);
+select plan(19);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -30,18 +30,37 @@ update public.profiles set is_banned = true
 
 -- ── Who may call it ─────────────────────────────────────────────────────────────────
 
+-- Spelled out in full, and the length of it is the point: this is the assertion that fails
+-- when somebody adds a parameter with `create or replace` instead of dropping and recreating,
+-- which creates a *second* function rather than changing this one. That mistake stopped every
+-- content write on the site once already; see 20260819090000.
 select ok(
   not has_function_privilege('anon', 'public.submit_report(text, public.report_area, '
     'public.report_task_type, jsonb, text, text, public.report_outcome, text, text, '
-    'boolean, text, text, text, integer, boolean, boolean, integer, text[])', 'EXECUTE'),
+    'boolean, text, text, text, integer, boolean, boolean, integer, text[], '
+    'text, text[], text, text, jsonb, integer, integer, boolean, integer, integer, '
+    'integer, integer, text)', 'EXECUTE'),
   'anon cannot execute submit_report'
 );
 
 select ok(
   has_function_privilege('authenticated', 'public.submit_report(text, public.report_area, '
     'public.report_task_type, jsonb, text, text, public.report_outcome, text, text, '
-    'boolean, text, text, text, integer, boolean, boolean, integer, text[])', 'EXECUTE'),
+    'boolean, text, text, text, integer, boolean, boolean, integer, text[], '
+    'text, text[], text, text, jsonb, integer, integer, boolean, integer, integer, '
+    'integer, integer, text)', 'EXECUTE'),
   'authenticated can'
+);
+
+-- There is exactly one of each. Named without an argument list on purpose: the count is what
+-- catches the overload, and a count of two here is the shape of the outage referred to above.
+select is(
+  (select count(*)::int
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('submit_report', 'resubmit_report')),
+  2,
+  'one submit_report and one resubmit_report, not an overload of either'
 );
 
 -- SECURITY INVOKER is the whole safety argument. As DEFINER this function would run as its
@@ -162,13 +181,17 @@ select throws_ok(
   'the verification field is still required through this path'
 );
 
+-- The affirmation is required when something was pasted and meaningless when nothing was, so
+-- this case passes an excerpt. Before 20260820100000 it was required unconditionally, which
+-- read as the stronger rule and was the weaker one.
 select throws_ok(
   $$ select public.submit_report(
        'Unconfirmed material', 'research', 'other',
        '[{"name":"Lean","version":"4.9.0","used_on":"2026-08-01"}]'::jsonb,
-       'a', 'b', 'worked', 'c', 'd', false) $$,
+       'a', 'b', 'worked', 'c', 'd', false,
+       'user: is this lemma true?') $$,
   '23514'::text, null::text,
-  'and so is the third-party material confirmation'
+  'and so is the third-party material confirmation, when there is a transcript to affirm about'
 );
 
 -- A share link is supplementary and never the only record: links expire, are revoked, and

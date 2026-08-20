@@ -1,3 +1,1 @@
-report_id,tool_name,tool_version,used_on
-"4fe8cee6-82e0-42af-8f90-ad7a183f5bb9","Lean","4.9.0","2026-08-18"
-"0022d629-a3a7-490b-892d-12566ab3bca6","AlphaXiv","none","2026-08-17"
+report_id,tool_name,tool_version,used_on,role

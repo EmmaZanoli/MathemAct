@@ -2265,3 +2265,122 @@ One claim in `docs/moderation.md` was simply wrong and is now deleted rather tha
 `reports/new.astro`, `debates/new.astro`, `network/new.astro` and `CommentThread.astro` all check
 `mayPost()` and say so in prose. What was missing was the account page, which is where somebody
 goes to find out why, and it now leads with it.
+
+## 2026-08-20 — Schema version 2 of a report: fifteen sections, and five scales that may all be skipped
+
+The submission form was twelve sections and thin in three places that anybody doing secondary
+analysis keeps needing: **who** was working, **what the prompts actually said**, and **how well
+it went as numbers rather than adjectives**. It also mixed two axes. `programming` and formal
+verification were being written into the narrative because Area is *why you were working* and
+Task type is *what the tool was asked to do*, and neither had a home for them — so "I read a
+paper with it" was landing in `literature_search`, which is a different question, and code that
+is not a formal proof was landing in `formalisation`, which makes the formalisation numbers
+overstate themselves.
+
+What arrived: two areas (`outreach`, `administration`), two task types (`comprehension`,
+`programming`), a secondary task list, career stage, a Prompts section separate from the
+Transcript, a Supporting material section, five 0-to-10 scales, a net-time-cost checkbox, a
+generalisation question, and `role` on a tool row. Forty-four migrations, 562 assertions across
+twenty-one files.
+
+Ten decisions inside it are worth the space.
+
+**The three example reports were deleted, not migrated.** They were written by the moderators to
+see the pages render. Backfilling `schema_version = 1` onto them would have left three rows in a
+citable dataset that answer none of the new questions and that nobody can complete, because a
+report's text fixes itself the moment somebody else confirms or comments on it. `data/` was
+emptied in the same commit rather than left for the nightly job, because the export's own shrink
+guard would have refused a 2-to-0 drop — correctly — and a red workflow is a worse way to learn
+about a decision than a paragraph in `data/README.md`, which now carries one.
+
+**The enums were extended, not converted to text with a CHECK.** The specification asked for the
+second; 20260815100100's argument for the first still holds, and it is about friction rather than
+storage. `alter type ... add value` is a migration with a comment saying why, which is the right
+amount of ceremony for a decision that changes what every past account means. The *new*
+vocabularies that had no enum — career stage, generalisation, reference kind — are text with a
+CHECK, because each is a short closed list nothing joins against and one of them is read out of
+jsonb, where an enum would buy nothing. Both positions are in the tree, each where it costs
+least.
+
+**`task_secondary` is an array of the same enum as `task_type`.** A report grouped under "proof
+drafting" and a report that also did proof drafting have to be the same filter, and two spellings
+of one word is how that stops being true. It follows that the listing's task filter reads primary
+and secondary together — a filter that read only the primary would understate the corpus, quietly
+and in the direction that flatters it.
+
+**Duplicates and the primary are normalised out rather than refused.** A form that sent
+`proof_drafting` as both the primary and a secondary has made a slip with one obvious right
+answer, and a submission somebody spent ten minutes on should not fail on one.
+`private.normalise_report_tasks()` deduplicates, strips the primary, and sorts — sorting so that
+two identical answers are one value in the export rather than two orderings of it. The
+cardinality cap is the only hard rule, and it sees the tidied array because the trigger is BEFORE.
+
+**Two scales are conditional, and a hidden scale stores null rather than 0.** Novelty is a
+meaningless question about a teaching-prep session and understanding gained is a meaningless
+question about a literature search, and seven rows of radios is an invitation to straight-line
+the lot. The subtlety is what happens when somebody answers novelty and then changes the area:
+the radio keeps its value and the row goes away. `ratingsFor()` in `src/lib/reports.ts` is the
+one place that decides, and it nulls anything that no longer applies — the form hides a row, and
+that function decides what a hidden row means. A 0 there would put "no help at all" into the
+corpus for a question the author was never shown, and `data/README.md` now says so twice,
+because it is the mistake an analysis will make.
+
+**`cost_more_time_than_saved` is a column because a 0-to-10 scale has no negative.** Without it,
+"the tool wasted my afternoon" and "the tool was mildly disappointing" both score 0, and the
+first is one of the most useful things this corpus can record.
+
+**The ratings are sort keys and not filters.** "Reports where helpfulness ≥ 8" reads as a
+measurement; an ordering is honest about being rough. Three sorts were added — most helpful,
+least work to check, highest novelty — and every one puts unanswered last, which is why
+`report-facets.ts` distinguishes an empty string from a zero on the element.
+
+**The third-party affirmation became conditional, which is the one loosening here.** It was
+required on every report; it is now required when there is a transcript excerpt or a prompt, and
+`prompts` counts because a prompt quotes somebody's unpublished conjecture as readily as a
+transcript does. Unconditional read as the stronger rule and was the weaker one: a tick every
+submission needs carries no information about any of them and teaches people to tick it without
+re-reading what they pasted. `reports_third_party_material_confirmed` is now
+`confirmed or (transcript_excerpt is null and prompts is null)`, and 009 asserts both refusals
+while 021 asserts the permission.
+
+**`"references"` is a quoted column name, and that was the cheaper of two bad options.**
+REFERENCES is reserved, so every SQL reference to it needs quotes; the alternative was
+`supporting_material` in the database and `references` in the JSON and the CSV, which is a third
+name for one field and a permanent tax on everybody reading the dataset. `select "references"` in
+psql is a known annoyance. The per-element rules are a trigger rather than a CHECK because each
+of them has a sentence attached and the person who trips one has just pasted a link.
+
+**`role` had to join the tool table's uniqueness key.** "The same tool at the same version on the
+same day is one use" was right until a tool row could say what it did: a model that drafted the
+sketch and then checked the proof, same version, same afternoon, is two rows and was a unique
+violation on the second. It is a functional unique index over `coalesce(role, '')` rather than
+`UNIQUE NULLS NOT DISTINCT`, so that two role-less rows are still the duplicate they were before
+the column existed, on any Postgres rather than only on this one.
+
+Two things were resolved against the specification and are worth recording as such. Its section
+table lists fourteen sections and omits Caveats, while §3 and §8 both keep the field and §0 says
+thirteen — so the count in it is unreliable and the content is not. The form is **fifteen**
+sections: the live twelve, plus About you, Prompts and Supporting material, with Caveats
+relabelled *What you would tell someone trying this* and moved after the Transcript exactly as §3
+directs. Nothing the specification keeps was dropped to make a number come out. And its data
+model names a `moderation_status` of `draft` / `submitted` / `published` / `rejected`, which
+predates post-moderation: `status` stays `published` / `hidden`, moved only by
+`public.moderate()`, and a draft stays in localStorage rather than becoming a row somebody has to
+moderate. MSC codes are out, as the specification's own last line asks.
+
+Two pieces of scaffolding paid for themselves immediately. `ReportFields.astro` and
+`src/lib/report-form.ts` are the form's markup and behaviour, shared by `/reports/new/` and
+`/account/edit-submission/`, which had carried two copies of all of it. Twelve sections of plain
+fields survived being duplicated; conditional scales would not have, because a scale shown on one
+page and not the other stores a number against a question the author never saw — silently, and in
+the direction that overstates what was asked. `src/lib/report-facets.ts` is the same argument for
+the four derived filter values: `ReportCard.astro` computes them during the build and the
+freshness overlay computes them in the browser, and a card whose recency band was worked out a
+second way fails a filter it should match with nothing to show that it did.
+
+Recorded rather than fixed: `has_prompts` and `has_transcript` are generated columns that exist
+for one caller. The freshness overlay has to answer "includes the prompts" for rows newer than
+the export, and the honest alternative was fetching up to twenty-four thousand characters per row
+onto a reading page to settle two yes-or-no questions — on the one query in this project that a
+reading page is allowed to make, and only because it is small. Two generated booleans are the
+cheaper answer, and they are absent from the export, which carries the text itself.

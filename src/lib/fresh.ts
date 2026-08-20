@@ -44,14 +44,32 @@ export interface FreshReport {
   readonly title: string;
   readonly aim: string;
   readonly area: string;
+  readonly areaOther: string | null;
   readonly taskType: string;
+  readonly taskSecondary: readonly string[];
+  readonly careerStage: string | null;
   readonly outcome: 'worked' | 'partial' | 'failed';
   readonly createdAt: string;
   readonly authorName: string | null;
   /** Null for an erased account, and always null when `authorName` is. */
   readonly authorId: string | null;
-  readonly tools: readonly { name: string; version: string }[];
+  readonly tools: readonly { name: string; version: string; usedOn: string | null }[];
   readonly tags: readonly string[];
+  /**
+   * Enough to compute the version 2 filter facets in the browser.
+   *
+   * Booleans rather than the text: a fresh card is a summary and never shows a prompt or a
+   * transcript, so fetching twenty thousand characters of excerpt to decide whether a
+   * checkbox matches would be paying for the whole record to answer a yes-or-no question.
+   */
+  readonly hasPrompts: boolean;
+  readonly hasTranscript: boolean;
+  readonly referenceKinds: readonly string[];
+  readonly timeSpentMinutes: number | null;
+  readonly generalises: string | null;
+  readonly ratingHelpfulness: number | null;
+  readonly ratingVerificationEffort: number | null;
+  readonly ratingNovelty: number | null;
 }
 
 export interface FreshDebate {
@@ -111,9 +129,17 @@ async function ask<T>(query: string): Promise<T[]> {
  */
 export async function reportsSince(since: string): Promise<FreshReport[]> {
   const select = [
-    'id,title,aim,area,task_type,outcome,created_at',
+    'id,title,aim,area,area_other,task_type,task_secondary,career_stage,outcome,created_at',
+    // `has_prompts` and `has_transcript` are generated columns and exist for this query.
+    // Selecting `prompts` and `transcript_excerpt` instead would mean fetching up to
+    // twenty-four thousand characters per row to answer two yes-or-no questions.
+    'has_prompts,has_transcript,references,time_spent_minutes,generalises',
+    'rating_helpfulness,rating_verification_effort,rating_novelty',
     'author:profiles!reports_author_id_fkey(id,display_name,is_pseudonym)',
-    'report_tools(tool_name,tool_version)',
+    // `used_on` is what the recency filter needs, and it is per tool rather than per report
+    // because a session that used one model in March and a proof assistant in June is stale
+    // in one half and current in the other.
+    'report_tools(tool_name,tool_version,used_on)',
     'report_tags(tags(code))',
   ].join(',');
 
@@ -128,7 +154,10 @@ export async function reportsSince(since: string): Promise<FreshReport[]> {
     title: row.title,
     aim: row.aim,
     area: row.area,
+    areaOther: row.area_other ?? null,
     taskType: row.task_type,
+    taskSecondary: row.task_secondary ?? [],
+    careerStage: row.career_stage ?? null,
     outcome: row.outcome,
     createdAt: row.created_at,
     // The name and the id it links to. No institutional badge, because a badge is an
@@ -138,8 +167,17 @@ export async function reportsSince(since: string): Promise<FreshReport[]> {
     tools: (row.report_tools ?? []).map((tool) => ({
       name: tool.tool_name,
       version: tool.tool_version,
+      usedOn: tool.used_on ?? null,
     })),
     tags: (row.report_tags ?? []).flatMap((link) => (link.tags ? [link.tags.code] : [])),
+    hasPrompts: row.has_prompts ?? false,
+    hasTranscript: row.has_transcript ?? false,
+    referenceKinds: (row.references ?? []).map((reference) => reference.kind),
+    timeSpentMinutes: row.time_spent_minutes ?? null,
+    generalises: row.generalises ?? null,
+    ratingHelpfulness: row.rating_helpfulness ?? null,
+    ratingVerificationEffort: row.rating_verification_effort ?? null,
+    ratingNovelty: row.rating_novelty ?? null,
   }));
 }
 
@@ -165,11 +203,22 @@ interface RawFreshReport {
   title: string;
   aim: string;
   area: string;
+  area_other: string | null;
   task_type: string;
+  task_secondary: string[] | null;
+  career_stage: string | null;
   outcome: 'worked' | 'partial' | 'failed';
   created_at: string;
+  has_prompts: boolean | null;
+  has_transcript: boolean | null;
+  references: { kind: string }[] | null;
+  time_spent_minutes: number | null;
+  generalises: string | null;
+  rating_helpfulness: number | null;
+  rating_verification_effort: number | null;
+  rating_novelty: number | null;
   author: { id: string; display_name: string; is_pseudonym: boolean } | null;
-  report_tools: { tool_name: string; tool_version: string }[];
+  report_tools: { tool_name: string; tool_version: string; used_on: string | null }[];
   report_tags: { tags: { code: string } | null }[];
 }
 

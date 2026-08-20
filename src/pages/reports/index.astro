@@ -19,7 +19,20 @@ import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
-import { AREAS, OUTCOME_CHOICES, TASK_TYPES } from '../../lib/report-schema';
+import {
+  AREAS,
+  CAREER_STAGES,
+  GENERALISATIONS,
+  OUTCOME_CHOICES,
+  TASK_TYPES,
+} from '../../lib/report-schema';
+import {
+  RECENCY_LABELS,
+  TIME_BAND_LABELS,
+  hasRunnableReference,
+  recencyBands,
+  timeBand,
+} from '../../lib/report-facets';
 import { listReports, listToolNames, listUsedTags, listAllTags, listInteractionCounts } from '../../lib/reports';
 
 const reports = await listReports();
@@ -29,11 +42,32 @@ const allTags = await listAllTags();
 const tagVocab = Object.fromEntries(allTags.map((t) => [t.code, t.label]));
 const extraInteractions = listInteractionCounts();
 
-/** Only offer a filter that some report actually has. A vocabulary of ten task types over
- *  a corpus of four is nine dead ends and one result. */
+/** Only offer a filter that some report actually has. A vocabulary of twelve task types over
+ *  a corpus of four is eleven dead ends and one result — and version 2 added seven filter
+ *  dimensions, so a panel that offered all of them unconditionally would be longer than the
+ *  corpus for a good while yet. */
+const now = new Date();
 const usedAreas = new Set(reports.map((report) => report.area));
-const usedTaskTypes = new Set(reports.map((report) => report.taskType));
+const usedTaskTypes = new Set(
+  reports.flatMap((report) => [report.taskType, ...report.taskSecondary]),
+);
 const usedOutcomes = new Set(reports.map((report) => report.outcome));
+const usedCareerStages = new Set(reports.map((report) => report.careerStage));
+const usedGeneralises = new Set(reports.map((report) => report.generalises));
+const usedRecency = new Set(
+  reports.flatMap((report) => recencyBands(report.staleness.latestToolUse, now)),
+);
+const usedTimeBands = new Set(reports.map((report) => timeBand(report.timeSpentMinutes)));
+
+/** The three "includes" toggles, which are one dimension so that ticking two means both.
+ *  See the AND note in the client script. */
+const usedHas = new Set(
+  reports.flatMap((report) => [
+    report.prompts ? 'prompts' : '',
+    report.transcriptExcerpt ? 'transcript' : '',
+    hasRunnableReference(report.references.map((reference) => reference.kind)) ? 'code' : '',
+  ]),
+);
 
 const groups = [
   {
@@ -69,6 +103,45 @@ const groups = [
     key: 'tool',
     legend: 'Tool',
     options: tools.map((tool) => ({ value: tool.toLowerCase(), label: tool })),
+  },
+  {
+    key: 'career',
+    legend: 'Career stage',
+    options: CAREER_STAGES.filter((choice) => usedCareerStages.has(choice.value)).map(
+      (choice) => ({ value: choice.value, label: choice.label }),
+    ),
+  },
+  {
+    key: 'recency',
+    legend: 'Recency',
+    options: (['6m', '12m'] as const)
+      .filter((band) => usedRecency.has(band))
+      .map((band) => ({ value: band, label: RECENCY_LABELS[band] })),
+  },
+  {
+    key: 'time',
+    legend: 'Time spent',
+    options: (['lt30', '30to120', 'gt120'] as const)
+      .filter((band) => usedTimeBands.has(band))
+      .map((band) => ({ value: band, label: TIME_BAND_LABELS[band] })),
+  },
+  {
+    key: 'has',
+    legend: 'Includes',
+    options: (
+      [
+        { value: 'prompts', label: 'The prompts' },
+        { value: 'transcript', label: 'A transcript' },
+        { value: 'code', label: 'Code or a formalisation' },
+      ] as const
+    ).filter((option) => usedHas.has(option.value)),
+  },
+  {
+    key: 'generalises',
+    legend: 'Generalises',
+    options: GENERALISATIONS.filter((choice) => usedGeneralises.has(choice.value)).map(
+      (choice) => ({ value: choice.value, label: choice.label }),
+    ),
   },
 ].filter((group) => group.options.length > 0);
 ---
@@ -153,10 +226,17 @@ const groups = [
 
               <p class="results__sort">
                 <label for="sort">Sort by</label>
+                {/* The three rating sorts are sorts and deliberately not filters. A range
+                    filter on a self-reported 0-to-10 scale invites over-reading — "reports
+                    where helpfulness ≥ 8" reads as a measurement — where an ordering is
+                    honest about being rough. Anything unanswered sorts last, always. */}
                 <select id="sort" data-sort>
                   <option value="recent">Most recent</option>
                   <option value="activity">Confirmation activity</option>
                   <option value="popularity">Most popular</option>
+                  <option value="helpful">Most helpful</option>
+                  <option value="effort">Least work to check</option>
+                  <option value="novelty">Highest novelty</option>
                 </select>
               </p>
             </div>
@@ -239,8 +319,30 @@ const groups = [
   import type { FreshReport } from '../../lib/fresh';
   import { longDate } from '../../lib/format';
   import { path } from '../../lib/paths';
-  import { areaLabel, taskTypeLabel, outcomeLabel } from '../../lib/report-schema';
+  import {
+    areaLabel,
+    careerStageLabel,
+    generalisesLabel,
+    outcomeLabel,
+    taskTypeLabel,
+  } from '../../lib/report-schema';
+  import {
+    RECENCY_LABELS,
+    TIME_BAND_LABELS,
+    hasRunnableReference,
+    recencyBands,
+    sortValue,
+    timeBand,
+  } from '../../lib/report-facets';
   import { OUTCOME, tombstoneName } from '../../lib/status';
+
+  /** The three "includes" toggles. Their words live here rather than in report-facets.ts
+   *  because they are a filter's labels rather than a fact about a report. */
+  const HAS_LABELS: Record<string, string> = {
+    prompts: 'The prompts',
+    transcript: 'A transcript',
+    code: 'Code or a formalisation',
+  };
 
   const filterForm = document.querySelector<HTMLFormElement>('[data-filters]');
 
@@ -268,7 +370,10 @@ const groups = [
     const clear = document.querySelector<HTMLButtonElement>('[data-clear]')!;
 
     const cards = [...results.querySelectorAll<HTMLElement>('[data-report]')];
-    const DIMENSIONS = ['area', 'task', 'outcome', 'tag', 'tool'] as const;
+    const DIMENSIONS = [
+      'area', 'task', 'outcome', 'tag', 'tool',
+      'career', 'recency', 'time', 'has', 'generalises',
+    ] as const;
     type Dimension = (typeof DIMENSIONS)[number];
 
     const LEGEND: Record<Dimension, string> = {
@@ -277,15 +382,36 @@ const groups = [
       outcome: 'Outcome',
       tag: 'Subject',
       tool: 'Tool',
+      career: 'Career stage',
+      recency: 'Recency',
+      time: 'Time spent',
+      has: 'Includes',
+      generalises: 'Generalises',
     };
 
-    /** The card attribute each dimension filters on, and whether it holds a list. */
-    const FIELD: Record<Dimension, { attr: string; multi: boolean }> = {
+    /**
+     * The card attribute each dimension filters on, whether it holds a list, and how the
+     * values within it combine.
+     *
+     * `any` is the right default and is what every dimension but one uses: "research or
+     * teaching" is the useful question, where "research and teaching" would always be empty.
+     * `has` is the exception, because its three values are not alternatives — somebody who
+     * ticks "the prompts" and "code or a formalisation" wants the reports with both, and
+     * OR'ing them would quietly widen the result instead of narrowing it.
+     */
+    const FIELD: Record<Dimension, { attr: string; multi: boolean; mode?: 'all' }> = {
       area: { attr: 'area', multi: false },
-      task: { attr: 'taskType', multi: false },
+      // Primary and secondary together. A session whose second task was proof drafting did
+      // proof drafting, and a filter that said otherwise would understate the corpus.
+      task: { attr: 'tasks', multi: true },
       outcome: { attr: 'outcome', multi: false },
       tag: { attr: 'tags', multi: true },
       tool: { attr: 'tools', multi: true },
+      career: { attr: 'career', multi: false },
+      recency: { attr: 'recency', multi: true },
+      time: { attr: 'time', multi: false },
+      has: { attr: 'has', multi: true, mode: 'all' },
+      generalises: { attr: 'generalises', multi: false },
     };
 
     function selected(): Record<Dimension, string[]> {
@@ -309,11 +435,14 @@ const groups = [
       const field = FIELD[dimension];
       const raw = card.dataset[field.attr] ?? '';
 
-      // Values within a dimension are OR'd: "research or teaching" is the useful question,
-      // where "research and teaching" would always be empty. Dimensions are AND'd.
-      return field.multi
-        ? raw.split('|').some((entry) => values.includes(entry))
-        : values.includes(raw);
+      // Dimensions are always AND'd with each other. Within a dimension it is OR, except
+      // for `has` — see the note on FIELD.
+      if (!field.multi) return values.includes(raw);
+
+      const held = raw.split('|').filter(Boolean);
+      return field.mode === 'all'
+        ? values.every((value) => held.includes(value))
+        : held.some((entry) => values.includes(entry));
     }
 
     function matches(card: HTMLElement, chosen: Record<Dimension, string[]>): boolean {
@@ -424,10 +553,38 @@ const groups = [
       }
     }
 
+    /**
+     * A rating as a sort key, with unanswered always last.
+     *
+     * An unanswered scale is the empty string on the element, and it has to be
+     * distinguishable from a zero: a report scored 0 for helpfulness is a finding, and a
+     * report nobody scored is not. `-Infinity` for a descending sort and `Infinity` for an
+     * ascending one puts it at the bottom either way.
+     */
+    function rating(card: HTMLElement, attr: string, missing: number): number {
+      const raw = card.dataset[attr] ?? '';
+      return raw === '' ? missing : Number(raw);
+    }
+
     function order(): void {
       const by = sort.value;
 
       const sorted = [...cards].sort((a, b) => {
+        if (by === 'helpful' || by === 'novelty') {
+          const attr = by === 'helpful' ? 'helpfulness' : 'novelty';
+          const left = rating(a, attr, -Infinity);
+          const right = rating(b, attr, -Infinity);
+          if (left !== right) return right - left;
+        }
+
+        if (by === 'effort') {
+          // Ascending: least work to check first. Unanswered goes to the bottom, which is
+          // why the missing value is +Infinity here and -Infinity above.
+          const left = rating(a, 'effort', Infinity);
+          const right = rating(b, 'effort', Infinity);
+          if (left !== right) return left - right;
+        }
+
         if (by === 'activity') {
           // Most recently confirmed first. A report nobody has checked sorts last
           // whatever its date, because this ordering is about attention rather than age.
@@ -498,8 +655,12 @@ const groups = [
           : '';
       }
 
+      // Checked against the options the page actually offers, so a stale link naming a sort
+      // that has since gone falls back to "most recent" rather than to an empty select.
       const wanted = params.get('sort');
-      if (wanted === 'activity' || wanted === 'recent' || wanted === 'popularity') sort.value = wanted;
+      if (wanted && [...sort.options].some((option) => option.value === wanted)) {
+        sort.value = wanted;
+      }
     }
 
     /** Return the filter fieldset for `dimension`, creating it if fresh cards introduce a
@@ -514,6 +675,11 @@ const groups = [
         outcome: 'Outcome',
         tag: 'Subject area',
         tool: 'Tool',
+        career: 'Career stage',
+        recency: 'Recency',
+        time: 'Time spent',
+        has: 'Includes',
+        generalises: 'Generalises',
       };
 
       const fieldset = document.createElement('fieldset');
@@ -572,8 +738,22 @@ const groups = [
 
       for (const card of freshCards) {
         injectOption('area', card.dataset.area ?? '', areaLabel);
-        injectOption('task', card.dataset.taskType ?? '', taskTypeLabel);
         injectOption('outcome', card.dataset.outcome ?? '', outcomeLabel);
+        injectOption('career', card.dataset.career ?? '', careerStageLabel);
+        injectOption('generalises', card.dataset.generalises ?? '', generalisesLabel);
+        injectOption('time', card.dataset.time ?? '', (band) => TIME_BAND_LABELS[band] ?? band);
+
+        for (const task of (card.dataset.tasks ?? '').split('|').filter(Boolean)) {
+          injectOption('task', task, taskTypeLabel);
+        }
+
+        for (const band of (card.dataset.recency ?? '').split('|').filter(Boolean)) {
+          injectOption('recency', band, (b) => RECENCY_LABELS[b] ?? b);
+        }
+
+        for (const flag of (card.dataset.has ?? '').split('|').filter(Boolean)) {
+          injectOption('has', flag, (f) => HAS_LABELS[f] ?? f);
+        }
 
         for (const code of (card.dataset.tags ?? '').split('|').filter(Boolean)) {
           injectOption('tag', code, (c) => tagVocab[c] ?? c);
@@ -653,15 +833,43 @@ const groups = [
 
     // The same attributes ReportCard writes, because the filter and sort code reads the
     // element rather than any data behind it. A card missing one of these would quietly
-    // fail to match a filter it should have matched.
+    // fail to match a filter it should have matched — which is why the derived ones go
+    // through src/lib/report-facets.ts, the same functions the build calls, rather than
+    // being computed a second way here.
     node.dataset.area = report.area;
     node.dataset.taskType = report.taskType;
+    node.dataset.tasks = [report.taskType, ...report.taskSecondary].join('|');
     node.dataset.outcome = report.outcome;
     node.dataset.tools = report.tools
       .map((tool) => tool.name.trim().toLowerCase())
       .join('|');
     node.dataset.toolsNames = report.tools.map((tool) => tool.name.trim()).join('|');
     node.dataset.tags = report.tags.join('|');
+    node.dataset.career = report.careerStage ?? '';
+    node.dataset.generalises = report.generalises ?? '';
+
+    // The most recent date any of its tools was used, which is what recency is about. The
+    // dates are ISO, so the lexicographic maximum is the chronological one.
+    const latestToolUse = report.tools
+      .map((tool) => tool.usedOn)
+      .filter((date): date is string => Boolean(date))
+      .sort()
+      .at(-1) ?? null;
+
+    node.dataset.recency = recencyBands(latestToolUse, new Date()).join('|');
+    node.dataset.time = timeBand(report.timeSpentMinutes);
+    node.dataset.has = [
+      report.hasPrompts ? 'prompts' : null,
+      report.hasTranscript ? 'transcript' : null,
+      hasRunnableReference(report.referenceKinds) ? 'code' : null,
+    ]
+      .filter((flag) => flag !== null)
+      .join('|');
+
+    node.dataset.helpfulness = sortValue(report.ratingHelpfulness);
+    node.dataset.effort = sortValue(report.ratingVerificationEffort);
+    node.dataset.novelty = sortValue(report.ratingNovelty);
+
     node.dataset.created = report.createdAt;
     node.dataset.confirmed = '';
     node.dataset.confirmations = '0';
