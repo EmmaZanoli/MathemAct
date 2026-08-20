@@ -14,8 +14,11 @@
 -- survive a column drop. Postgres would drop it automatically along with the column, but
 -- naming it here makes the migration easier to read and is consistent with adding its
 -- replacement explicitly below.
+--
+-- The constraint was created as practices_disclosure_needs_publication and renamed to
+-- reports_disclosure_needs_publication by 20260817130000_rename_vocabulary.sql.
 alter table public.reports
-  drop constraint practices_disclosure_needs_publication;
+  drop constraint reports_disclosure_needs_publication;
 
 -- Drop and re-add the column. ALTER COLUMN ... USING does not work here because the local
 -- Postgres version evaluates the USING expression with the column already cast to the new
