@@ -14,7 +14,7 @@
  * usual one: this community's minority position is frequently the correct one.
  */
 import Base from '../../layouts/Base.astro';
-import CommentThread from '../../components/CommentThread.astro';
+import Contributions from '../../components/Contributions.astro';
 import FormStatus from '../../components/FormStatus.astro';
 import Histogram from '../../components/Histogram.astro';
 import RatingScale from '../../components/RatingScale.astro';
@@ -42,6 +42,16 @@ const [thread, incoming, outgoing] = await Promise.all([
   referencesTo('debate', debate.id),
   referencesFrom('debate', debate.id),
 ]);
+
+/**
+ * Flattened, because contributions on a debate are flat.
+ *
+ * `threadFor()` returns roots each carrying their replies, which is the shape a report thread
+ * needs. Any reply still in the corpus on a debate is historical — the database refuses a new
+ * one — and it is flattened into the list rather than dropped: a remark somebody wrote is not a
+ * schema change's to withdraw. It loses its indent and keeps its place.
+ */
+const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
 ---
 
 <Base title={debate.statement} description={debate.rationale ?? debate.statement}>
@@ -224,10 +234,9 @@ const [thread, incoming, outgoing] = await Promise.all([
     <References incoming={incoming} outgoing={outgoing} />
 
     <div data-pagefind-ignore>
-      <CommentThread
-        parentType="debate"
+      <Contributions
         parentId={debate.id}
-        nodes={thread}
+        contributions={contributions}
         title={debate.statement}
         href={path(`/debates/${debate.id}/`)}
       />
@@ -359,6 +368,29 @@ const [thread, incoming, outgoing] = await Promise.all([
     withheld.hidden = true;
     wrap.hidden = false;
     renderHistogram(histogram, aggregate.value, myScore, iRated, counts);
+
+    /**
+     * Told, rather than fetched twice.
+     *
+     * The contributions section needs two things that only the distribution knows: which
+     * position is the reader's own, so it can land there, and how many people answered at a
+     * position nobody wrote from — which is the interesting empty state and is a fact about the
+     * histogram. Neither may be in the page source before the reader has answered, and this is
+     * the moment both become allowed.
+     *
+     * An event rather than a shared module holding DOM state: two components on one page, each
+     * with its own script, and the only thing crossing between them is this payload.
+     */
+    document.dispatchEvent(
+      new CustomEvent('mathemact:rated', {
+        detail: {
+          rated: iRated,
+          score: myScore,
+          histogram: aggregate.value.histogram,
+          noOpinionCount: aggregate.value.noOpinionCount,
+        },
+      }),
+    );
   }
 
   again.addEventListener('click', () => {

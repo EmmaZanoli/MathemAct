@@ -17,7 +17,7 @@
  * static pages too, so the page initialises exactly the same way once it has the ID.
  */
 import Base from '../../layouts/Base.astro';
-import CommentThread from '../../components/CommentThread.astro';
+import Contributions from '../../components/Contributions.astro';
 import FormStatus from '../../components/FormStatus.astro';
 import Histogram from '../../components/Histogram.astro';
 import RatingScale from '../../components/RatingScale.astro';
@@ -121,14 +121,12 @@ import { path } from '../../lib/paths';
 
       <References incoming={[]} outgoing={[]} />
 
+      {/* Empty, and it stays empty. This page exists for a debate the export has never seen,
+          so it has no contributions to group — a brand-new claim cannot have any, because
+          writing one requires having answered it. The section renders its own "nobody has
+          written a contribution yet" state, which is the truth here rather than a fallback. */}
       <div data-pagefind-ignore>
-        <CommentThread
-          parentType="debate"
-          parentId=""
-          nodes={[]}
-          title=""
-          href=""
-        />
+        <Contributions parentId="" contributions={[]} title="" href="" />
       </div>
     </div>
   </div>

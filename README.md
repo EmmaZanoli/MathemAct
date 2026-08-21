@@ -42,7 +42,8 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | Reading: listing with linkable filters, report pages, author pages |
 | ✅ | Debates, the agreement scale, and the histogram — median first, mean beside it |
 | ✅ | Network: submission, moderation, and a monthly link check |
-| ✅ | Discussion, the citation graph, and the flag queue |
+| ✅ | Discussion on reports, the citation graph, and the flag queue |
+| ✅ | Contributions on debates: grouped by position or flat, sorted, no replies |
 | ✅ | Moderation: flag-led, audited, explained to both sides, and erasure that erases |
 | ✅ | Account bans: reachable, reversible, and explained to the account holder |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |

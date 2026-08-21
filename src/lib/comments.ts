@@ -44,6 +44,43 @@ export interface Comment {
   readonly deletedAt: string | null;
   /** Null for a deleted comment and for one whose author erased their account. */
   readonly author: CommentAuthor | null;
+
+  /**
+   * The position its author held when they wrote it. **Two different facts share the null.**
+   *
+   * On a report comment it is always null: a report comment argues from no position. On a
+   * debate contribution null means the author answered "no opinion, or outside my expertise" —
+   * the off-scale option, which is a real answer on a real rating row. It never means "unset",
+   * because the database refuses a contribution from somebody holding no rating at all.
+   *
+   * `parentType` is what tells the two apart, and every consumer that renders this has to
+   * consult it. See `groupKeyFor()` in src/lib/positions.ts, which is the one place that
+   * decides which group a contribution belongs in.
+   */
+  readonly agreementScore: number | null;
+  /**
+   * Whether `agreementScore` is a recorded answer at all.
+   *
+   * False on exactly one kind of row: a debate contribution from an export written before
+   * 2026-08-22, when the column did not exist. Without this, that row's absent score would be
+   * indistinguishable from a null one and would be filed under "no opinion, or outside my
+   * expertise" — **publishing a position its author never took.** A stale file is not a reason
+   * to put words in somebody's mouth, so those contributions are grouped as unrecorded until
+   * the next export gives them their real score.
+   *
+   * Always true for a report comment, whose null means "this argues from no position" and is
+   * correct rather than missing.
+   */
+  readonly positionKnown: boolean;
+  /** A later contribution by the same author on the same debate, if there is one. */
+  readonly supersededBy: string | null;
+  /** The same relation from the other end: this one replaced an earlier contribution. */
+  readonly supersedesEarlier: boolean;
+  /** Counts, never endorsers. Naming them would publish their positions by inference. */
+  readonly endorsements: {
+    readonly capturesMyView: number;
+    readonly agreePositionNotReason: number;
+  };
 }
 
 /** A comment and the replies under it. There is no third level; the database refuses one. */
@@ -82,12 +119,42 @@ async function readComments(): Promise<Comment[]> {
     return cached;
   }
 
-  cached = exported;
+  // Normalised rather than trusted. An export written before 2026-08-22 has no
+  // `agreementScore`, no `supersededBy` and no `endorsements`, and the type here says they are
+  // present — so without this every consumer reads `undefined` through a field TypeScript has
+  // promised is a number or a null. The same shape of defaulting as `listDebateStats()`, and
+  // for the same reason: `data/` is a historical document and older files are still valid.
+  cached = exported.map((comment) => ({
+    ...comment,
+    agreementScore: comment.agreementScore ?? null,
+    // `in`, not `?? `: an explicit null is the off-scale answer and an absent key is an older
+    // file. Collapsing the two would label a contribution "no opinion" on no evidence.
+    positionKnown: comment.parentType !== 'debate' || 'agreementScore' in comment,
+    supersededBy: comment.supersededBy ?? null,
+    supersedesEarlier: comment.supersedesEarlier ?? false,
+    endorsements: {
+      capturesMyView: comment.endorsements?.capturesMyView ?? 0,
+      agreePositionNotReason: comment.endorsements?.agreePositionNotReason ?? 0,
+    },
+  }));
+
   return cached;
 }
 
+/**
+ * `agreement_score` and `superseded_by` are readable by anybody who can read the comment —
+ * neither has a write grant, both are set server-side. The endorsement **counts** are not
+ * available here: public.comment_endorsements is readable only by its own author, so a
+ * browser cannot count them and must not appear to. Anything showing a count reads it from
+ * the export, which runs as service role.
+ *
+ * `supersedes_earlier` is likewise absent: it is an `exists` the export computes, and the
+ * overlay has no cheap way to ask it. A contribution fetched live carries `false` and gains
+ * the flag at the next build, which is the same shape of staleness the overlay has everywhere.
+ */
 const SELECT = [
   'id,parent_type,parent_id,in_reply_to,body,created_at,updated_at,deleted_at',
+  'agreement_score,superseded_by',
   'author:profiles!comments_author_id_fkey(id,display_name,is_pseudonym,institution_name,institution_country,institution_verified_at)',
 ].join(',');
 
@@ -100,6 +167,8 @@ interface RawComment {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  agreement_score: number | null;
+  superseded_by: string | null;
   author: {
     id: string;
     display_name: string;
@@ -120,6 +189,16 @@ function toComment(row: RawComment): Comment {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+    agreementScore: row.agreement_score ?? null,
+    // The column is always in the SELECT, so a live row's score is always recorded — a null
+    // here is the off-scale answer and nothing else.
+    positionKnown: true,
+    supersededBy: row.superseded_by ?? null,
+    // Both unavailable over PostgREST — see the note on SELECT. A live-fetched contribution
+    // renders with no endorsement count and no movement flag, and picks both up at the next
+    // build.
+    supersedesEarlier: false,
+    endorsements: { capturesMyView: 0, agreePositionNotReason: 0 },
     author: row.author
       ? {
           id: row.author.id,

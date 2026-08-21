@@ -1,0 +1,189 @@
+---
+/**
+ * One contribution on a debate.
+ *
+ * Its own component, so that the position groups and the off-scale group render a contribution
+ * from one definition rather than two copies of the same twenty lines. **Its styles live here
+ * and not in the parent**, because Astro does not put a parent's scoped-style attribute on a
+ * child component's root element — `.contribution` styled in `Contributions.astro` would
+ * compile to a selector matching nothing.
+ *
+ * Name and date only. **No badge line**: verification status, institution and country are all
+ * absent, and that is a rendering rule for this surface alone. A contribution is read by the
+ * position it argues from, and an institution beside it invites the reader to weigh the
+ * affiliation instead of the reason. Nothing about what is stored or derived changes, and
+ * badges are untouched on report pages, entry pages, author pages and report comments.
+ *
+ * The name is not a link, which is how it renders today: author pages are generated for report
+ * authors, debate authors and entry submitters, and a contribution's author may be none of the
+ * three. Linking the ones who happen to qualify would produce a page for some names and a 404
+ * for the rest.
+ */
+import { longDate } from '../lib/format';
+import { positionLabel } from '../lib/positions';
+import type { Comment } from '../lib/comments';
+
+interface Props {
+  contribution: Comment;
+  /** Sanitised HTML with its formulas already set, from src/lib/markdown.ts. Empty when the
+   *  contribution has been deleted, which is when there is nothing to render. */
+  html: string;
+  /** The group this sits in — `0`–`10`, or `none`. Read by the flat view to move the node back. */
+  positionKey: string;
+}
+
+const { contribution, html, positionKey }: Props = Astro.props;
+
+const endorsements =
+  contribution.endorsements.capturesMyView + contribution.endorsements.agreePositionNotReason;
+---
+
+<li
+  class="contribution"
+  id={`comment-${contribution.id}`}
+  data-contribution
+  data-position={positionKey}
+  data-comment-id={contribution.id}
+  data-comment-author={contribution.author?.id ?? ''}
+  data-comment-created={contribution.createdAt}
+  data-endorsements={endorsements}
+>
+  <div class="contribution__head">
+    <span class="contribution__who">
+      {contribution.deletedAt
+        ? 'Removed'
+        : (contribution.author?.displayName ?? 'A former member')}
+      {!contribution.deletedAt && contribution.author?.isPseudonym && (
+        <span class="contribution__pseudonym"> — a pseudonym</span>
+      )}
+    </span>
+
+    <span class="contribution__position">
+      {positionLabel(contribution.agreementScore, contribution.positionKnown)}
+    </span>
+
+    <a class="contribution__permalink meta" href={`#comment-${contribution.id}`}>
+      {longDate(contribution.createdAt)}
+    </a>
+  </div>
+
+  {
+    contribution.deletedAt ? (
+      <p class="contribution__removed">
+        Removed by its author. The position it was written from stays in the distribution.
+      </p>
+    ) : (
+      <div class="contribution__body markdown" data-comment-body data-quotable set:html={html} />
+    )
+  }
+
+  {/* Spelled out in words, and never beside a heart, a thumb, an arrow or a +1. This counts how
+      many people hold a reason; it is not a score for the argument. The buttons that produce it
+      are prompt 6's — these are read from the export, because public.comment_endorsements is
+      readable only by its own author and a browser cannot count them. */}
+  {
+    endorsements > 0 && (
+      <p class="contribution__endorsements meta">
+        {contribution.endorsements.capturesMyView > 0 && (
+          <span>
+            {contribution.endorsements.capturesMyView === 1
+              ? '1 person says this captures their view'
+              : `${contribution.endorsements.capturesMyView} people say this captures their view`}
+          </span>
+        )}
+        {contribution.endorsements.agreePositionNotReason > 0 && (
+          <span>
+            {contribution.endorsements.agreePositionNotReason === 1
+              ? '1 person agrees with the position but not this reason'
+              : `${contribution.endorsements.agreePositionNotReason} people agree with the position but not this reason`}
+          </span>
+        )}
+      </p>
+    )
+  }
+
+  <div class="contribution__actions" data-comment-actions>
+    <button class="link-button" type="button" data-action="edit" hidden>Edit</button>
+    <button class="link-button" type="button" data-action="delete" hidden>Delete</button>
+    <button class="link-button" type="button" data-action="flag" hidden>Flag</button>
+  </div>
+
+  <div class="contribution__slot" data-comment-slot></div>
+</li>
+
+<style>
+  .contribution {
+    padding-block-start: var(--space-sm);
+    border-block-start: var(--border);
+  }
+
+  .contribution__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-2xs) var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .contribution__who {
+    font-weight: var(--weight-semibold);
+  }
+
+  .contribution__pseudonym {
+    font-weight: var(--weight-normal);
+    color: var(--ink-muted);
+  }
+
+  /* The position, stated rather than badged: no border, no fill, and **no colour by
+     agreement** — nothing in the debates section may be coloured by where somebody stands, so
+     there is no ramp here and no tint that varies with the number. */
+  .contribution__position {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    color: var(--ink-muted);
+  }
+
+  .contribution__permalink {
+    margin-inline-start: auto;
+  }
+
+  .contribution__body {
+    margin-block-start: var(--space-2xs);
+  }
+
+  .contribution__removed {
+    margin-block-start: var(--space-2xs);
+    color: var(--ink-muted);
+    font-style: italic;
+  }
+
+  .contribution__endorsements {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3xs);
+    margin-block-start: var(--space-2xs);
+  }
+
+  .contribution__actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-block-start: var(--space-2xs);
+  }
+
+  .contribution__slot:not(:empty) {
+    margin-block-start: var(--space-sm);
+  }
+
+  /* An edit the browser saved but has not set. Markdown and TeX are rendered at build time, so
+     until the next build the honest thing to show is the source, marked as such. */
+  .contribution__body--unset {
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+  }
+
+  @media (max-width: 42rem) {
+    .contribution__permalink {
+      margin-inline-start: 0;
+    }
+  }
+</style>

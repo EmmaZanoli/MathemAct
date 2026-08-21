@@ -1372,3 +1372,109 @@ first — they looked for their marker, it is not there, and that sentence is th
 no column, because "outside my expertise" is not a position on a scale of agreement, and they
 are not parked at 5, because filing a declared non-opinion as a neutral opinion is the exact
 corruption the off-scale option exists to prevent.
+
+## 2026-08-22 — The thread component is split, reversing its own header
+
+`CommentThread.astro` argued that a thread is a thread and that separating the report thread
+from the debate thread would guarantee they drift. That was right while both were the same
+surface: a list of remarks under a page, threaded one level, newest at the bottom.
+
+They stopped being the same surface. A debate now has twelve groups, two views, a sort control,
+no replies, no nesting and no badge line — none of which has an analogue on a report, where the
+thread is a discussion of one specific account and threading is correct. Branching on
+`parentType` inside one file would have meant two mutually exclusive markup trees and two client
+scripts in one component, with every shared selector a way to change how a report thread renders
+by accident. That risk is not hypothetical here: report interaction cannot be exercised locally,
+because it needs a database and a signed-in account.
+
+So: reports keep `CommentThread.astro`, **byte-identical** — `git diff` shows no change to it —
+and debates get `Contributions.astro` plus `Contribution.astro`.
+
+**The boundary is rendering only.** Reading the corpus, editing, deleting and flagging all still
+go through `src/lib/comments.ts`, so the behaviour the old header was protecting cannot drift;
+what diverged is markup, which is what was supposed to diverge. The `:scope >` discipline is
+carried into the new component even though a debate contribution can no longer nest, because
+historical replies are rendered flat in that list and the rule is the discipline rather than the
+current shape of the data.
+
+`Contribution.astro` is its own component rather than a snippet repeated in the position groups
+and the off-scale group, and **its styles live in it** — Astro does not put a parent's
+scoped-style attribute on a child component's root element, so `.contribution` styled in the
+parent would compile to a selector matching nothing.
+
+## 2026-08-22 — The zero-JavaScript case is "open a position, read those contributions"
+
+The selector is native `<details>`: one per family, each holding one per position, all closed.
+So the by-position view starts empty because the disclosures are closed, not because script
+emptied it — and the prompt line disappears through
+`.view:has(details[data-position-group][open])`, which needs no state kept in step with
+anything.
+
+What is the enhancement, deliberately: exclusive selection, the URL, opening a whole family at
+once, landing on the reader's own position, the sort control, and **the flat view**. A reader
+with no JavaScript gets one view in one order and no dead controls — the view switch and the
+sort `<select>` are `hidden` in the markup and revealed by script, because a control that does
+nothing is worse than an absent one.
+
+The flat view **moves** the same `<li>` nodes rather than rendering a second copy. Two copies
+would mean two elements carrying one `id`, and `#comment-<id>` is a real address: the activity
+feed builds it to point somebody at the contribution they were told about. `data-position` on
+each node is what lets the move be reversed.
+
+## 2026-08-22 — Three things a single null would have collapsed
+
+`agreementScore` is null in three situations and only one of them means what the off-scale group
+claims.
+
+- On a **report comment** it argues from no position, which is correct rather than missing.
+- On a **debate contribution** it is the off-scale answer: the author was asked and declined.
+- On a **debate contribution from an export written before the column existed** it is nothing
+  at all.
+
+The third was filing that contribution under "No opinion, or outside my expertise" — **publishing
+a position its author never took**, which is the precise failure the off-scale group exists to
+prevent, inverted. It was found by reading the built HTML rather than by any check: the row
+rendered, the page looked right, and the label was a claim about somebody's view that nothing
+supported.
+
+So `Comment.positionKnown` distinguishes an absent key from an explicit null (`'agreementScore'
+in comment`, not `??`), and `groupKeyFor(score, known)` returns a thirteenth key for it. That
+group renders **only when it has something in it**, so a current export shows the twelve groups
+the design describes and nothing else, and the rows in it say "position not recorded" until the
+next nightly export gives them their real one.
+
+## 2026-08-22 — What only the distribution knows arrives by event
+
+"People answered at this position and none of them wrote anything" is the interesting empty
+state and the one the design asks for. It is also a fact about the histogram, which is fetched
+after the reader has answered precisely so that it is not in the page source — so the section
+cannot render it, and weakening that rule to get a nicer empty state would trade the thing for
+the description of the thing.
+
+The debate page therefore tells the contributions section, once, on the same code path that
+reveals the chart: a `mathemact:rated` CustomEvent carrying the histogram, the off-scale count,
+and the reader's own score. That is also how the section knows which position to land on.
+
+An event rather than a shared module holding DOM state, because these are two components with
+two client scripts on one page and the only thing that should cross between them is the payload.
+Until it arrives, an empty position says only that it has no contributions — which is all the
+page can honestly claim.
+
+## 2026-08-22 — Editing, deleting and flagging came across; writing did not
+
+The specification for this surface covers the two views and what a contribution shows. It says
+nothing about the per-contribution controls, and carrying them over is a slight widening of it —
+but the alternative was shipping a debate page where an author could no longer correct their own
+contribution and **no reader could flag one**, which is a moderation path, and losing it silently
+would have been the worst of the three outcomes.
+
+Writing a contribution deliberately did **not** come across. It belongs inside the reader's own
+position group, below what is already there, collapsed behind an explicit control, and that
+sequence is specified separately. What is here is the seam: a `data-compose-seam` element per
+position group, empty and hidden, so there is no always-visible box to have to remove later.
+
+One consequence to know about: `installQuoteAffordance()` lived in `CommentThread.astro`'s
+script, so the selection popover — quote a passage into a comment, cite one into a debate — is
+not on debate pages at present. It is not an oversight and it is not restorable on its own: the
+affordance exists to put a passage into a composer, and there is no composer on this surface
+yet. It belongs with the writing box.
