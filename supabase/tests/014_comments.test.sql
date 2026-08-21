@@ -82,6 +82,14 @@ values
    'Every AI-generated proof step must be checked by a human before publication.',
    'active', now(), 'research');
 
+-- A position for account 1, because 20260821120000 refuses a contribution to a debate its
+-- author has not answered: a contribution is the reason for a position, so there has to be
+-- one. Without this the debate comment below is refused and every assertion after it fails
+-- for a reason that has nothing to do with what this file tests.
+insert into public.ratings (debate_id, user_id, score)
+values ('33333333-0000-0000-0000-000000000001',
+        '11111111-0000-0000-0000-000000000001', 4);
+
 -- ── Comments ────────────────────────────────────────────────────────────────────────
 
 insert into public.comments (id, parent_type, parent_id, author_id, in_reply_to, body, status, created_at)

@@ -138,12 +138,16 @@ database will refuse.
 ### What a ban does, exactly
 
 It sets `public.profiles.is_banned`, which every insert policy on the site reads. Nothing else.
-**Eight** write paths stop — reports, debates, network entries, comments, ratings,
-confirmations, flags, citations — and `supabase/tests/020_account_bans.test.sql` asserts each of
-them from the banned side, because "a ban means a ban" is written in eight places, there is
-nothing central holding it, and one of them being wrong would present as a member having a bad
-day. This paragraph said seven for a day, having forgotten `citations_insert_own`, which is the
-argument for the test rather than the list.
+**Nine** write paths stop — reports, debates, network entries, comments, ratings,
+confirmations, flags, citations, endorsements — and `supabase/tests/020_account_bans.test.sql`
+asserts each of them from the banned side, because "a ban means a ban" is written in nine
+places, there is nothing central holding it, and one of them being wrong would present as a
+member having a bad day.
+
+This paragraph has been wrong twice, in both directions, and that history is the argument for
+the test rather than the list. It said seven for a day, having forgotten `citations_insert_own`,
+which made it eight; `20260821120200_comment_endorsements.sql` then added
+`comment_endorsements_insert_own`, which makes it nine. Count the policies, not the sentence.
 
 What a ban is **not**:
 
@@ -340,7 +344,7 @@ write attempted directly from a console silently changes nothing.
 | Leave it up | The flag is `dismissed`. The content does not move. | **Required.** Read by the flagger, and by the author — who learns from it that a flag existed, and never who raised it. |
 | Close: already gone | The flag is `actioned` without touching the content. Offered only when what it named is already hidden or deleted. | **Required.** Read by the flagger. |
 | Unhide | → `published`, or `active` for a debate. Nothing records the status before hiding, so unhiding publishes. | **Required.** Read by the author. |
-| Ban | `profiles.is_banned`. Blocks posting, commenting, rating, confirming, flagging and citing. Touches nothing the account has posted. Refused against the caller's own account, against anybody with moderation standing, and against an account already banned. Reversible. | **Required.** Read by the account holder. |
+| Ban | `profiles.is_banned`. Blocks posting, commenting, rating, confirming, flagging, citing and endorsing. Touches nothing the account has posted. Refused against the caller's own account, against anybody with moderation standing, and against an account already banned. Reversible. | **Required.** Read by the account holder. |
 | Unban | Lifts it. Refused if the account is not banned. | **Required.** Read by the account holder. |
 | Erase | Deletes the account. Admins only, and only against a standing request. | Not required — it is a request being carried out, not a judgement. |
 

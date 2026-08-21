@@ -1108,3 +1108,129 @@ overlay added carries the same data attributes as one the build wrote — that i
 `src/lib/report-facets.ts` exists to guarantee.
 
 `?cat=` still works on `/network/` — `legacyParams` maps the old name forward on read.
+
+## 2026-08-21 — A contribution stores the position it was written from, rather than joining it
+
+`public.comments.agreement_score`, copied from the author's rating row at insert and frozen.
+
+The alternative — a view joining a contribution to its author's *live* rating — is one join
+shorter and wrong. Somebody who changes their mind would drag every contribution they have ever
+written into a different group, retroactively, so the record of what the community thought in
+March would silently become a record of what those same people think now. A contribution is
+written *from* a position. That is a fact about a moment, and it is stored like one.
+
+`022_debate_contributions.test.sql` asserts the column **after** the author has moved from "no
+opinion" to 7, because before that the two designs are indistinguishable.
+
+## 2026-08-21 — The score trigger overwrites what the client sent; it does not raise on a mismatch
+
+Both defences work today and only one keeps working if the grant is ever widened. Raising turns
+a lie into an error but depends on the client having been able to name the column in order to be
+wrong about it. Overwriting does not care: grant the column by accident, add a service-role
+path, widen a column list in a migration about something else, and the stored value is still the
+one read out of the rating row, because the last write before the row lands is the trigger's.
+
+The grant is still withheld — INSERT and UPDATE on `public.comments` are per column, so a column
+nobody names is a column no browser can write. The two failure modes are both wanted and differ:
+naming the column is refused outright with 42501, and a value arriving by any other route is
+silently replaced. The test widens the grant on purpose, because a test that only proves the door
+is locked says nothing about the floor under it.
+
+## 2026-08-21 — A NULL `agreement_score` on a debate comment means "no opinion", not "unset"
+
+The agreement scale's off-scale option is stored as a NULL `score` on a **real** `public.ratings`
+row, not as an absent row, and the trigger refuses a contribution from anyone holding no rating
+row at all. Between those two facts the column is unambiguous by construction: a contribution
+exists only where a rating exists, so a NULL here can only have been copied from a NULL there.
+
+So no sentinel, no coercion to 5, and no companion boolean. A sentinel puts a non-answer on the
+scale; coercing to 5 files a declared non-opinion as a neutral opinion, which is the exact
+corruption the off-scale option exists to prevent; a boolean is a second source of truth for
+something the column already says.
+
+## 2026-08-21 — Endorsements are readable only by their author, and the reason is two tables away
+
+A rating row is readable only by its author — that is why `public.rating_aggregate` is
+`SECURITY DEFINER` — and endorsing a contribution requires holding a rating on that debate.
+
+So a public endorser list would leak, by inference, the private position of everybody on it.
+"This captures my view" on a contribution written from 8 places its endorser near 8, and the leak
+is worst on the contributions that matter most: one written from 0 or from 10 pins its endorsers
+hard. **Counts are public; names are not.** Counts arrive through the nightly export; the browser
+reads its own rows only, to decide which button is pressed.
+
+Two things follow and both are deliberate absences. **No `SECURITY DEFINER` aggregate for live
+counts** — `rating_aggregate` has one because a distribution must be current the moment a reader
+answers, which is what they get in exchange for answering; an endorsement count is not that, and
+a second DEFINER function on a private table to save a reader from a number being a day old is a
+seventh Security Advisor warning for nothing. **No activity trigger** — "somebody endorsed your
+contribution" cannot name the endorser without undoing the above, an unnamed one is a
+notification that a number went up, and not touching `private.log_activity()` is worth something
+on its own after 20260819090000.
+
+## 2026-08-21 — "Has anybody endorsed this?" is a column, because the guard cannot ask the table
+
+`private.protect_comment_columns()` is and must stay `SECURITY INVOKER`: it is the
+`current_user` test in it that tells a browser from the table's owner, and a DEFINER guard sees
+its own owner on every request. But the window closes on the first endorsement, and the guard
+has no honest way to read `public.comment_endorsements`.
+
+**An inlined `exists` fails silently, in the dangerous direction.** The subquery runs under the
+caller's own policies; that table is own-rows-only; the caller is the contribution's *author*,
+who cannot endorse their own contribution and so owns none of its rows. It would return false
+however many endorsements exist — the window closed in the source and open in production, which
+is the failure that reviews as correct.
+
+**A `SECURITY DEFINER` helper in `private` fails too, and louder.** `authenticated` holds no
+USAGE on the private schema — 20260813200000 revoked it and `002_exposure.test.sql` asserts it —
+so the call is refused with 42501 and every legitimate edit becomes a permission error. This was
+written and then reverted before it ever ran; recorded here because it looks obviously right.
+
+So `public.comments.endorsed_at`, stamped by a DEFINER trigger on the endorsement insert, and
+the guard reads a column on the row it is already updating. Same move as
+`public.reports.answered_at` in 20260819100000 — there a subquery recursed, here it lies — and
+cheaper either way. The stamp is never cleared: the text was frozen when somebody said it was
+theirs too, and an erasure removing that row should not reopen an edit window on text other
+people have since read.
+
+## 2026-08-21 — Rating history exists, is append-only, and no browser role may read it
+
+`public.rating_changes`, written by an AFTER UPDATE trigger on `public.ratings` when the score is
+`is distinct from` the old one. **This reverses 20260815160100's "no history is kept."** The half
+of that decision which stands is its reason: the aggregate is computed from current ratings only,
+and `public.ratings` still holds exactly one row per person, so "the current distribution" stays
+unambiguous. What changed is that the transition is no longer discarded — a position change is
+the most valuable event this section produces.
+
+Both score columns are nullable, because moving between "no opinion" and a number is a real
+change and the most interesting one on the site. A `NOT NULL` on either would record every
+position change except that one. The trigger's WHEN clause uses `is distinct from` and not `<>`
+for the same reason: `<>` evaluates to NULL on exactly that transition and the trigger would
+silently not fire.
+
+**No SELECT grant to `anon` or `authenticated`, and no policy.** A readable per-person history is
+a public voting record for a rating that is deliberately private, and it is worse than exposing
+the rating: a current position is one fact, a trail through somebody's changes of mind is a record
+of how they think, attached to a name, on a site whose audience includes people contributing
+pseudonymously because admitting AI reliance carries professional stigma. The table exists to
+produce one number per debate in the export, which runs as service role and is not subject to RLS.
+History is never shown as a voting record.
+
+## 2026-08-21 — Every rule in the debates rebuild carries a subject-type condition
+
+`public.comments` serves reports and debates. Reports keep one level of nesting, keep replies,
+and keep an edit window that closes on the first reply — a report thread is a discussion of one
+specific account of one specific piece of work, and a remark with the author's answer under it is
+the shape of a referee's note.
+
+So flatness is `check (parent_type <> 'debate' or in_reply_to is null)`, the score column is
+`check (parent_type = 'debate' or agreement_score is null)`, the supersession trigger carries
+`when (new.parent_type = 'debate')`, and the guard branches on `old.parent_type` before choosing
+which early-close rule applies. A CHECK without a `parent_type` term in it would break report
+threads silently.
+
+The flat rule is written **twice** — once in the constraint, once in `comments_insert_own` — and
+the policy was **dropped and reissued** rather than supplemented. Permissive policies on one
+command are OR'd, so a second INSERT policy carrying the rule would not add a restriction; it
+would add a route that grants exactly what the rule withholds. The same reasoning keeps the edit
+window in the guard.

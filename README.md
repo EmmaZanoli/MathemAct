@@ -104,9 +104,9 @@ there are no moderator `UPDATE` policies on any content table, so a direct write
 log silently changes nothing.
 
 **Suspending an account** is the second kind of decision — about a person rather than a post,
-for spam or sustained hostility. It sets `profiles.is_banned`, which closes eight insert
+for spam or sustained hostility. It sets `profiles.is_banned`, which closes nine insert
 policies (reports, debates, network entries, comments, ratings, confirmations, flags,
-citations) and nothing else:
+citations, endorsements) and nothing else:
 
 - **Not a lockout.** Sign-in, reading, profile edits, password changes and erasure requests all
   still work. `auth.users` is untouched. An account somebody could not leave would be a
@@ -206,14 +206,18 @@ production rather than a report after it.
 
 ### Database tests
 
-565 pgTAP assertions across twenty-one files in `supabase/tests/`, covering domain matching, the
+604 pgTAP assertions across twenty-two files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the
 tombstone rule, the rate limits, the submission RPC, the agreement scale, every comment
 policy including the nesting limit and what soft deletion destroys, the citation and
-flag queues, the activity feed and its backfill, account bans — the eight write paths a
-ban closes, asserted one by one, and the notice it sends — and schema version 2 of a report:
+flag queues, the activity feed and its backfill, account bans — the nine write paths a
+ban closes, asserted one by one, and the notice it sends — debate contributions: the position
+each was written from and that it survives its author changing their mind, flatness on debates
+against threading on reports, endorsement and who may not, the edit window closing on the first
+endorsement, supersession, and a rating history no browser role can read — and schema version 2
+of a report:
 the two widened vocabularies, the secondary task types and how they are normalised, the
 supporting links and every URL they refuse, the five scales and the two bounds on each, the
 ordered `time_saved` vocabulary that replaced a sixth scale, the guard's freeze list, reached
