@@ -25,19 +25,27 @@ grant insert (category_other) on public.network_entries to authenticated;
 grant update (category_other) on public.network_entries to authenticated;
 
 -- Reissued to add `category_other` to the freeze list. A content column the guard forgets is a
--- column that can be rewritten after publication, silently. Signature unchanged, so
--- `create or replace` is safe here; the body is the one from 20260817130000_rename_vocabulary,
--- which is the latest migration to touch this function -- read that one, not the one that
--- created it, or the overload trap in CLAUDE.md is waiting.
+-- column an author can rewrite after somebody else has acted on the entry, silently.
+--
+-- **The body below is copied from 20260818180000_flag_led_moderation.sql, which is the latest
+-- migration to touch this function -- not from the one that created it and not from the rename.**
+-- Those older bodies assign `new.moderation_note`, and 20260818180000 dropped that column along
+-- with its two siblings: a plpgsql body is stored as text, so reissuing one of them compiles
+-- happily and then throws `record "new" has no field "moderation_note"` at the first UPDATE of
+-- any entry. They also freeze on `old.status <> 'pending'`, which predates post-moderation and
+-- would re-freeze the hidden entries their authors are now supposed to be able to edit. Both
+-- mistakes were made writing this file and both were caught by test-db on the branch.
 create or replace function private.protect_network_columns()
 returns trigger
 language plpgsql
-security invoker        -- must remain INVOKER: current_user check decides who is trusted
+security invoker        -- must remain INVOKER: the current_user check decides who is trusted
 set search_path = ''
 as $$
 declare
   v_is_trusted boolean;
 begin
+  -- url_normalised was already set by normalise_network_url(), which fires before this
+  -- trigger (alphabetical: network_entries_a_ before network_entries_b_).
   new.updated_at := now();
 
   v_is_trusted :=
@@ -58,14 +66,11 @@ begin
   new.submitter_id := old.submitter_id;
   new.created_at   := old.created_at;
 
-  -- Status, link check, and moderation columns are for moderators and the link-check
-  -- script respectively. No browser caller may write them.
-  new.status             := old.status;
-  new.link_status        := old.link_status;
-  new.link_checked_at    := old.link_checked_at;
-  new.moderation_note    := old.moderation_note;
-  new.moderation_note_at := old.moderation_note_at;
-  new.moderation_note_by := old.moderation_note_by;
+  -- Status is public.moderate()'s; the link columns are the link-check script's. No browser
+  -- caller may write either.
+  new.status          := old.status;
+  new.link_status     := old.link_status;
+  new.link_checked_at := old.link_checked_at;
 
   -- Restoring a deleted entry is a moderation action.
   if old.deleted_at is not null then
@@ -73,8 +78,8 @@ begin
     new.deleted_by := old.deleted_by;
   end if;
 
-  -- Once past pending, the content is fixed.
-  if old.status <> 'pending' then
+  -- Hidden is the editable state, exactly as on reports.
+  if old.status <> 'hidden' then
     new.title          := old.title;
     new.url            := old.url;
     new.url_normalised := old.url_normalised;
@@ -87,3 +92,7 @@ begin
   return new;
 end;
 $$;
+
+comment on function private.protect_network_columns() is
+  'Reverts writes to columns the caller does not own. Text is editable only while the entry '
+  'is hidden. SECURITY INVOKER for the same reason as every other guard here.';
