@@ -17,7 +17,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(28);
+select plan(34);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────────
 
@@ -32,7 +32,14 @@ values
   ('33331111-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000',
    'authenticated', 'authenticated', 'res_banned@example.org', '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('33331111-0000-0000-0000-000000000005', '00000000-0000-0000-0000-000000000000',
-   'authenticated', 'authenticated', 'res_moderator@example.org', '{}'::jsonb, '{}'::jsonb, now(), now());
+   'authenticated', 'authenticated', 'res_moderator@example.org', '{}'::jsonb, '{}'::jsonb, now(), now()),
+  -- Posts nothing in the fixtures, and exists only for the column-constraint tests below.
+  -- They need five or six inserts between them and every other confirmed account here is
+  -- close enough to the five-per-day limit that the CHECK they are testing never gets
+  -- evaluated: enforce_daily_limit() is a BEFORE INSERT trigger, so it raises 53400 first
+  -- and a test expecting 23514 fails for a reason that has nothing to do with the column.
+  ('33331111-0000-0000-0000-000000000006', '00000000-0000-0000-0000-000000000000',
+   'authenticated', 'authenticated', 'res_schema@example.org', '{}'::jsonb, '{}'::jsonb, now(), now());
 
 update auth.users set email_confirmed_at = now()
  where id <> '33331111-0000-0000-0000-000000000003';
@@ -45,8 +52,8 @@ update public.profiles set role = 'moderator'
 
 select is(
   (select count(*)::int from public.profiles where confirmed_at is not null),
-  4,
-  'four of the five fixtures have a confirmed account'
+  5,
+  'five of the six fixtures have a confirmed account'
 );
 
 -- ── Network ──────────────────────────────────────────────────────────────────────────────
@@ -216,6 +223,81 @@ select is(
   'example.com/ordinary',
   'url_normalised is computed on insert (scheme stripped, lowercase)'
 );
+
+-- ── The category_other constraint ────────────────────────────────────────────────────────
+-- Submitter 6 throughout: only the successful inserts count against the daily limit, but
+-- every account above is near enough to it that the trigger would answer before the CHECK.
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000006","role":"authenticated"}';
+
+select lives_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, category_other, description)
+     values ('33331111-0000-0000-0000-000000000006',
+             'An other-category entry', 'https://example.com/other-cat',
+             'other', 'Symbolic computation', 'A description.') $$,
+  'category=other with a category_other string is accepted'
+);
+
+select throws_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description)
+     values ('33331111-0000-0000-0000-000000000006',
+             'Other without label', 'https://example.com/other-no-label',
+             'other', 'A description.') $$,
+  '23514'::text, null::text,
+  'category=other without category_other fails the CHECK constraint'
+);
+
+select throws_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, category_other, description)
+     values ('33331111-0000-0000-0000-000000000006',
+             'Non-other with label', 'https://example.com/non-other-with-label',
+             'community', 'Should be null', 'A description.') $$,
+  '23514'::text, null::text,
+  'category<>other with a category_other value fails the CHECK constraint'
+);
+
+reset role;
+
+-- ── One prose field ──────────────────────────────────────────────────────────────────────
+-- `relevance` was retired on 2026-08-21 and the description absorbed it. The column stays,
+-- nullable, for the rows submitted while it was collected.
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000006","role":"authenticated"}';
+
+select lives_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description)
+     values ('33331111-0000-0000-0000-000000000006',
+             'No relevance given', 'https://example.com/no-relevance',
+             'reading', 'The description now carries the whole of the prose.') $$,
+  'an entry may be submitted with no relevance at all'
+);
+
+select lives_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description)
+     values ('33331111-0000-0000-0000-000000000006',
+             'A long description', 'https://example.com/long-description',
+             'reading', repeat('x', 1000)) $$,
+  'the description cap is 1000 characters'
+);
+
+select throws_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description)
+     values ('33331111-0000-0000-0000-000000000006',
+             'Too long', 'https://example.com/too-long',
+             'reading', repeat('x', 1001)) $$,
+  '23514'::text, null::text,
+  'and 1001 characters is refused'
+);
+
+reset role;
 
 -- ── Writing: editing your own ────────────────────────────────────────────────────────────
 

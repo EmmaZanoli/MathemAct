@@ -2,9 +2,10 @@
 /**
  * Entry submission form.
  *
- * Short by design — title, URL, category, description, relevance — so that submitting a
- * link takes under a minute once the link is in front of the submitter. The relevance
- * field is what makes the corpus worth having: scraped page titles are free and worthless.
+ * Short by design — title, URL, category, description — so that submitting a link takes
+ * under a minute. The description is the field that makes the corpus worth having, and it
+ * carries the whole of the prose: it used to be a 200-character "what is this" beside a
+ * separate 600-character "why should mathematicians care", which asked one question twice.
  *
  * URL duplicate check: on blur of the URL field, the client normalises the URL and queries
  * Supabase for any existing entry with the same normalised form. If found, a non-blocking
@@ -15,19 +16,19 @@ import Field from '../../components/Field.astro';
 import FormStatus from '../../components/FormStatus.astro';
 import { path } from '../../lib/paths';
 import { CATEGORIES } from '../../lib/network';
-import { SITE } from '../../lib/site';
+import { LICENCE, SITE } from '../../lib/site';
 
 export const ENTRY_LIMITS = {
   title: 120,
-  description: 200,
-  relevance: 600,
+  categoryOther: 80,
+  description: 1000,
 } as const;
 ---
 
 <Account
   title="Submit an entry"
   description="Add a link to a tool, course, library, or guideline that is genuinely useful for mathematicians working with AI."
-  lead="Five fields. Takes under a minute if the link is in front of you."
+  lead="Four fields. Takes under a minute."
   gate="required"
 >
   <div class="panel" data-gate-unconfirmed hidden>
@@ -74,90 +75,78 @@ export const ENTRY_LIMITS = {
         hint="A plain name for the entry. 120 characters."
         required
         maxlength={ENTRY_LIMITS.title}
+        autocomplete="off"
         counter
-      >
-        <input
-          slot="input"
-          type="text"
-          id="title"
-          name="title"
-          required
-          maxlength={ENTRY_LIMITS.title}
-          autocomplete="off"
-        />
-      </Field>
+      />
 
       <Field
         id="url"
         label="URL"
+        type="url"
         hint="The link itself. Must start with https:// or http://."
         required
-      >
-        <input
-          slot="input"
-          type="url"
-          id="url"
-          name="url"
-          required
-          autocomplete="off"
-          inputmode="url"
-        />
-      </Field>
+        autocomplete="off"
+      />
 
-      <Field
-        id="category"
-        label="Category"
-        hint="Choose the one that fits best."
-        required
-      >
-        <select slot="input" id="category" name="category" required>
-          <option value="" disabled selected>Select a category</option>
-          {CATEGORIES.map((c) => (
-            <option value={c.value}>{c.label}</option>
-          ))}
-        </select>
-      </Field>
+      {/* A radio list, not a <select>, and the same shape as Area on the report form: a
+          select hides most of the options and every one of their explanations. The visible
+          label sits outside the fieldset because `.choices` is a grid of the choices alone
+          — on the report the heading comes from the FormSection this short form has none
+          of. See the choice-list block in forms.css. */}
+      <div class="field">
+        <p class="field__label">Category</p>
+        <div class="field__hint" id="category-hint">
+          <p>Choose the one that fits best.</p>
+        </div>
+        <fieldset class="choices" aria-describedby="category-hint">
+          <legend class="visually-hidden">Category</legend>
+          {
+            CATEGORIES.map((c) => (
+              <label class="choice" for={`category-${c.value}`}>
+                <input
+                  class="choice__input"
+                  type="radio"
+                  id={`category-${c.value}`}
+                  name="category"
+                  value={c.value}
+                />
+                <span>{c.label}</span>
+                <span class="choice__hint">{c.hint}</span>
+              </label>
+            ))
+          }
+        </fieldset>
+      </div>
+
+      {/* Required exactly when the category is `other`, which is the only way "other" means
+          anything — and the CHECK constraint refuses one on any other category. Hidden
+          rather than disabled: a disabled control that never becomes enabled reads as
+          broken. */}
+      <div data-category-other hidden>
+        <Field
+          id="category_other"
+          label="Say which"
+          hint="A few words. It is what stops “other” from meaning nothing."
+          maxlength={ENTRY_LIMITS.categoryOther}
+        />
+      </div>
 
       <Field
         id="description"
         label="Description"
-        hint={`One sentence saying what this is. ${ENTRY_LIMITS.description} characters.`}
+        type="textarea"
+        rows={5}
+        hint={`Explain what it is and why it can be of interest to the community. In your own words — do not paste marketing copy. ${ENTRY_LIMITS.description} characters.`}
         required
         maxlength={ENTRY_LIMITS.description}
         counter
-      >
-        <textarea
-          slot="input"
-          id="description"
-          name="description"
-          required
-          maxlength={ENTRY_LIMITS.description}
-          rows={2}
-        ></textarea>
-      </Field>
-
-      <Field
-        id="relevance"
-        label="Why mathematicians should care"
-        hint={`In your own words. Do not paste marketing copy. ${ENTRY_LIMITS.relevance} characters.`}
-        required
-        maxlength={ENTRY_LIMITS.relevance}
-        counter
-      >
-        <textarea
-          slot="input"
-          id="relevance"
-          name="relevance"
-          required
-          maxlength={ENTRY_LIMITS.relevance}
-          rows={4}
-        ></textarea>
-      </Field>
+      />
 
       <div class="form-section">
         <label class="checkbox-label" for="cc-confirm">
           <input type="checkbox" id="cc-confirm" name="cc-confirm" required />
-          I agree that this submission is published under CC BY 4.0.
+          I agree that this submission is published under{''}
+          <a href={LICENCE.url} rel="license">{LICENCE.name}</a>
         </label>
       </div>
 
@@ -189,6 +178,30 @@ export const ENTRY_LIMITS = {
   const duplicateWarning = document.querySelector<HTMLElement>('[data-duplicate-warning]');
   const duplicateTitle  = document.querySelector<HTMLElement>('[data-duplicate-title]');
   const duplicateLink   = document.querySelector<HTMLAnchorElement>('[data-duplicate-link]');
+
+  // ── The "other" category ─────────────────────────────────────────────────────────────
+  //
+  // Same rule as area_other on the report form, and cleared for the same reason: the CHECK
+  // constraint refuses a category_other on any category but `other`, so a value left behind
+  // by somebody who picked "other", typed something, then changed their mind would fail the
+  // submission from a field no longer on their screen.
+
+  const categoryOtherField = document.querySelector<HTMLElement>('[data-category-other]');
+  const categoryOtherInput = document.querySelector<HTMLInputElement>('#category_other');
+
+  function syncCategoryOther(): void {
+    if (!categoryOtherField) return;
+    const chosen = form.querySelector<HTMLInputElement>('input[name="category"]:checked');
+    const show = chosen?.value === 'other';
+    categoryOtherField.hidden = !show;
+    if (!show && categoryOtherInput) categoryOtherInput.value = '';
+  }
+
+  for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="category"]')) {
+    radio.addEventListener('change', syncCategoryOther);
+  }
+
+  syncCategoryOther();
 
   let userId: string | null = null;
 
@@ -275,15 +288,28 @@ export const ENTRY_LIMITS = {
     hideStatus(status);
 
     const data = new FormData(form);
-    const title       = (data.get('title')       as string).trim();
-    const url         = (data.get('url')          as string).trim();
-    const category    = data.get('category')      as string;
-    const description = (data.get('description') as string).trim();
-    const relevance   = (data.get('relevance')   as string).trim();
-    const ccConfirm   = data.get('cc-confirm') === 'on';
+    const text = (name: string): string => ((data.get(name) as string | null) ?? '').trim();
 
-    if (!title || !url || !category || !description || !relevance) {
+    const title         = text('title');
+    const url           = text('url');
+    // Null when no radio is checked, which is the state the form loads in.
+    const category      = (data.get('category') as string | null) ?? '';
+    const categoryOther = text('category_other');
+    const description   = text('description');
+    const ccConfirm     = data.get('cc-confirm') === 'on';
+
+    if (!title || !url || !description) {
       showStatus(status, 'error', 'Please fill in all fields.');
+      return;
+    }
+
+    if (!category) {
+      showStatus(status, 'error', 'Choose a category.');
+      return;
+    }
+
+    if (category === 'other' && !categoryOther) {
+      showStatus(status, 'error', 'Say which category, in a few words.');
       return;
     }
 
@@ -310,8 +336,8 @@ export const ENTRY_LIMITS = {
       title,
       url,
       category,
+      ...(category === 'other' ? { category_other: categoryOther } : {}),
       description,
-      relevance,
     });
 
     setBusy(submit, false);

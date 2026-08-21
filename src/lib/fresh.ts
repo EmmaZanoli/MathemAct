@@ -85,8 +85,9 @@ export interface FreshEntry {
   readonly url: string;
   readonly urlNormalised: string;
   readonly category: string;
+  readonly categoryOther: string | null;
   readonly description: string;
-  readonly relevance: string;
+  readonly relevance: string | null;
   readonly createdAt: string;
 }
 
@@ -225,7 +226,7 @@ interface RawFreshReport {
 /** Published entries created after `since`. */
 export async function networkSince(since: string): Promise<FreshEntry[]> {
   const rows = await ask<RawFreshEntry>(
-    'network_entries?select=id,title,url,url_normalised,category,description,relevance,created_at' +
+    'network_entries?select=id,title,url,url_normalised,category,category_other,description,relevance,created_at' +
       `&status=eq.published&created_at=gt.${encodeURIComponent(since)}` +
       `&order=created_at.desc&limit=${LIMIT}`,
   );
@@ -236,8 +237,9 @@ export async function networkSince(since: string): Promise<FreshEntry[]> {
     url: row.url,
     urlNormalised: row.url_normalised,
     category: row.category,
+    categoryOther: row.category_other ?? null,
     description: row.description,
-    relevance: row.relevance,
+    relevance: row.relevance ?? null,
     createdAt: row.created_at,
   }));
 }
@@ -255,7 +257,8 @@ interface RawFreshEntry {
   url: string;
   url_normalised: string;
   category: string;
+  category_other: string | null;
   description: string;
-  relevance: string;
+  relevance: string | null;
   created_at: string;
 }

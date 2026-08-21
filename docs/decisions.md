@@ -2484,3 +2484,61 @@ Any migration that adds, drops or retypes a column on a per-column-granted table
 `grant` in the same file, and `021_report_schema_v2.test.sql` now asserts both columns on both
 commands, because that four-way `has_column_privilege` check is the only thing standing between
 this and the next schema version repeating it.
+
+## 2026-08-21 — `Field.astro` has no `input` slot, and `/network/new/` shipped the wrong controls
+
+`Field.astro` renders its own control from its `type` prop. It has exactly one slot, `hint`.
+`/network/new/` had been written as though it also had an `input` slot — `<Field><select
+slot="input">…</select></Field>` — and Astro drops slotted content addressed to a named slot that
+does not exist. So every control on that form was silently the component's default
+`<input type="text">`: the category `<select>` never existed, and neither did the two
+`<textarea>`s, which meant the 200- and 600-character prose fields were single-line text boxes.
+The built page contained zero `<select>` and zero `<textarea>` elements.
+
+Nothing warns you. There is no error, no unused-prop diagnostic, and `astro check` is green,
+because passing children to a component is always legal. It presents as a feature request that
+was never implemented rather than as markup that was thrown away, which is how a `<select>` added
+in the morning was still a free-text box in the afternoon. The tell is in the built HTML, not the
+source: grep `dist/` for the element you think you wrote. `src/pages/network/new.astro` was the
+only file in the repo using `slot="input"`; every other form already used the props API.
+
+The fix is the props API plus a bespoke `fieldset` for the choice list, which is what
+`ReportFields.astro` does. `Field.astro` gained `'url'` in its `type` union — the URL field had
+been relying on the discarded slot for `type="url"`. An `input` slot was deliberately *not*
+added: it would be a second way to do what the props API already does, and the next form to use
+it would have the same silent failure available to it again.
+
+## 2026-08-21 — The network category is a closed vocabulary with an `other`, and it is radios
+
+`public.network_category` gains `other`, and `public.network_entries` gains `category_other`,
+required exactly when the category is `other` and refused otherwise — the same both-directions
+CHECK as `reports.area_other`, for the same reason: an unqualified `other` is a row that has
+opted out of the axis, and a label on a row that is not `other` is a field that will never be
+displayed and will be read as data by somebody.
+
+It is a radio list rather than a `<select>`, matching Area on the report form and following the
+note already in `forms.css` — a select hides most of the options and every one of their
+explanations, and a category chosen without reading the alternatives is the one that makes the
+listing filter useless. Each category therefore carries a one-line hint in `CATEGORIES`
+(`src/lib/network.ts`), which is also what makes `other` honest: it says "you will be asked to
+say which".
+
+The free-text box is cleared when the category changes away from `other`, exactly as
+`syncAreaOther()` does on the report form. Left behind, it would fail the CHECK from a field no
+longer on screen — the submission is refused because of something the submitter cannot see.
+
+## 2026-08-21 — One prose box on a network entry, not two
+
+"Why mathematicians should care" (`relevance`, 600 characters) was removed from the form and the
+description's cap went from 200 to 1000, with a prompt that asks for both halves: *Explain what
+it is and why it can be of interest to the community.* Two short prose boxes in a row asked one
+question twice, and 200 characters was not enough to say what a thing is once the second box had
+taken the interesting half of the answer.
+
+`relevance` is **made nullable, not dropped**. Nothing writes it and the form no longer offers
+it, but the column keeps whatever rows were submitted while it was collected: dropping it would
+destroy the only copy of text somebody wrote by hand, and a column that is null on every new row
+costs one field in the CSV and nothing else. Its length CHECK needed no change, because a CHECK
+evaluates to NULL on a NULL input and NULL passes. The listing renders the paragraph only when
+there is one — an empty `<p class="entry-card__relevance">` carries a bottom margin and would
+open a gap under the description of every entry submitted since.
