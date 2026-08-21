@@ -16,11 +16,11 @@ not belong, and says so. The moderator decides whether it stays up or comes down
 **writes an explanation that both the author and the flagger read.**
 
 There is a second kind of decision, and it is about a person rather than a post: **an account
-can be banned.** That is for the case no sequence of hides answers — an account posting the
-same advertisement eleven times, or one whose contribution to every thread is hostility. It
-stops them writing anything, it leaves everything they have already written where it is, it is
-reversible, and like every other decision here it carries an explanation the account holder
-reads. See *Banning an account* below.
+can be banned.** That is for extreme cases — an account posting the same advertisement eleven
+times, or one whose contribution to every thread is hostility. It stops them writing anything,
+it leaves everything they have already written where it is, it is reversible, and like every
+other decision here it carries an explanation the account holder reads. See *Banning an account*
+below.
 
 Why this way round is in `docs/decisions.md` under *Post-moderation*. The short version:
 pre-moderation put two volunteers between a mathematician and the corpus, scaled with

@@ -60,10 +60,18 @@ See `docs/decisions.md` for the reasoning behind non-obvious choices.
 
 ## Moderation
 
-Nothing is reviewed before it is published. Moderation is what happens when somebody flags
-something: a moderator decides whether it stays up and writes an explanation that both the
-author and the flagger read. The screen is at `/moderate/`. There is no navigation link to
-it — it is documented in `docs/moderation.md`, which is where new moderators are pointed.
+MathemAct can count on a couple of volunteer moderators. They are not gatekeepers for content:
+anything users post is published right away, withouth needing a review. However, moderation exists
+as a tool to make sure that the content of the website doesn't violate the
+[/code-of-conduct/](docs/code-of-conduct.md). 
+Users have the possibility to flag content if they deem it inappropriate. A moderator then
+decides whether it stays up and writes an explanation that both the author and the flagger read.
+For serious and repeated violations, accounts can be banned. Banned users can still access the
+site, but in read-only mode, they can't post anything. The content they have already posted stays
+up, but each contribution can be flagged and reviewed as any other post and comment can. Banned
+users can appeal the decision and a second moderator will review it.
+The moderation screen is at `/moderate/`. There is no navigation link to it — it is documented in
+`docs/moderation.md`, which is where new moderators are pointed.
 
 ## Reporting a bug
 

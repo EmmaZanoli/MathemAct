@@ -65,7 +65,32 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
     them collectively.
   </p>
 
-  <h2>Openness and trust</h2>
+  <h2>A respectful community</h2>
+
+    <p>
+    We encourage users to adhere to the website's <a href={path('/code-of-conduct/')}>code of conduct</a>.
+    In it, we have attempted to establish ground ruls for what constitutes acceptable vs. unacceptable behavior.
+    The document also details what happens to users who violate its principles.
+    </p>
+
+    <p>
+    MathemAct can count on a couple of volunteer moderators. They are not gatekeepers for content:
+    anything users post is published right away, withouth needing a review. However, moderation exists
+    as a tool to make sure that the content of the website remains appopriate and respectful: 
+    users have the possibility to flag content if they deem it inappropriate, a moderator then
+    decides whether it stays up and writes an explanation that both the author and the flagger read.
+    For serious and repeated violations, accounts can be suspended. Suspended users can still access the
+    site, but in read-only mode, they can't post anything. The content they have already posted stays
+    up, but each contribution can be flagged and reviewed as any other post and comment can. Suspended
+    users can appeal the decision and a second moderator will review it.
+    </p>
+
+    <p>
+    Full details on how moderation, flagging and supensions work can be found on the
+    <a href={path('/code-of-conduct/')}>code of conduct</a> page.
+    </p>
+
+  <h2>A place of openness and trust</h2>
 
   <p>
     Contributions can be made under a real name or a pseudonym. Institutional verification is available for
@@ -77,19 +102,7 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
     Published contributions are openly available under a <a href={LICENCE.url} rel="license"
       >{LICENCE.fullName} ({LICENCE.name})</a
     >, and the underlying corpus is made available as structured data.
-  </p>
-
-  <p>
-    Nothing is reviewed before it appears. Moderation happens when a reader flags something, and
-    every decision is explained in writing to the person who wrote the content and to the person
-    who flagged it. Separately, an account can be suspended for spam or sustained hostility —
-    which stops it posting, leaves everything it has already posted in place, is explained to
-    whoever holds it, and can be lifted. The
-    <a href={path('/code-of-conduct/')}>code of conduct</a> sets out what is in scope, what
-    happens after a flag, and exactly what a suspension does and how to appeal it.
-  </p>
-
- 
+  </p> 
 
   <p>
     While MathemAct was not inspired by the <a class="principles__link" href={LEIDEN.url}>Leiden Declaration on Artificial Intelligence and Mathematics</a>, its aims
@@ -109,8 +122,14 @@ import { LEIDEN, LICENCE, SITE } from '../lib/site';
   </p>
 
   <p>
-    Suggestions, criticism, complaints, and reports of things that do not work are especially useful. You can
+    Suggestions, criticism, complaints, and requests for new features are highly appreciated. You can
     send them to <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.
+  </p>
+
+  <p>
+    Reports of things that do not work are especially useful. If you run into technical issues, please reach out to <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>
+    detailing what went wrong. The website is actively maintained, even though on a volunteer basis: we will address
+    your concern at the earliest opportunity.
   </p>
 
   <h2>Writing mathematics</h2>
