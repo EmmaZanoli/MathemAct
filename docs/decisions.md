@@ -2542,3 +2542,30 @@ costs one field in the CSV and nothing else. Its length CHECK needed no change, 
 evaluates to NULL on a NULL input and NULL passes. The listing renders the paragraph only when
 there is one — an empty `<p class="entry-card__relevance">` carries a bottom margin and would
 open a gap under the description of every entry submitted since.
+
+## 2026-08-21 — The accessibility page states type properties, and claims no conformance from them
+
+`/accessibility/` gained a *Type and legibility* section. It opens by saying that WCAG places no
+requirement on typeface choice, and that is the load-bearing sentence: there is no such thing as
+an accessible font, no certification behind IBM Plex, and a page that implied otherwise would be
+making the one kind of claim this audience checks. What the section does instead is state
+properties that can be verified — x-height at 74% of cap height, body at 17px/1.6, sizes in
+`rem` so zoom and an OS text-size setting work, latin-ext shipped so a diacritic does not change
+face mid-name, `font-display: swap` with a real fallback stack, and no text as an image.
+
+The reason the Serif / Sans / Mono split belongs on an accessibility page rather than only in the
+design notes: **Plex Mono dots its zero and the other two families do not.** In Sans and Serif,
+`0` and `O` differ only in width. Everything on this site meant to be read character by character
+— a model name, a version string, a date, a score — is already Mono for semantic reasons, so the
+family that disambiguates is the family carrying the strings where it matters, and that is worth
+saying out loud because it is the sort of thing a later refactor breaks by "unifying" the
+metadata font. `Il1` is unambiguous in all three; that was checked by rendering the committed
+woff2 files, not assumed. Plex Sans does not draw a bare-stem capital I, which is the thing one
+expects to find wrong and is not.
+
+Two honest limitations were added rather than omitted: the `0`/`O` width-only distinction in Sans
+and Serif, and Kalam, whose `I`, `l` and `1` are near-identical strokes. Kalam is defensible only
+because it is fenced to the home page diagram and never touches prose, and because that diagram
+carries `role="img"` with a title and a description — so the fix for its illegibility is already
+shipped. Stating the limitation is also what keeps the fence visible: the day Kalam appears in a
+sentence, this page is wrong.
