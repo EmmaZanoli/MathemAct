@@ -47,8 +47,11 @@ import { path } from '../../lib/paths';
           <span class="meta" data-status-label></span>
         </p>
 
+        {/* An h1 for the same reason as on /debates/<id>/ — see the note there. Empty
+            until the fetch lands, which is why it sits inside the hidden [data-content]
+            wrapper: an h1 with no text is worse than no h1. */}
         <blockquote class="debate__statement">
-          <p data-statement></p>
+          <h1 data-statement></h1>
         </blockquote>
 
         <ul class="card__facts" role="list">

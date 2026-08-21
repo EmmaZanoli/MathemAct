@@ -2569,3 +2569,89 @@ because it is fenced to the home page diagram and never touches prose, and becau
 carries `role="img"` with a title and a description — so the fix for its illegibility is already
 shipped. Stating the limitation is also what keeps the fence visible: the day Kalam appears in a
 sentence, this page is wrong.
+
+## 2026-08-21 — The debate statement is the page's `h1`, inside the blockquote
+
+A debate page had no `h1` at all. The statement was a `<p>` inside `<blockquote
+class="debate__statement">` — right about the blockquote, which says the site is reporting a
+claim rather than making one — but it left the page's first heading as *1. Where do you stand?*
+That is what a screen reader's heading list opened on, and it is the rating control, not the
+subject.
+
+It is now `<blockquote><h1>`. A blockquote takes flow content so a heading is legal inside one;
+the other nesting, an `h1` wrapping a `blockquote`, is not, which is why this is the shape. No
+visually hidden duplicate: the statement is announced once, as the heading it already was
+visually. `/debates/view/` got the same change, where the `h1` is empty until the fetch lands
+and therefore sits inside the existing hidden `[data-content]` wrapper — an `h1` with no text is
+worse than no `h1`.
+
+**It fixed a second thing nobody had connected to it.** Pagefind takes a result title from the
+first `h1` and falls back to `<title>`, so every debate came back in search as *"… —
+MathemAct"* while every report came back clean. Verified in `dist/pagefind/fragment/`: the
+indexed title went from `AI is exceptional as a reading assistant. — MathemAct` to `AI is
+exceptional as a reading assistant.` A missing heading is not only an assistive-technology
+problem; anything deriving structure from the document pays for it.
+
+The CSS is now `.debate__statement > *`, not `> h1`, for the reason already recorded about
+`.card__facts > li + li`: an element name inside a shared-class selector is a silent opt-out.
+The rule addressed `p`, and the moment the element changed it matched nothing and the claim
+would have rendered at body size — no error, no warning. `corpus` is the last layer, so it wins
+over `:where(h1)` in `base` regardless of the lower specificity of `> *`.
+
+## 2026-08-21 — `--outcome-partial` is 4.63:1, and the glyph-only rule was never about contrast
+
+`tokens.css` gave two different ratios for `#8a6a1f` in one file — 4.41:1 in the prose comment
+and 4.6:1 on the declaration — and `Tombstone.astro`, `OutcomeChoice.astro` and CLAUDE.md all
+repeated 4.4:1 with the conclusion that it *fails* the 4.5:1 floor for body text. Computed
+against `--ground` it is **4.63:1**, which passes at every text size. Every other documented
+ratio in the file checks out to the stated precision, so this was one bad number, not a bad
+method.
+
+Nothing in the rendered site changes. The rule — outcome colour on the square, label in ink —
+stands on the other reason the same comment gave, and called "the one that matters": colour must
+never be the sole carrier of meaning. The correction is worth making because a wrong contrast
+figure is the kind of thing somebody later acts on, and the action it invites is darkening
+`--outcome-partial` to clear a floor it already clears. The comment now says outright not to
+reinstate the contrast argument.
+
+## 2026-08-21 — What the accessibility review changed, and what it deliberately did not
+
+An audit of all 33 built pages (landmarks, labels, names, heading order, duplicate ids,
+`autocomplete`, fieldset legends, in-page anchor targets) came back with one real structural
+defect, the missing debate `h1` above. Three findings were false positives worth recording so
+the next audit does not chase them:
+
+- **Unlabelled controls in the tool and supporting-link rows.** They live in a `<template>`, and
+  lxml does not implement `<template>`, so it hoists the content and any "is this inert?" test
+  fails. Parse built HTML with html5lib when the question is what is in the accessibility tree.
+  The labels are real: `bind()` in `src/lib/report-form.ts` assigns a unique `id` and points
+  `label.htmlFor` at it as each row is cloned.
+- **Two unnamed `<svg>`s on the home page.** Both sit inside `<div aria-hidden="true">`.
+  `aria-hidden` inherits; a check that only looks at the element itself will report these
+  forever.
+- **Two `<header>`s per page.** `header` is only `role="banner"` when it is *not* inside
+  `article`, `aside`, `main`, `nav` or `section`. `.page__header` is inside `main`, so there is
+  exactly one banner.
+
+Verified rather than assumed, and now stated on `/accessibility/`: KaTeX really does emit MathML
+with `output: 'htmlAndMathml'` and marks the visual copy `aria-hidden` (checked by running the
+`src/lib/markdown.ts` plugin chain over a test formula, not by reading the config); no
+stylesheet anywhere uses `order` or a `-reverse` flex direction, so DOM order is visual order;
+input borders are `--ink-muted` at 8.4:1, not the 1.3:1 hairline; the skip link is the first
+element in `<body>`; and the focus ring's 2px offset is load-bearing for contrast as well as for
+looks — ink on the page is 16:1, but ink drawn tight against a filled `--accent` button would be
+2.6:1.
+
+**The page's claim that there are "no animations by default" was false** and is now stated
+exactly: there is one, a 220ms reveal on the report form's conditional scales, and it is set to
+`none` under `prefers-reduced-motion`.
+
+Two deviations from the "these three colours appear nowhere else" rule were found and left
+alone, because they are design questions rather than accessibility ones and both pass contrast:
+`--outcome-partial` on text in `/moderate/` and `--outcome-failed` on the unreachable-entry
+badge in `/network/`.
+
+Not built, and the reason it is now a stated limitation on the page rather than a silent one:
+**no automated accessibility check runs anywhere.** `test-db.yml` gates the schema and
+`auth-config.yml` catches dashboard drift, but every claim on `/accessibility/` was verified by
+hand on one day and nothing goes red if one regresses.

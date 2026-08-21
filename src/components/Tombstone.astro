@@ -15,8 +15,9 @@
  *    the full phrase, so assistive tech hears "Reported outcome: partially worked.
  *    Last confirmed against an older model" while the screen shows "Partially worked".
  *  - Colour is never the only signal: fill state and the text label both carry it, and
- *    the outcome colour goes on the square rather than the label. --outcome-partial is
- *    4.4:1 on ground, fine for a graphic and short of the 4.5:1 floor for text.
+ *    the outcome colour goes on the square rather than the label. That is a rule about
+ *    meaning, not about contrast: all three outcome colours clear 4.5:1 on the ground,
+ *    --outcome-partial included at 4.63:1. See the note in tokens.css.
  */
 import { OUTCOME, TOMBSTONE_STATUS, tombstoneName } from '../lib/status';
 import type { Outcome, TombstoneStatus } from '../lib/status';

@@ -61,14 +61,20 @@
    * worked / partially worked / did not work. These three appear NOWHERE else — the
    * moment they are borrowed for a button or a link, they stop meaning anything.
    *
-   * They are applied to the tombstone glyph, never to the label. Two reasons, and the
-   * second is the one that matters:
+   * They are applied to the tombstone glyph, never to the label. There is one reason and
+   * it is not the contrast:
    *
-   *  1. --outcome-partial is 4.41:1 on ground, just under the 4.5:1 floor for body
-   *     text. As a glyph it is a graphic and clears the 3:1 threshold comfortably.
-   *  2. Colour must never be the sole carrier of meaning. The label states the outcome
-   *     in words regardless; leaving it in ink keeps that the primary signal and the
-   *     colour a secondary cue, which is the correct ordering.
+   *  Colour must never be the sole carrier of meaning. The label states the outcome in
+   *  words regardless; leaving it in ink keeps that the primary signal and the colour a
+   *  secondary cue, which is the correct ordering.
+   *
+   * This block used to give a second reason — that --outcome-partial is 4.41:1 and so
+   * falls short of the 4.5:1 floor for body text. That number was wrong. #8a6a1f on
+   * #f8f5ee is 4.63:1, which the inline comment below has said all along, and it passes
+   * AA at every text size. Corrected 2026-08-21; the behaviour does not change, because
+   * the reason above was always the load-bearing one. Do not reinstate the contrast
+   * argument: it invites somebody to "fix" the colour to clear a floor it already clears,
+   * and it teaches that the rule is about legibility when the rule is about meaning.
    *
    * ── The accent is now red, and --outcome-failed is a red too ──────────────────────
    * This is the one uncomfortable consequence of the 2026-08-17 palette change, and it
@@ -85,7 +91,7 @@
    * --outcome-failed, not to move the accent back.
    */
   --outcome-worked: #2e6b4f; /*  5.8:1 */
-  --outcome-partial: #8a6a1f; /*  4.6:1 — glyph only, see above */
+  --outcome-partial: #8a6a1f; /*  4.63:1 — glyph only, see above */
   --outcome-failed: #8a3a34; /*  7.0:1 */
 
   /* ══ Type ═════════════════════════════════════════════════════════════════════════

@@ -634,7 +634,12 @@
     border: 0;
   }
 
-  .debate__statement p {
+  /* `> *`, not `> h1`, and the reason is the one already written down about
+     `.card__facts > li + li`: an element name inside a shared-class selector is a silent
+     opt-out. This rule addressed `p` until the statement became the page's h1, at which
+     point it matched nothing and the claim rendered at body size — no error, no warning,
+     just a headline that stopped being one. There is one child either way. */
+  .debate__statement > * {
     margin: 0;
     color: var(--accent-strong);
     font-family: var(--font-serif);
@@ -759,7 +764,7 @@
   }
 
   @media (max-width: 42rem) {
-    .debate__statement p {
+    .debate__statement > * {
       font-size: var(--size-6);
     }
 
