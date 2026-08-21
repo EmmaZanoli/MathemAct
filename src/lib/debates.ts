@@ -15,9 +15,15 @@
  * prevents is the ordinary reader seeing a distribution before they have thought about the
  * question, which is where the effect actually comes from.
  *
- * **Nothing here computes a mean.** Not from the histogram, not from the counts, not
- * anywhere. The mean of an 11-point bipolar scale is misleading exactly when the
- * distribution is bimodal, and bimodal is what to expect on the contested debates.
+ * **Nothing here computes a mean, and that has not changed.** What changed on 2026-08-21 is
+ * that `public.rating_aggregate` now returns one, so this module carries it. It does not derive
+ * it: not from the histogram, not from the counts, not anywhere, because a second mean computed
+ * to a second definition is the failure the single-source rule exists to prevent.
+ *
+ * The original reason for having no mean at all survives as a display rule. The mean of an
+ * 11-point bipolar scale is misleading exactly when the distribution is bimodal, and bimodal is
+ * what to expect on the contested debates — so it is shown beside the median, never as a
+ * headline, never on a card, never on a sort control, and never without the histogram beside it.
  */
 import { getSupabase } from './supabase';
 import type { Area } from './report-schema';
@@ -71,20 +77,66 @@ export interface Debate {
 /**
  * The aggregate, exactly as public.debate_ratings reports it.
  *
- * There is no `mean` field and there must never be one. If a future consumer wants central
- * tendency, it has the median; if it wants spread, it has the whole histogram.
+ * `mean` was added on 2026-08-21 and had been prohibited before it. The analysis behind the
+ * prohibition stands — on a bimodal distribution the mean reports mild agreement for a
+ * community that has split cleanly in two — so it survives as a **display** rule rather than as
+ * an absent field: the mean is shown beside the median, never as a headline, never on a card,
+ * never on a sort control, and never without the histogram beside it. See docs/decisions.md.
  */
 export interface Aggregate {
   /** Eleven counts. Index i holds the number of people who chose score i. */
   readonly histogram: readonly number[];
   /** Null when nobody has expressed an opinion — everyone declined, or nobody answered. */
   readonly median: number | null;
+  /**
+   * Secondary, and null on the same condition as the median. **Not zero** when nobody has an
+   * opinion: zero is a position on this scale and means strong disagreement.
+   */
+  readonly mean: number | null;
   /** Everyone who answered, including those who declined. */
   readonly totalRaters: number;
   readonly opinionCount: number;
   readonly noOpinionCount: number;
   /** opinionCount / totalRaters, or null when nobody has answered at all. */
   readonly coverage: number | null;
+}
+
+/**
+ * The rest of what the export computes per debate, which the live aggregate does not carry.
+ *
+ * Split from `Aggregate` on purpose, and the split is the boundary between two sources rather
+ * than a tidying-up. `Aggregate` is exactly `public.debate_ratings`, so it is the shape both
+ * the export and a live browser query return. Everything here is an **export-time product**:
+ * `divided` and `consensus` are computed in scripts/export.mjs, and `positionChanges` counts
+ * `public.rating_changes`, which no browser role may read at all.
+ *
+ * A consumer holding only an `Aggregate` therefore cannot accidentally render a figure that
+ * would be missing the moment it came from a live call instead.
+ */
+export interface DebateStats extends Aggregate {
+  /**
+   * Contributions on this debate, soft-deleted ones included: their positions still count.
+   *
+   * **Null when the export predates the field**, which is not the same as zero and must not be
+   * rendered as one — an export written before 2026-08-21 has debates with contributions and
+   * no count of them, and printing "0 contributions" under a chart with contributions beneath
+   * it would be the page contradicting itself.
+   */
+  readonly contributionCount: number | null;
+  /** How many people the arguments moved. Distinct people, not edits. Null on the same
+   *  condition as above, and for the same reason. */
+  readonly positionChanges: number | null;
+  /**
+   * Twice the smaller of the two sides' shares, over the scored positions only.
+   *
+   * Null below `sortableMinimum`, and null is not zero: zero means "nobody disagrees", which a
+   * debate with four answers has not established.
+   */
+  readonly divided: number | null;
+  /** The largest share held by any one of the five families. Null on the same condition. */
+  readonly consensus: number | null;
+  /** The threshold the two above need. Carried so the page can say it rather than hard-code it. */
+  readonly sortableMinimum: number;
 }
 
 export type Result<T> =
@@ -100,13 +152,18 @@ const EXPORTED = import.meta.glob<{ default: Debate[] }>('/data/debates.json', {
   eager: true,
 });
 
+/**
+ * The per-debate statistics from the nightly export.
+ *
+ * Typed as the full `DebateStats` now rather than the two fields the listing needed, because
+ * the debate page reads the distribution from here. Every field is optional in practice: a
+ * `data/` written before 2026-08-21 has no `mean`, no `divided` and no `positionChanges`, and a
+ * `data/` written before the corpus existed has no rows at all. `statsFor()` is where that is
+ * handled once.
+ */
 const AGGREGATES = import.meta.glob<{
-  default: readonly { debateId: string; totalRaters: number }[];
+  default: readonly Partial<DebateStats>[] & readonly { debateId: string }[];
 }>('/data/debate-ratings.json', { eager: true });
-
-const COMMENTS = import.meta.glob<{
-  default: readonly { parentType: string; parentId: string }[];
-}>('/data/comments.json', { eager: true });
 
 let cached: Debate[] | null = null;
 
@@ -152,17 +209,73 @@ export async function debatesByAuthor(authorId: string): Promise<Debate[]> {
   );
 }
 
-/** Interaction count per debate id: totalRaters (from aggregate) + comment count.
- *  Call this at build time to populate data-interactions on each debate list item. */
-export function listDebateInteractionCounts(): Map<string, number> {
-  const counts = new Map<string, number>();
-  const bump = (id: string, by = 1) => counts.set(id, (counts.get(id) ?? 0) + by);
+/**
+ * Every debate's statistics, by id, from the export. Build time only.
+ *
+ * A debate missing from the map has no aggregates, and there are two ways to be in that state
+ * — posted since the last export, or in an export written before these fields existed. Both are
+ * the same fact for every consumer: **render no distribution, and be ineligible for the two
+ * aggregate sorts.** Nothing here substitutes a zero for an absence.
+ */
+let statsCache: Map<string, DebateStats> | null = null;
+
+export function listDebateStats(): Map<string, DebateStats> {
+  if (statsCache) return statsCache;
+
+  const stats = new Map<string, DebateStats>();
 
   for (const row of Object.values(AGGREGATES)[0]?.default ?? []) {
-    bump(row.debateId, row.totalRaters);
+    const histogram = row.histogram;
+
+    // A row with no histogram is not a debate nobody answered — the export writes eleven zeros
+    // for those. It is a row from an older file, and it has nothing to render.
+    if (!Array.isArray(histogram) || histogram.length !== SCALE_POINTS.length) continue;
+
+    stats.set(row.debateId, {
+      histogram,
+      median: row.median ?? null,
+      mean: row.mean ?? null,
+      totalRaters: row.totalRaters ?? 0,
+      opinionCount: row.opinionCount ?? 0,
+      noOpinionCount: row.noOpinionCount ?? 0,
+      coverage: row.coverage ?? null,
+      // `?? null`, not `?? 0`. See the note on the type: an older export has debates with
+      // contributions and no count of them, and a zero would be the page asserting otherwise.
+      contributionCount: row.contributionCount ?? null,
+      positionChanges: row.positionChanges ?? null,
+      // `?? null` and not `?? 0`. An older export has no shares at all, and the whole point of
+      // the null is that it is not a reading.
+      divided: row.divided ?? null,
+      consensus: row.consensus ?? null,
+      sortableMinimum: row.sortableMinimum ?? 10,
+    });
   }
-  for (const comment of Object.values(COMMENTS)[0]?.default ?? []) {
-    if (comment.parentType === 'debate') bump(comment.parentId);
+
+  statsCache = stats;
+  return stats;
+}
+
+/** One debate's statistics, or undefined when the export has none for it. */
+export function statsFor(debateId: string): DebateStats | undefined {
+  return listDebateStats().get(debateId);
+}
+
+/**
+ * Interaction count per debate id: positions plus contributions.
+ *
+ * The ordering key behind the "Most answered" sort, and the number itself is never shown. It
+ * now comes entirely from the aggregate file — `contributionCount` is computed there — rather
+ * than from a second pass over comments.json. Two files counting the same thing is how a sort
+ * key and a page come to disagree.
+ */
+export function listDebateInteractionCounts(): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const [id, stats] of listDebateStats()) {
+    // `?? 0` is right here and wrong in the type. As a sort key an unknown contribution count
+    // has to be some number, and treating it as none orders the debate by its rater count
+    // alone — which is a worse ordering, not a wrong figure. Nothing renders this.
+    counts.set(id, stats.totalRaters + (stats.contributionCount ?? 0));
   }
 
   return counts;
@@ -252,7 +365,9 @@ export async function loadAggregate(debateId: string): Promise<Result<Aggregate>
   try {
     const { data, error } = await supabase
       .from('debate_ratings')
-      .select('histogram, median, total_raters, opinion_count, no_opinion_count, coverage')
+      .select(
+        'histogram, median, mean, total_raters, opinion_count, no_opinion_count, coverage',
+      )
       .eq('debate_id', debateId)
       .maybeSingle();
 
@@ -266,6 +381,10 @@ export async function loadAggregate(debateId: string): Promise<Result<Aggregate>
       value: {
         histogram: (data.histogram as number[]) ?? SCALE_POINTS.map(() => 0),
         median: data.median as number | null,
+        // `data.mean` arrives as a string: node-postgres and PostgREST both render `numeric`
+        // as text rather than risk a float, so Number() is not decoration. Null stays null —
+        // nobody has an opinion is not a mean of zero.
+        mean: data.mean === null || data.mean === undefined ? null : Number(data.mean),
         totalRaters: (data.total_raters as number) ?? 0,
         opinionCount: (data.opinion_count as number) ?? 0,
         noOpinionCount: (data.no_opinion_count as number) ?? 0,

@@ -54,10 +54,12 @@ import { path } from '../../lib/paths';
           <h1 data-statement></h1>
         </blockquote>
 
+        {/* No date line, matching /debates/<id>/. "Active since <date>" described a lifecycle
+            the site stopped having on 2026-08-18, and dating a standing question framed it as
+            news. */}
         <ul class="card__facts" role="list">
           <li data-pagefind-filter="area" data-area></li>
           <li data-author></li>
-          <li><span class="meta" data-date></span></li>
         </ul>
       </header>
 
@@ -66,8 +68,13 @@ import { path } from '../../lib/paths';
         <p class="field-block__body" data-rationale-text></p>
       </section>
 
+      {/* No `data-contributions` or `data-position-changes`: this page exists for a debate the
+          export has never seen, so those two figures do not exist for it and the statistics
+          line ends after the mean. That is the point of them being absent rather than zero. */}
       <section class="rate" data-rate data-debate-id="" data-pagefind-ignore>
-        <h2>Where do you stand?</h2>
+        {/* Removed outright once they have answered, exactly as on /debates/<id>/. */}
+        <div data-rate-ask hidden>
+          <h2>Where do you stand?</h2>
 
         <div class="panel" data-rate-signedout hidden>
           <p>
@@ -93,6 +100,7 @@ import { path } from '../../lib/paths';
 
           <FormStatus id="rate-status" />
         </form>
+        </div>
 
         <p class="rate__withheld" data-rate-withheld hidden>
           The distribution is hidden until you have answered, so that what other people think
@@ -100,8 +108,14 @@ import { path } from '../../lib/paths';
         </p>
 
         <div data-aggregate-wrap hidden>
-          <h3>How people answered</h3>
+          <h2>How people answered</h2>
           <Histogram />
+
+          <p class="rate__again">
+            <button class="button" type="button" data-rate-again>Update my answer</button>
+          </p>
+
+          <FormStatus id="rate-outcome" />
         </div>
       </section>
 
@@ -127,7 +141,6 @@ import { path } from '../../lib/paths';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
   import { areaLabel } from '../../lib/report-schema';
-  import { longDate } from '../../lib/format';
   import { path } from '../../lib/paths';
 
   const params = new URLSearchParams(window.location.search);
@@ -183,11 +196,6 @@ import { path } from '../../lib/paths';
       authorEl.appendChild(erased);
     }
 
-    const dateEl = document.querySelector<HTMLElement>('[data-date]')!;
-    dateEl.textContent = debate.activatedAt
-      ? `Active since ${longDate(debate.activatedAt)}`
-      : `Proposed ${longDate(debate.createdAt)}`;
-
     if (debate.rationale) {
       const rationaleSection = document.querySelector<HTMLElement>('[data-rationale]')!;
       const rationaleText = document.querySelector<HTMLElement>('[data-rationale-text]')!;
@@ -217,13 +225,16 @@ import { path } from '../../lib/paths';
 
   function initRating(debateId: string): void {
     const root = query<HTMLElement>('[data-rate]');
+    const ask = query<HTMLElement>('[data-rate-ask]', root);
     const signedOut = query<HTMLElement>('[data-rate-signedout]', root);
     const unconfirmed = query<HTMLElement>('[data-rate-unconfirmed]', root);
     const form = query<HTMLFormElement>('[data-rate-form]', root);
     const withheld = query<HTMLElement>('[data-rate-withheld]', root);
     const wrap = query<HTMLElement>('[data-aggregate-wrap]', root);
     const histogram = query<HTMLElement>('[data-histogram]', root);
+    const again = query<HTMLButtonElement>('[data-rate-again]', root);
     const status = query<HTMLElement>('#rate-status', root);
+    const outcome = query<HTMLElement>('#rate-outcome', root);
     const submit = query<HTMLButtonElement>('button[type="submit"]', form);
 
     let userId: string | null = null;
@@ -235,6 +246,7 @@ import { path } from '../../lib/paths';
 
       if (state.status !== 'signed-in') {
         userId = null;
+        ask.hidden = false;
         signedOut.hidden = false;
         form.hidden = true;
         withheld.hidden = false;
@@ -252,15 +264,17 @@ import { path } from '../../lib/paths';
       const profile = await loadProfile(id);
 
       if (profile.ok && !mayPost(profile.value)) {
+        ask.hidden = false;
         unconfirmed.hidden = false;
         withheld.hidden = false;
         return;
       }
 
-      form.hidden = false;
-
       const mine = await loadMyRating(debateId, id);
       if (!mine.ok) {
+        ask.hidden = false;
+        form.hidden = false;
+        withheld.hidden = false;
         showStatus(status, 'error', mine.message);
         return;
       }
@@ -269,30 +283,51 @@ import { path } from '../../lib/paths';
       myScore = mine.value.score;
 
       if (iRated) {
-        const value = myScore === null ? 'none' : String(myScore);
-        const input = form.querySelector<HTMLInputElement>(
-          `input[name="score"][value="${value}"]`,
-        );
-        if (input) input.checked = true;
-
+        reflect();
         submit.textContent = 'Update my answer';
         await reveal();
       } else {
+        ask.hidden = false;
+        form.hidden = false;
         withheld.hidden = false;
       }
+    }
+
+    function reflect(): void {
+      const value = myScore === null ? 'none' : String(myScore);
+      const input = form.querySelector<HTMLInputElement>(
+        `input[name="score"][value="${value}"]`,
+      );
+      if (input) input.checked = true;
     }
 
     async function reveal(): Promise<void> {
       const aggregate = await loadAggregate(debateId);
       if (!aggregate.ok) {
+        ask.hidden = false;
+        form.hidden = false;
         showStatus(status, 'error', aggregate.message);
         return;
       }
 
+      ask.hidden = true;
       withheld.hidden = true;
       wrap.hidden = false;
+
+      // No static counts on this page: a debate the export has never seen has no contribution
+      // count and no position-change count, and the line ends after the mean rather than
+      // claiming both are zero.
       renderHistogram(histogram, aggregate.value, myScore, iRated);
     }
+
+    again.addEventListener('click', () => {
+      hideStatus(status);
+      hideStatus(outcome);
+      ask.hidden = false;
+      form.hidden = false;
+      reflect();
+      form.querySelector<HTMLInputElement>('input[name="score"]:checked')?.focus();
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -330,12 +365,13 @@ import { path } from '../../lib/paths';
 
       await reveal();
 
+      // On the results panel, because reveal() has just hidden the block #rate-status is in.
       showStatus(
-        status,
+        outcome,
         'success',
         editing
-          ? 'Rating updated.'
-          : 'Answer recorded. Yours is never shown next to your name — only the distribution is public.',
+          ? 'Your position has been updated.'
+          : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
       );
     });
   }

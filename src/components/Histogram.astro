@@ -2,12 +2,19 @@
 /**
  * The distribution of answers to one debate.
  *
- * A histogram and a median, and no mean — the whole reason CLAUDE.md insists on this shape
- * is that the mean of an 11-point bipolar scale is misleading exactly when the distribution
- * is bimodal, and bimodal is what to expect on the contested debates. A single number
- * would report "6.2, mild agreement" for a community that had split cleanly into two camps.
- * The bars are the finding; the median is a summary of them that cannot invent a middle
- * nobody occupies.
+ * A histogram, a median, and — since 2026-08-21 — a mean, in that order of prominence and for
+ * that reason. The mean of an 11-point bipolar scale is misleading exactly when the
+ * distribution is bimodal, and bimodal is what to expect on the contested debates: a single
+ * number reports "6.2, mild agreement" for a community that has split cleanly into two camps.
+ * The bars are the finding; the median is a summary of them that cannot invent a middle nobody
+ * occupies; the mean is given because people ask for it.
+ *
+ * **The display rule is what carries the old prohibition, so it lives here rather than only in
+ * CLAUDE.md.** The mean never appears as a headline, never on a card, never on a sort control,
+ * and never without the histogram beside it. In this component that means: in the statistics
+ * line and nowhere else, smaller than the median, muted where the median is ink, and below the
+ * chart rather than above it. The four equal stat cards that used to sit here were removed for
+ * exactly this reason — they made every number a headline, and one of them is now the mean.
  *
  * Accessibility, which is most of the work here
  * ---------------------------------------------
@@ -56,33 +63,44 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     <tbody data-histogram-rows></tbody>
   </table>
 
-  {/* Coverage is its own number, per CLAUDE.md, because a median over four opinions out of
-      forty raters means something very different from a median over thirty-eight. */}
-  <dl class="histogram__counts" data-histogram-counts>
-    <div>
-      <dt>Median</dt>
-      <dd data-stat="median">—</dd>
-    </div>
-    <div>
-      <dt>Gave a score</dt>
-      <dd data-stat="opinions">0</dd>
-    </div>
-    <div>
-      <dt>No opinion</dt>
-      <dd data-stat="no-opinion">0</dd>
-    </div>
-    <div>
-      <dt>Coverage</dt>
-      <dd data-stat="coverage">—</dd>
-    </div>
-  </dl>
+  {/* Somebody who declined has no column, because "outside my expertise" is not a position on
+      a scale of agreement — and parking them at 5 would file a declared non-opinion as a
+      neutral opinion, which is the exact corruption the off-scale option exists to prevent. So
+      they are said in words instead, right under the chart they are not in. Filled and shown by
+      renderHistogram; absent when nobody declined. */}
+  <p class="histogram__offscale" data-offscale hidden></p>
+
+  {/* One line, not four cards.
+
+      The cards were four equal boxes with the numbers set at --size-5, which made every one of
+      them a headline — and one of them is now the mean. A headline mean is the specific thing
+      the display rule forbids, because it is the reading that survives when somebody skims: on
+      a bimodal debate it reports mild agreement for a community that has split cleanly in two.
+      A line puts the mean where it belongs, beside the median, smaller than it, and downstream
+      of the chart that contradicts it.
+
+      Median first among the two summaries and set heavier, because it is the one that cannot
+      invent a middle nobody occupies. Coverage is spelled as "N expressed an opinion" rather
+      than as a percentage: a ratio invites reading it as a quality score for the debate, where
+      the count invites the comparison that matters — how many of the people who answered were
+      willing to put a number on it. */}
+  <p class="histogram__line" data-histogram-line>
+    <span class="histogram__figure"><b data-stat="positions">0</b> positions</span>
+    <span class="histogram__figure"><b data-stat="opinions">0</b> expressed an opinion</span>
+    <span class="histogram__figure histogram__figure--lead">median <b data-stat="median">—</b></span>
+    <span class="histogram__figure histogram__figure--aside">mean <b data-stat="mean">—</b></span>
+    <span class="histogram__figure" data-figure="contributions" hidden><b data-stat="contributions">0</b> contributions</span>
+    <span class="histogram__figure" data-figure="changed" hidden><b data-stat="changed">0</b> changed position</span>
+  </p>
 
   <details class="histogram__why">
-    <summary>Why isn't an average shown?</summary>
+    <summary>Why is the median given more weight than the mean?</summary>
     <p class="histogram__note">
-      An average can hide disagreement and polarisation. We show the
-      complete distribution so that a divided community still looks
-      divided.
+      Because the mean hides the shape. A community split cleanly into two camps
+      produces a mean reporting mild agreement and a histogram showing the split —
+      and on the claims that matter here, the split is the finding. The mean is
+      given because people ask for it, not because it summarises this well. Read
+      the bars first.
     </p>
   </details>
 </div>
@@ -212,40 +230,53 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     text-wrap: balance;
   }
 
-  .histogram__counts {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0;
+  /* One line, wrapping on a narrow screen. The separator is a middot from ::before rather
+     than a character in the markup, so the text equivalent above does not read a row of
+     punctuation to somebody who is already getting these numbers from the table. */
+  .histogram__line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2xs) 0;
     margin: 0;
-    padding: 0;
-    overflow: hidden;
-    border: var(--border);
-    border-radius: calc(var(--radius-md) * 2);
-  }
-
-  .histogram__counts > div {
-    padding: var(--space-sm);
-    text-align: center;
-  }
-
-  .histogram__counts > div + div {
-    border-inline-start: var(--border);
-  }
-
-  .histogram__counts dt {
-    font-family: var(--font-mono);
-    font-size: var(--size-0);
-    letter-spacing: var(--tracking-wide);
-    text-transform: uppercase;
+    font-size: var(--size-2);
     color: var(--ink-muted);
   }
 
-  .histogram__counts dd {
-    margin-block-start: var(--space-3xs);
-    margin-inline-start: 0;
-    font-family: var(--font-serif);
-    font-size: var(--size-5);
+  .histogram__figure + .histogram__figure::before {
+    content: '·';
+    margin-inline: var(--space-2xs);
+    color: var(--rule);
+  }
+
+  /* Every number is mono, because monospace marks anything a machine could parse. */
+  .histogram__figure b {
+    font-family: var(--font-mono);
     font-weight: var(--weight-semibold);
+    color: var(--ink);
+  }
+
+  /* The median leads. Heavier than the mean beside it and set in ink rather than muted,
+     which is the whole of the visual hierarchy this line needs. */
+  .histogram__figure--lead {
+    color: var(--ink);
+    font-weight: var(--weight-semibold);
+  }
+
+  .histogram__figure--lead b {
+    font-size: var(--size-3);
+  }
+
+  /* And the mean is the aside. Deliberately no larger than the surrounding prose: a mean set
+     at display size is a headline whatever the words around it say. */
+  .histogram__figure--aside b {
+    color: var(--ink-muted);
+  }
+
+  .histogram__offscale {
+    margin: 0;
+    font-size: var(--size-2);
+    color: var(--ink-muted);
   }
 
   .histogram__why {

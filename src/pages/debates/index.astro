@@ -11,12 +11,15 @@
  * Nothing is endorsed by being listed here, and the page still says so in the paragraph
  * below, which is where that claim always belonged.
  *
- * No aggregate anywhere on this page, not even a count of raters. A listing that showed
- * "42 raters, median 8" would tell a reader where the community landed before they had
- * opened the question, which is exactly what the debate page is careful not to do. That is
- * also why the only filter here is area: a "has answers" or "most disagreed" filter would
- * leak the same thing one bit at a time. The popularity sort orders the list without
- * reporting a number about any single debate, which is the line.
+ * **No aggregate is rendered anywhere on this page, not even a count of raters** — and that is
+ * still true now that two of the sorts are computed from aggregates. The line is between
+ * ordering the corpus and reporting on one claim: a card reading "42 positions, median 8" tells
+ * a reader where the community landed before they opened the question, where "most divided
+ * first" tells them which arguments are live. The first is what the debate page withholds; the
+ * second is what a listing is for.
+ *
+ * The only filter is area, for the same reason: a "has answers" or "median above 7" checkbox
+ * would hand over the first thing one bit at a time.
  *
  * The rail, the count, the sort and the chips are `src/components/Listing.astro`, shared
  * with /reports/ and /network/, so the three behave identically down to the address bar.
@@ -30,10 +33,15 @@ import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { AREAS, areaLabel } from '../../lib/report-schema';
 import { DEBATE_DIMENSIONS, DEBATE_NOUN, DEBATE_SORTS, groupsFor } from '../../lib/listings';
-import { listDebates, listDebateInteractionCounts } from '../../lib/debates';
+import { listDebates, listDebateStats } from '../../lib/debates';
+import { debateCardAttrs } from '../../lib/debate-facets';
 
 const debates = await listDebates();
-const debateInteractions = listDebateInteractionCounts();
+
+/** Export-time statistics, by id. A debate absent from this map has no aggregates and is
+ *  ineligible for the two aggregate sorts — see `debateCardAttrs`, which writes the empty
+ *  string rather than a zero for exactly that case. */
+const stats = listDebateStats();
 
 /** Only the areas something is actually filed under. An area nothing uses is a dead end
  *  with a zero beside it, and on a corpus this size most of them would be. */
@@ -63,8 +71,10 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
     <div class="prose">
       <p>
         MathemAct takes no position on any of these. What it records is the shape of the
-        disagreement: the full distribution and the median, never an average, because an
-        average reports mild agreement for a community that has split cleanly into two camps.
+        disagreement, and the distribution is the finding: every position, counted. The median
+        is the summary statistic. The mean sits beside it and is the less trustworthy of the
+        two — a community split cleanly into two camps produces a mean reporting mild agreement
+        and a histogram showing the split. Read the histogram first.
       </p>
     </div>
 
@@ -86,9 +96,16 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
           <li
             class="debate-item"
             data-debate
-            data-area={debate.area}
-            data-created={debate.createdAt}
-            data-interactions={debateInteractions.get(debate.id) ?? 0}
+            {...debateCardAttrs({
+              area: debate.area,
+              createdAt: debate.createdAt,
+              interactions:
+                (stats.get(debate.id)?.totalRaters ?? 0) +
+                (stats.get(debate.id)?.contributionCount ?? 0),
+              /* Only the two shares decide eligibility, so the whole stats object goes in and
+                 `debateCardAttrs` reads what it needs. */
+              shares: stats.get(debate.id) ?? null,
+            })}
           >
             <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
               {debate.statement}
@@ -117,8 +134,15 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
     {/* One suggested since the export. Links to /debates/view/?id=<id>, the
         client-rendered viewer, because /debates/<id>/ is generated at build time
         from the export and does not exist yet for rows newer than the last build. */}
+    {/* Every sort attribute starts empty and the overlay fills in what it knows. `data-divided`
+        and `data-consensus` stay empty because a debate this new has no aggregates — they are
+        an export-time product — and the engine reads an empty numeric attribute as "cannot be
+        sorted by this" and puts the card last. A literal `0` in either would be a reading: it
+        would rank a brand-new claim among the ones the community has been shown to agree
+        about. `data-interactions` is the exception and is genuinely `0`: nobody has answered a
+        debate posted an hour ago, and that is a fact rather than an absence. */}
     <template data-fresh-debate>
-      <li class="debate-item" data-fresh data-debate data-area="" data-created="" data-interactions="0">
+      <li class="debate-item" data-fresh data-debate data-area="" data-created="" data-interactions="0" data-divided="" data-consensus="">
         <a class="debate-item__link" data-statement></a>
         <p class="card__facts debate-item__facts">
           {/* `data-area-label`, not `data-area`: the <li> above carries `data-area` for the
@@ -148,6 +172,7 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
   import { longDate } from '../../lib/format';
   import { createListing } from '../../lib/listing-filters';
   import { DEBATE_DIMENSIONS, DEBATE_NOUN, DEBATE_SORTS } from '../../lib/listings';
+  import { applyCardAttrs, debateCardAttrs } from '../../lib/debate-facets';
   import { areaLabel } from '../../lib/report-schema';
 
   const listing = createListing({
@@ -179,11 +204,22 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
       const node = (template.content.cloneNode(true) as DocumentFragment)
         .firstElementChild as HTMLElement;
 
-      // The attributes the filter and sort read, written before the node is absorbed. The
-      // interactions count stays at 0: a debate this new has no aggregate to ask for, and
-      // this page would not show one if it did.
-      node.dataset.area = debate.area;
-      node.dataset.created = debate.createdAt;
+      // The attributes the filter and the sorts read, written before the node is absorbed —
+      // and written by the same function that attributed every card the build wrote, so a
+      // fresh card and an exported one cannot carry different names or different formats.
+      //
+      // `shares: null` is the whole of the "ineligible" behaviour: aggregates are an
+      // export-time product, a debate this new has none, and `debateCardAttrs` turns that into
+      // the empty string the engine already sorts last. Nothing here invents a zero.
+      applyCardAttrs(
+        node,
+        debateCardAttrs({
+          area: debate.area,
+          createdAt: debate.createdAt,
+          interactions: 0,
+          shares: null,
+        }),
+      );
 
       const statement = node.querySelector<HTMLAnchorElement>('[data-statement]');
       if (statement) {

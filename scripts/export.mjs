@@ -75,9 +75,9 @@ Export the public corpus to JSON and CSV.
 Options
   --out <dir>      Where to write. Default: data
   --dry-run        Query and report; write nothing.
-  --allow-shrink   Permit an export that drops more than half the reports in the
-                   previous manifest. Refused otherwise, because the usual cause is a
-                   broken query rather than a mass deletion.
+  --allow-shrink   Permit an export in which any JSON file drops more than half the rows
+                   it had in the previous manifest. Refused otherwise, because the usual
+                   cause is a broken query rather than a mass deletion.
 
 Environment
   SUPABASE_DB_URL  Connection string. Direct connection, not PostgREST.
@@ -240,30 +240,68 @@ const DEBATES = `
 `;
 
 /**
- * The distribution per debate: histogram, median, counts. **Never an individual rating,
- * and never a mean.**
+ * The distribution per debate: histogram, median, mean, counts, and two numbers that are not
+ * about the scale at all. **Never an individual rating.**
  *
- * public.rating_aggregate() is the one place either is computed, and this reads the view over
- * it rather than reaching into public.ratings — so a change to how coverage is defined cannot
- * be true on the site and false in the dataset. There is no mean in the view and none is
- * derived here; the histogram is in the file, so anyone who wants central tendency has the
- * median and anyone who wants spread has the whole shape.
+ * public.rating_aggregate() is the one place the median and the mean are computed, and this
+ * reads the view over it rather than reaching into public.ratings — so a change to how either
+ * is defined cannot be true on the site and false in the dataset. **Nothing is recomputed in
+ * JavaScript here** except `divided` and `consensus`, which are shares of the histogram and are
+ * derived in `toAggregate` rather than in SQL because they are a listing's sort keys rather
+ * than a fact about the debate.
  *
- * This file is for the dataset. **Nothing in src/ imports it**, and that is deliberate: a
- * reader is not shown the distribution until they have answered, and a histogram baked into
- * the built HTML would make that a decoration view-source defeats.
+ * The mean is new as of 2026-08-21 and is secondary. See the migration for the reversal and
+ * the display rule that carries the original concern: never a headline, never on a sort
+ * control, never without the histogram beside it.
+ *
+ * `no_opinion_count` is deliberately outside the histogram and outside everything computed from
+ * it — the median, the mean, `divided` and `consensus` all run over the eleven scored positions
+ * only. Somebody who said "outside my expertise" is not at 5 and is not absent; they are their
+ * own number, reported in words.
  */
 const AGGREGATES = `
   select
     r.debate_id,
     r.histogram,
     r.median,
+    r.mean,
     r.total_raters::int    as total_raters,
     r.opinion_count::int   as opinion_count,
     r.no_opinion_count::int as no_opinion_count,
-    r.coverage
+    r.coverage,
+    contributions.count::int as contribution_count,
+    movement.count::int      as position_changes
   from public.debate_ratings r
   join public.debates q on q.id = r.debate_id
+
+  -- Contributions on this debate, counted the same way the export selects them: published,
+  -- and including soft-deleted ones. A deleted contribution keeps its node and its position,
+  -- so it is part of what the distribution is made of; dropping it here would make the count
+  -- under the chart disagree with the rows above it.
+  left join lateral (
+    select count(*) as count
+      from public.comments c
+     where c.parent_type = 'debate'
+       and c.parent_id = r.debate_id
+       and c.status = 'published'
+  ) contributions on true
+
+  -- **How many people changed position, and nothing else.** Distinct users, not rows: somebody
+  -- who moved 6 to 8 to 3 changed their position once as far as this number is concerned,
+  -- because the number answers "how many people did the arguments move" and not "how much
+  -- clicking happened".
+  --
+  -- public.rating_changes is readable by no browser role at all — see 20260821120500 — and
+  -- this connection is not a browser. This is the only thing the table exists for, and the
+  -- only shape in which it may leave the database: a count. Nothing here carries a user id, a
+  -- direction, a date, or a from-and-to pair, because a per-person history is a public voting
+  -- record for a rating that is deliberately private.
+  left join lateral (
+    select count(distinct h.user_id) as count
+      from public.rating_changes h
+     where h.debate_id = r.debate_id
+  ) movement on true
+
   where q.status <> 'hidden'
   order by r.debate_id
 `;
@@ -338,6 +376,30 @@ const COMMENTS = `
     c.created_at,
     c.updated_at,
     c.deleted_at,
+
+    -- The position this contribution was written from, and NULL on every report comment.
+    -- On a debate contribution NULL is not "unset": it is the off-scale answer, because a
+    -- contribution cannot exist without a rating row. See 20260821120000.
+    c.agreement_score,
+
+    -- The forward link, when its author has since written another one on the same debate.
+    c.superseded_by,
+
+    -- And the same relation from the other end: whether this contribution is the one that
+    -- replaced an earlier one. Both directions are carried because they are rendered in
+    -- different places — the earlier row gets the movement badge, the later one is what the
+    -- badge links to — and deriving either from the other means scanning the whole file.
+    exists (
+      select 1 from public.comments prior where prior.superseded_by = c.id
+    ) as supersedes_earlier,
+
+    -- Endorsement counts, split by kind. **Counts, never names.** Endorsing requires holding a
+    -- rating, ratings are readable only by their author, so a list of endorsers would leak the
+    -- private position of everyone on it by inference. public.comment_endorsements is granted
+    -- to the authenticated role for its own rows only, and is never exported row by row.
+    endorsements.captures_my_view::int          as endorsed_captures_my_view,
+    endorsements.agree_position_not_reason::int as endorsed_agree_position_not_reason,
+
     a.id                      as author_id,
     a.display_name            as author_display_name,
     a.is_pseudonym            as author_is_pseudonym,
@@ -346,6 +408,15 @@ const COMMENTS = `
     a.institution_verified_at as author_institution_verified_at
   from public.comments c
   left join public.profiles a on a.id = c.author_id
+
+  left join lateral (
+    select
+      count(*) filter (where e.kind = 'captures_my_view')          as captures_my_view,
+      count(*) filter (where e.kind = 'agree_position_not_reason') as agree_position_not_reason
+      from public.comment_endorsements e
+     where e.comment_id = c.id
+  ) endorsements on true
+
   where c.status = 'published'
     and (
       (c.parent_type = 'report' and exists (
@@ -545,15 +616,99 @@ function toDebate(row) {
   };
 }
 
+/**
+ * The minimum number of scored positions a debate needs before `divided` and `consensus` mean
+ * anything.
+ *
+ * Ten is a judgement rather than a derivation, and the reason for having a floor at all is that
+ * both figures are shares. Two people at opposite ends is a perfectly divided debate by the
+ * arithmetic and tells a reader nothing, and it would sit above a genuinely contested claim
+ * answered by ninety. The listing says the threshold out loud rather than quietly ranking
+ * everything.
+ */
+const SORTABLE_MINIMUM = 10;
+
+/**
+ * Divided, and its opposite.
+ *
+ * **Both run over the eleven scored positions only.** The off-scale answers are not in the
+ * histogram, so they are not in either figure, and that is right: "outside my expertise" is not
+ * a mild version of agreeing or disagreeing, and folding it in would move a debate toward the
+ * middle for a reason that has nothing to do with where anybody stands.
+ *
+ * `divided` is twice the smaller of the two sides' shares. Twice, so that a clean 50/50 split
+ * scores 1 rather than 0.5 and the number reads as a proportion of the most divided a debate
+ * could be. Taking the *smaller* side is what makes it a measure of contest rather than of
+ * volume: 90 against 10 scores 0.2, and 10 against 90 also scores 0.2, because they are the
+ * same shape seen from two directions. **The neutral 5s are deliberately in neither side.**
+ * They are counted in the denominator and in no numerator, so a debate where everybody sits at
+ * 5 comes out as 0 divided — which is correct, and is a thing a mean of 5.0 could not tell you
+ * apart from a clean two-camp split.
+ *
+ * `consensus` is the largest share held by any one of the five families. Families rather than
+ * single scores because 8 and 7 are not a disagreement, and a metric that treated them as one
+ * would report a united community as fractured over rounding.
+ *
+ * Returns nulls below the threshold rather than zeros. A zero is a real reading — "nobody
+ * disagrees" — and a debate with four answers has not established that.
+ */
+function shares(histogram, opinionCount) {
+  if (!Array.isArray(histogram) || opinionCount < SORTABLE_MINIMUM) {
+    return { divided: null, consensus: null };
+  }
+
+  const at = (i) => Number(histogram[i] ?? 0);
+  const sum = (from, to) => {
+    let total = 0;
+    for (let i = from; i <= to; i += 1) total += at(i);
+    return total;
+  };
+
+  // The denominator is the histogram's own total rather than opinion_count, so that the two
+  // cannot drift apart if one of them ever starts counting something the other does not.
+  const scored = sum(0, 10);
+  if (scored === 0) return { divided: null, consensus: null };
+
+  const disagree = sum(0, 4) / scored;
+  const agree = sum(6, 10) / scored;
+
+  // The five families, in the order CLAUDE.md names them.
+  const families = [sum(0, 1), sum(2, 4), sum(5, 5), sum(6, 8), sum(9, 10)];
+
+  return {
+    divided: round3(2 * Math.min(disagree, agree)),
+    consensus: round3(Math.max(...families) / scored),
+  };
+}
+
+/** Three places, matching `coverage`, so every share in the file reads to the same precision. */
+function round3(value) {
+  return Math.round(value * 1000) / 1000;
+}
+
 function toAggregate(row) {
+  const histogram = row.histogram;
+  const opinionCount = Number(row.opinion_count ?? 0);
+  const { divided, consensus } = shares(histogram, opinionCount);
+
   return {
     debateId: row.debate_id,
-    histogram: row.histogram,
+    histogram,
     median: row.median === null ? null : Number(row.median),
+    // Secondary, and never a headline. Null rather than 0 when nobody has expressed an
+    // opinion — 0 is a position on this scale and means strong disagreement.
+    mean: row.mean === null ? null : Number(row.mean),
     totalRaters: Number(row.total_raters ?? 0),
-    opinionCount: Number(row.opinion_count ?? 0),
+    opinionCount,
     noOpinionCount: Number(row.no_opinion_count ?? 0),
     coverage: row.coverage === null ? null : Number(row.coverage),
+    contributionCount: Number(row.contribution_count ?? 0),
+    // How many people the arguments moved. A number, and nothing else — see the query.
+    positionChanges: Number(row.position_changes ?? 0),
+    // Null below the threshold, so a consumer cannot mistake "not established" for "zero".
+    divided,
+    consensus,
+    sortableMinimum: SORTABLE_MINIMUM,
   };
 }
 
@@ -589,6 +744,22 @@ function toComment(row) {
     createdAt: iso(row.created_at),
     updatedAt: iso(row.updated_at),
     deletedAt: iso(row.deleted_at),
+
+    // The debate fields. All four are null or zero on a report comment, and the shape is kept
+    // uniform rather than conditional so that one reader type covers both kinds and a consumer
+    // never has to test which it is holding before looking at a property.
+    //
+    // `agreementScore` is null on a report comment because it has no position, and null on a
+    // debate contribution when its author chose the off-scale answer. Those two nulls mean
+    // different things, and `parentType` is what distinguishes them — see 20260821120000.
+    agreementScore: row.agreement_score === null ? null : Number(row.agreement_score),
+    supersededBy: row.superseded_by ?? null,
+    supersedesEarlier: row.supersedes_earlier ?? false,
+    endorsements: {
+      capturesMyView: Number(row.endorsed_captures_my_view ?? 0),
+      agreePositionNotReason: Number(row.endorsed_agree_position_not_reason ?? 0),
+    },
+
     author: row.author_id
       ? {
           id: row.author_id,
@@ -878,15 +1049,44 @@ async function main() {
   // The usual cause of an export losing most of the corpus is a broken query, not a mass
   // deletion, and the committed files are what the site serves. Refusing is recoverable;
   // committing an empty corpus over a full one is a bad hour.
+  //
+  // **This used to watch `reports.json` and nothing else**, which meant the discussion, the
+  // debates, the aggregates and the citations could all go to zero without a word. That was
+  // survivable while those queries were plain selects. It stopped being survivable on
+  // 2026-08-21, when `AGGREGATES` and `COMMENTS` grew lateral joins: a join that matches
+  // nothing does not error, it returns fewer rows, and the failure would have arrived as a
+  // quietly empty `comments.json` committed over a full one.
+  //
+  // So every JSON file is checked, against its own previous count. The CSVs are skipped
+  // because they are projections of files already checked — `csv/reports.csv` cannot shrink
+  // without `reports.json` shrinking first, and reporting both would make one fault read as
+  // two.
+  //
+  // A file that was empty last night is not checked, because "0 to 0" and "0 to 4" are both
+  // fine and `before > 0` is what distinguishes a corpus that lost content from one that never
+  // had any. That is also why this is the one guard an empty `data/` cannot trip.
 
   const previous = await readPreviousManifest(options.out);
-  const before = previous?.files?.['reports.json']?.rows ?? 0;
-  const after = files.get('reports.json').length;
+  const shrunk = [];
 
-  if (!options.allowShrink && before > 0 && after < before / 2) {
+  for (const [name, rows] of files) {
+    if (!name.endsWith('.json')) continue;
+
+    const before = previous?.files?.[name]?.rows ?? 0;
+    const after = rows.length;
+
+    if (before > 0 && after < before / 2) {
+      shrunk.push(`  ${name}: ${before} → ${after}`);
+    }
+  }
+
+  if (!options.allowShrink && shrunk.length) {
     fail(
-      `Refusing to write: reports would go from ${before} to ${after}.\n` +
-        'If that is genuinely right, re-run with --allow-shrink.',
+      'Refusing to write: these files would lose more than half their rows.\n' +
+        shrunk.join('\n') +
+        '\nA lateral join that matches nothing looks exactly like this and does not error, so ' +
+        'check the queries before the database.\nIf that is genuinely right, re-run with ' +
+        '--allow-shrink.',
     );
   }
 

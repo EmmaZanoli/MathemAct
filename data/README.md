@@ -21,10 +21,10 @@ Suggested citation:
 | `manifest.json` | When this export ran, and the row count and byte size of every file |
 | `reports.json` | The corpus: published first-hand accounts, with their tools, tags and derived staleness |
 | `debates.json` | Claims the community rates. Everything not hidden; `proposed` appears only on rows written before 2026-08-19 |
-| `debate-ratings.json` | The distribution of answers per debate. Aggregates only |
+| `debate-ratings.json` | The distribution of answers per debate, plus how many people changed position. Aggregates only |
 | `tags.json` | The tag vocabulary: the arXiv mathematics categories in use |
 | `profiles.json` | Public profile fields for contributors who have something public |
-| `comments.json` | Discussion on reports and debates |
+| `comments.json` | Discussion on reports, and contributions on debates — see *Reading the discussion* |
 | `citations.json` | The citation graph: which page points at which |
 | `csv/reports.csv` | The same corpus, flattened, for people who would rather not parse JSON |
 | `csv/report-tools.csv` | One row per tool per report |
@@ -135,26 +135,110 @@ wrote it, and one attributable answer would undo the promise the whole scale res
   "debateId": "…",
   "histogram": [0, 0, 1, 0, 2, 5, 3, 4, 9, 2, 1],
   "median": 7,
+  "mean": 6.41,
   "totalRaters": 32,
   "opinionCount": 27,
   "noOpinionCount": 5,
-  "coverage": 0.84
+  "coverage": 0.84,
+  "contributionCount": 11,
+  "positionChanges": 4,
+  "divided": 0.222,
+  "consensus": 0.556,
+  "sortableMinimum": 10
 }
 ```
 
 The scale is 0–10: 0 strongly disagree, 5 neutral, 10 strongly agree. `histogram[i]` is how
 many people chose `i`.
 
-**There is no mean here and please do not compute one.** The mean of an 11-point bipolar
-scale is misleading exactly when the distribution is bimodal, and bimodal is what to expect
-on the contested debates — the ones worth writing about. The median and the full
-histogram are in the file for that reason.
+**The `mean` is here and the median is the one to quote.** It was deliberately absent until
+2026-08-21 and is included now because people asked for it, not because it summarises this
+well: the mean of an 11-point bipolar scale is misleading exactly when the distribution is
+bimodal, and bimodal is what to expect on the contested debates — the ones worth writing about.
+A community split cleanly into two camps produces a mean reporting mild agreement and a
+histogram showing the split. If you quote one number, quote the median; if you quote the mean,
+show the histogram beside it.
 
 `noOpinionCount` is people who answered "no opinion, or outside my expertise". That is a real
 answer stored as a real row with a null score, not an absence: without it, a mathematician
 who has never opened Lean answers 5 on a formalisation question and quietly drags the
-aggregate toward the middle. `coverage` is `opinionCount / totalRaters` and is worth
-reporting alongside any median you quote.
+aggregate toward the middle. **It is excluded from the histogram and from everything computed
+from it** — the median, the mean, `divided` and `consensus` all run over the eleven scored
+positions only. `coverage` is `opinionCount / totalRaters` and is worth reporting alongside any
+median you quote.
+
+`contributionCount` counts the contributions written on the debate, soft-deleted ones included:
+a deleted contribution keeps its position, so it is part of what the distribution is made of.
+
+`positionChanges` is **how many people changed their answer, and nothing else** — distinct
+people, not edits, so somebody who moved 6 → 8 → 3 counts once. There is no per-person history
+in this dataset and there will not be one: a trail through somebody's changes of mind is a
+public voting record for a rating that is deliberately private. The count is the only shape in
+which that table leaves the database.
+
+`divided` and `consensus` are two shares of the histogram, and both are **null** below
+`sortableMinimum` scored positions rather than zero — a debate with four answers has not
+established that nobody disagrees.
+
+- `divided` is twice the smaller of (share of 0–4) and (share of 6–10). It peaks at 1 on a clean
+  even split and is 0 when everyone is on one side. The neutral 5s are in the denominator and in
+  neither numerator, so a debate where everybody sits at 5 is 0 divided — which a mean of 5.0
+  cannot distinguish from a two-camp split.
+- `consensus` is the largest share held by any one of five families: 0–1, 2–4, 5, 6–8, 9–10.
+  Families rather than single scores, because 8 and 7 are not a disagreement.
+
+## Reading the discussion
+
+`comments.json` holds two things with one shape: **comments on reports**, which are threaded one
+level deep, and **contributions on debates**, which are flat. `parentType` tells you which, and
+it decides which of the fields below mean anything.
+
+```json
+{
+  "id": "…",
+  "parentType": "debate",
+  "parentId": "…",
+  "inReplyTo": null,
+  "body": "…",
+  "agreementScore": 8,
+  "supersededBy": null,
+  "supersedesEarlier": true,
+  "endorsements": { "capturesMyView": 6, "agreePositionNotReason": 2 },
+  "author": { "…": "…" }
+}
+```
+
+`agreementScore` is **the position its author held at the moment they wrote it**, copied from
+their rating and frozen. It is not a live join, and that distinction is the point: somebody who
+changes their mind would otherwise drag every contribution they had ever written into a
+different group, retroactively.
+
+Its nulls need care, because two different facts share one value.
+
+- On a **report** comment it is always null. A report comment has no position.
+- On a **debate** contribution, null means the author answered "no opinion, or outside my
+  expertise" — the off-scale option, a real answer. It never means "unset", because a
+  contribution cannot exist without a rating row: the database refuses one.
+
+`inReplyTo` is always null when `parentType` is `debate`, and that is enforced rather than
+observed. Debates are a map of positions; a reply is a position on a position.
+
+`supersededBy` points forward to a later contribution by the same author on the same debate, and
+`supersedesEarlier` is the same relation seen from the other end. **A superseded contribution is
+not deleted, moved, or rewritten** — it keeps its text, its date and its original
+`agreementScore`, because somebody changing their mind is the most valuable event this section
+records and erasing the earlier reasoning would destroy the evidence that it happened.
+
+`endorsements` are **counts, never names**. Endorsing requires holding a rating on the debate,
+and ratings are private, so a list of endorsers would leak the position of everyone on it by
+inference: "this captures my view" on a contribution written from 8 places its endorser near 8.
+`capturesMyView` is "this says what I would have said"; `agreePositionNotReason` is "I am where
+this person is, and I got there another way". The two are counted separately because otherwise
+the first has to carry both meanings.
+
+A soft-deleted contribution is in the file with an empty `body` and a null `author`, and it
+keeps its `agreementScore`: the node has to survive so the counts still add up, and its position
+is part of what the distribution was made of.
 
 ## What is not in here, and why
 
@@ -169,6 +253,13 @@ reporting alongside any median you quote.
   what moderators wrote to each other about it, and what they wrote to the people involved.
 - **No erasure requests.** Who is leaving.
 - **No individual ratings.** See above.
+- **No per-person rating history.** `positionChanges` is a count per debate and that is the
+  only shape in which it leaves the database. A current position is one fact; a trail through
+  somebody's changes of mind is a record of how they think, attached to a name, on a site whose
+  contributors include people posting pseudonymously because admitting AI reliance carries
+  professional stigma.
+- **No endorsers, only endorsement counts.** Endorsing requires a rating and ratings are
+  private, so naming endorsers would publish their positions by inference.
 - **No `role` or ban status on a profile.** A public list of the moderators is an attack
   surface; a public list of banned accounts is a punishment nobody agreed to.
 - **No deleted comments' text.** A deleted comment keeps its node so that the replies under

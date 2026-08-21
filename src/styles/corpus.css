@@ -880,11 +880,10 @@
     font-size: var(--size-5);
   }
 
-  .debate-section-number {
-    font-family: var(--font-mono);
-    font-weight: var(--weight-normal);
-    color: var(--ink-muted);
-  }
+  /* `.debate-section-number` was here and is gone with the "1." and "2." prefixes it set. The
+     numbering only made sense while both panels were always on the page; once the asking block
+     is removed at the moment it is answered, a "2." with no "1." above it numbers the page's
+     history rather than the page. */
 
   .debate-explainer {
     max-width: 20rem;
@@ -914,6 +913,12 @@
   .rate__actions {
     justify-content: flex-end;
     margin-block-start: var(--space-md);
+  }
+
+  /* The one control under the chart, and the only route back to the scale. Deliberately not
+     `.button--primary`: the primary action on this page was answering, and that is done. */
+  .rate__again {
+    margin-block: var(--space-md) 0;
   }
 
   .results-placeholder {

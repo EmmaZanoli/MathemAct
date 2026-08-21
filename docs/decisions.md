@@ -1234,3 +1234,141 @@ the policy was **dropped and reissued** rather than supplemented. Permissive pol
 command are OR'd, so a second INSERT policy carrying the rule would not add a restriction; it
 would add a route that grants exactly what the rule withholds. The same reasoning keeps the edit
 window in the guard.
+
+## 2026-08-22 — The mean is computed once, in the function, and the test was narrowed to allow it
+
+The 2026-08-15 entry above records the reversal in principle. This is what it took in practice,
+because the prohibition had been written into three places and one of them was load-bearing.
+
+`public.rating_aggregate` gains a `mean` column, and it had to be **dropped and recreated**:
+adding a column to a `returns table (...)` changes the return type, which `create or replace
+function` refuses outright. `public.debate_ratings` came with it, since the view depends on the
+function — and dropping a view loses its `security_invoker` reloption and its comment, both of
+which are restated. A view over a user-content table without `security_invoker` hands hidden
+rows to anonymous callers while looking correct in review.
+
+**The mean is in the function rather than only in the export**, and that is not tidiness. The
+debate page shows the distribution twice at two different moments: the export writes it into
+`data/debate-ratings.json`, and the browser fetches the live aggregate once the reader has
+answered. A mean in only one of those places is a page whose summary changes when you answer it.
+
+`013_ratings.test.sql` asserted against the catalogue that **no function or view in `public`
+contained `avg(`** — written broadly on purpose, "so it covers whatever is added next". It now
+exempts `rating_aggregate` by name and nothing else. The view assertion was left unexempted and
+still passes, because the view calls the function rather than restating the arithmetic; that
+assertion is what would notice somebody inlining it. Note that `sum(score)/count(score)` slips
+past the regex — the honest move was to narrow the test, not to evade it.
+
+## 2026-08-22 — Divided and consensus are export-time, and absent is not zero
+
+Both are computed in `scripts/export.mjs` and stored, never derived in the browser.
+
+- **divided** — twice the smaller of (share of 0–4) and (share of 6–10). Twice, so a clean
+  50/50 split scores 1 and the number reads as a proportion of the most divided a debate could
+  be. The *smaller* side, so 90/10 and 10/90 both score 0.2: they are the same shape seen from
+  two directions. **The neutral 5s are in the denominator and in neither numerator**, so a
+  debate where everybody sits at 5 comes out as 0 divided — which a mean of 5.0 could not tell
+  apart from a clean two-camp split.
+- **consensus** — the largest share held by any one of the five families. Families rather than
+  single scores because 8 and 7 are not a disagreement, and a metric that treated them as one
+  would report a united community as fractured over rounding. Labelled *Most agreed on*:
+  "consensus" is a claim about the community, not about the numbers.
+
+Off-scale positions are in neither, like everything else computed from the eleven.
+
+**Below ten scored positions both are null, and null is not zero.** Two people at opposite ends
+is perfectly divided by the arithmetic and tells a reader nothing, and it would outrank a
+genuinely contested claim answered by ninety. A zero is a real reading — "nobody disagrees" —
+which a debate with four answers has not established. The null travels all the way to the DOM as
+the **empty string**, because `numeric()` in the listing engine reads `''` as "cannot be sorted
+by this" and `'0'` as a value. That is the whole of the "a fresh card is ineligible" behaviour:
+no new code path, just the absence of a number.
+
+## 2026-08-22 — A sort may read an aggregate; a card may not show one
+
+`src/lib/listings.ts` said that nothing on the debates listing touches ratings, full stop. That
+has been **narrowed rather than abandoned**, and the line is worth stating because the two
+sound identical and are not.
+
+An *ordering* says "these claims divide the community" about the corpus. A *figure on a card*
+says "this claim divides it 60/40" about one debate, to a reader who has not opened it — which
+is exactly what the debate page withholds, and a listing that leaked it instead would make the
+withholding pointless. So the sorts exist and the cards stay silent: no count, no median, no
+mean, no share anywhere on `/debates/`.
+
+The filters are unchanged and still area-only, for the older reason: a "has answers" or "median
+above 7" checkbox hands over the same thing one bit at a time.
+
+## 2026-08-22 — `src/lib/debate-facets.ts`, and why `Number('')` is a bug
+
+The same argument as `report-facets.ts`: cards are built by the build and by the freshness
+overlay, and a card whose attributes were assembled by two different pieces of code is a card
+that fails a sort it should be in, with nothing to notice it. Both callers now hand a shape to
+`debateCardAttrs()` and neither writes an attribute name.
+
+It also owns `readCount()`, which exists because of a trap worth writing down: **Astro renders
+an attribute whose value is the empty string as a bare attribute**, `dataset` hands that back as
+`''`, and `Number('')` is `0`. Parsing a `data-` count directly therefore turns "the export has
+never counted this" into "somebody counted this and the answer was none" — and the debate page's
+statistics line depends on exactly that distinction, since a contribution count of 0 printed
+under a chart with contributions listed beneath it is the page contradicting itself.
+
+## 2026-08-22 — The shrink guard watches every JSON file, not just reports.json
+
+It compared `reports.json` against the previous manifest and nothing else, so the discussion,
+the debates, the aggregates and the citations could each go to zero without a word.
+
+That was survivable while those queries were plain selects. It stopped being survivable when
+`AGGREGATES` and `COMMENTS` grew lateral joins for the endorsement counts and the position
+changes: **a join that matches nothing does not error, it returns fewer rows**, and the failure
+would have arrived as a quietly empty `comments.json` committed over a full one.
+
+Every JSON file is now checked against its own previous count. The CSVs are skipped as
+projections of files already checked — `csv/reports.csv` cannot shrink without `reports.json`
+shrinking first, and reporting both would make one fault read as two. A file that was empty last
+night is not checked, which is why an empty `data/` cannot trip it.
+
+## 2026-08-22 — The debate page has no section numbers and no date
+
+Three changes to the top of `/debates/<id>/`, and the reasons are unrelated.
+
+**No "Active since <date>".** It described a lifecycle the site stopped having on 2026-08-18,
+when post-moderation made a debate part of the record the moment it was written; `activated_at`
+is now a date on which nothing happened. Dating a standing question also framed it as news. The
+date stays in the export and on the listing card, where "posted" is what it honestly means.
+
+**The asking block is removed once answered**, not collapsed and not replaced by a summary of
+their own answer. The question has been asked; a spent control left on the page turns a reading
+page into a form. Their answer comes back as the marker on the histogram, and one button under
+the chart reopens the same scale — one scale on the page, because two would be two sources of
+truth for one answer.
+
+**No "1." and "2."** The numbering only worked while both panels were always present. Once the
+first is removed at the moment it is answered, a "2." with no "1." above it numbers the page's
+history rather than the page.
+
+One consequence to know about: the form's `#rate-status` lives inside the asking block, so a
+success message had nowhere to be displayed by the time the save had succeeded. There is now a
+second status element on the results panel, and that is what a confirmation uses.
+
+## 2026-08-22 — Four stat cards became one line, because the mean was about to be a headline
+
+The distribution used to be summarised by four equal bordered boxes with their numbers set at
+`--size-5`. That layout makes every number in it a headline, and one of them is now the mean —
+which is the one reading the display rule exists to prevent, because it is what survives a skim:
+on a bimodal debate "6.2" reports mild agreement for a community that has split cleanly in two.
+
+One line instead, in the order d4 specifies, with the median in ink and heavier and the mean
+muted and no larger than the surrounding prose. The mean sits *below* the chart that contradicts
+it. Coverage is spelled "X expressed an opinion" rather than as a percentage: a ratio invites
+reading it as a quality score for the debate, where the count invites the comparison that
+matters — how many of the people who answered were willing to put a number on it.
+
+The two export-time figures hide their own wrappers when the number is unavailable, so the line
+ends after the mean on `/debates/view/` rather than trailing two zeros.
+
+**The off-scale answers are said in words** under the chart, naming the reader's own decline
+first — they looked for their marker, it is not there, and that sentence is the answer. They get
+no column, because "outside my expertise" is not a position on a scale of agreement, and they
+are not parked at 5, because filing a declared non-opinion as a neutral opinion is the exact
+corruption the off-scale option exists to prevent.

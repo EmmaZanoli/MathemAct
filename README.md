@@ -40,7 +40,7 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | Reports schema: RLS, tags, confirmations, staleness, rate limits |
 | ✅ | The submission form: fifteen sections, draft autosave, one-transaction submit |
 | ✅ | Reading: listing with linkable filters, report pages, author pages |
-| ✅ | Debates, the agreement scale, and the histogram — median, never a mean |
+| ✅ | Debates, the agreement scale, and the histogram — median first, mean beside it |
 | ✅ | Network: submission, moderation, and a monthly link check |
 | ✅ | Discussion, the citation graph, and the flag queue |
 | ✅ | Moderation: flag-led, audited, explained to both sides, and erasure that erases |
@@ -206,7 +206,7 @@ production rather than a report after it.
 
 ### Database tests
 
-604 pgTAP assertions across twenty-two files in `supabase/tests/`, covering domain matching, the
+605 pgTAP assertions across twenty-two files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the

@@ -136,20 +136,55 @@ export const REPORT_SORTS: readonly Sort[] = [
  * Area, and nothing else.
  *
  * A debate is a single sentence, an optional rationale and an area, so area is the whole of
- * what there is to filter on. Nothing here touches ratings: no aggregate appears on this
- * listing, not even a count of raters, because a reader must not be shown where the
- * community landed before they have opened the question. A "has answers" filter would leak
- * exactly that, one bit at a time.
+ * what there is to filter on. **Nothing here filters on ratings**, and that is still the rule:
+ * a "has answers" or "median above 7" checkbox would tell a reader where the community landed
+ * before they had opened the question, one bit at a time, and no number about any single debate
+ * appears on a card.
  */
 export const DEBATE_DIMENSIONS: readonly Dimension[] = [
   { key: 'area', legend: 'Area', chipKind: 'Area' },
 ];
 
+/**
+ * The two aggregate sorts, and the line they sit on.
+ *
+ * This file previously said that nothing on the debates listing touches ratings, full stop.
+ * **That has been narrowed rather than abandoned, and the distinction is the whole of why
+ * these are sorts and not filters or figures.** An ordering says "these claims divide the
+ * community" about the corpus. A number on a card says "this claim divides it 60/40" about one
+ * debate, to a reader who has not answered — which is the thing the debate page withholds and
+ * a listing must not hand over instead.
+ *
+ * So: the sorts exist, the cards stay silent, and no count, median, mean or share is rendered
+ * on this page. A reader who reorders the list learns the shape of the corpus and still has to
+ * open a claim and answer it to learn the shape of that claim.
+ *
+ * Both are export-time aggregates read off `data-divided` and `data-consensus`. A debate with
+ * fewer than ten scored positions, and every debate the freshness overlay added, carries the
+ * empty string in both — so `descending()` sorts it last under either, which is the engine's
+ * existing behaviour for a card that cannot be ranked. See `shareValue()` in
+ * src/lib/debate-facets.ts for why the empty string and not a zero.
+ *
+ * `popularity` keeps its comparator and loses its label. "Most popular" was a copy-rule
+ * violation of long standing — the debates vocabulary forbids *popular* and *top* — and on a
+ * page about disagreement it read as a ranking of claims by approval. "Most answered" says
+ * what the comparator actually does: raters plus contributions, a measure of attention.
+ */
 export const DEBATE_SORTS: readonly Sort[] = [
   MOST_RECENT,
-  // Raters plus comments. The number itself is never shown, for the reason above — this
-  // orders the list without reporting on any one debate.
-  { value: 'popularity', label: 'Most popular', compare: descending('interactions') },
+  // Positions plus contributions. The number itself is never shown, for the reason above —
+  // this orders the list without reporting on any one debate.
+  { value: 'popularity', label: 'Most answered', compare: descending('interactions') },
+  {
+    value: 'divided',
+    label: 'Most divided',
+    compare: descending('divided'),
+  },
+  {
+    value: 'consensus',
+    label: 'Most agreed on',
+    compare: descending('consensus'),
+  },
 ];
 
 // ── Network ───────────────────────────────────────────────────────────────────────────
