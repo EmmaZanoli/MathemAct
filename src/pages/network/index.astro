@@ -109,11 +109,13 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 
                 <p class="entry-card__description">{entry.description}</p>
 
-                <p class="entry-card__relevance">{entry.relevance}</p>
+                {/* Retired on 2026-08-21 — the description absorbed it. Only the entries
+                    submitted while it was collected still carry one. */}
+                {entry.relevance && <p class="entry-card__relevance">{entry.relevance}</p>}
 
                 <div class="entry-card__meta">
                   <span class="entry-card__category mono">
-                    {categoryLabel(entry.category as NetworkCategory)}
+                    {categoryLabel(entry.category as NetworkCategory, entry.categoryOther)}
                   </span>
                   {entry.submitter && (
                     <Fragment>
@@ -294,11 +296,14 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
       const descEl = node.querySelector<HTMLElement>('[data-description]');
       if (descEl) descEl.textContent = entry.description;
 
+      // Removed rather than left empty: the paragraph carries a bottom margin, so an entry
+      // submitted since the field was retired would open a gap under its description.
       const relEl = node.querySelector<HTMLElement>('[data-relevance]');
-      if (relEl) relEl.textContent = entry.relevance;
+      if (relEl && entry.relevance) relEl.textContent = entry.relevance;
+      else relEl?.remove();
 
       const catEl = node.querySelector<HTMLElement>('[data-category-label]');
-      if (catEl) catEl.textContent = categoryLabel(entry.category as Parameters<typeof categoryLabel>[0]);
+      if (catEl) catEl.textContent = categoryLabel(entry.category as Parameters<typeof categoryLabel>[0], entry.categoryOther);
 
       const dateEl = node.querySelector<HTMLElement>('[data-date]');
       if (dateEl) dateEl.textContent = longDate(entry.createdAt);

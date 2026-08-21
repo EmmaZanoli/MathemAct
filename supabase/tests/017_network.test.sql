@@ -17,7 +17,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(28);
+select plan(34);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────────
 
@@ -216,6 +216,79 @@ select is(
   'example.com/ordinary',
   'url_normalised is computed on insert (scheme stripped, lowercase)'
 );
+
+-- ── The category_other constraint ────────────────────────────────────────────────────────
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+select lives_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, category_other, description, relevance)
+     values ('33331111-0000-0000-0000-000000000001',
+             'An other-category entry', 'https://example.com/other-cat',
+             'other', 'Symbolic computation', 'A description.', 'Some relevance.') $$,
+  'category=other with a category_other string is accepted'
+);
+
+select throws_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description, relevance)
+     values ('33331111-0000-0000-0000-000000000001',
+             'Other without label', 'https://example.com/other-no-label',
+             'other', 'A description.', 'Some relevance.') $$,
+  '23514'::text, null::text,
+  'category=other without category_other fails the CHECK constraint'
+);
+
+select throws_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, category_other, description, relevance)
+     values ('33331111-0000-0000-0000-000000000001',
+             'Non-other with label', 'https://example.com/non-other-with-label',
+             'community', 'Should be null', 'A description.', 'Some relevance.') $$,
+  '23514'::text, null::text,
+  'category<>other with a category_other value fails the CHECK constraint'
+);
+
+reset role;
+
+-- ── One prose field ──────────────────────────────────────────────────────────────────────
+-- `relevance` was retired on 2026-08-21 and the description absorbed it. The column stays,
+-- nullable, for the rows submitted while it was collected.
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"33331111-0000-0000-0000-000000000001","role":"authenticated"}';
+
+select lives_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description)
+     values ('33331111-0000-0000-0000-000000000001',
+             'No relevance given', 'https://example.com/no-relevance',
+             'reading', 'The description now carries the whole of the prose.') $$,
+  'an entry may be submitted with no relevance at all'
+);
+
+select lives_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description)
+     values ('33331111-0000-0000-0000-000000000001',
+             'A long description', 'https://example.com/long-description',
+             'reading', repeat('x', 1000)) $$,
+  'the description cap is 1000 characters'
+);
+
+select throws_ok(
+  $$ insert into public.network_entries
+       (submitter_id, title, url, category, description)
+     values ('33331111-0000-0000-0000-000000000001',
+             'Too long', 'https://example.com/too-long',
+             'reading', repeat('x', 1001)) $$,
+  '23514'::text, null::text,
+  'and 1001 characters is refused'
+);
+
+reset role;
 
 -- ── Writing: editing your own ────────────────────────────────────────────────────────────
 

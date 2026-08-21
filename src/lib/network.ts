@@ -20,7 +20,8 @@ export type NetworkCategory =
   | 'formalisation'
   | 'guidelines_and_policy'
   | 'community'
-  | 'reading';
+  | 'reading'
+  | 'other';
 
 export type NetworkLinkStatus = 'ok' | 'unreachable' | 'redirected' | null;
 
@@ -41,24 +42,66 @@ export interface Entry {
   readonly url: string;
   readonly urlNormalised: string;
   readonly category: NetworkCategory;
+  readonly categoryOther: string | null;
   readonly description: string;
-  readonly relevance: string;
+  /** Retired on 2026-08-21: the description absorbed it. Null on everything submitted since. */
+  readonly relevance: string | null;
   readonly createdAt: string;
   readonly linkStatus: NetworkLinkStatus;
   readonly linkCheckedAt: string | null;
   readonly submitter: NetworkSubmitter | null;
 }
 
-export const CATEGORIES: readonly { value: NetworkCategory; label: string }[] = [
-  { value: 'research_tool',        label: 'Research tool' },
-  { value: 'educational',          label: 'Educational' },
-  { value: 'formalisation',        label: 'Formalisation' },
-  { value: 'guidelines_and_policy', label: 'Guidelines and policy' },
-  { value: 'community',            label: 'Community' },
-  { value: 'reading',              label: 'Reading' },
+/**
+ * The category vocabulary, with a one-line explanation each.
+ *
+ * The hints are not decoration: the submission form renders these as a radio list rather
+ * than a select, for the reason given in forms.css — a select hides most of the options and
+ * all of their explanations, and a category picked without reading the alternatives is the
+ * one that makes a filter useless.
+ *
+ * `other` sits last and is the only value that takes free text beside it.
+ */
+export const CATEGORIES: readonly { value: NetworkCategory; label: string; hint: string }[] = [
+  {
+    value: 'research_tool',
+    label: 'Research tool',
+    hint: 'Something used directly in doing mathematics.',
+  },
+  {
+    value: 'educational',
+    label: 'Educational',
+    hint: 'Courses, lectures, and material for learning.',
+  },
+  {
+    value: 'formalisation',
+    label: 'Formalisation',
+    hint: 'Proof assistants, their libraries, and formal methods.',
+  },
+  {
+    value: 'guidelines_and_policy',
+    label: 'Guidelines and policy',
+    hint: 'Declarations, journal policies, and codes of practice.',
+  },
+  {
+    value: 'community',
+    label: 'Community',
+    hint: 'Groups, seminars, forums, and mailing lists.',
+  },
+  {
+    value: 'reading',
+    label: 'Reading',
+    hint: 'Papers, essays, and reports worth the time.',
+  },
+  {
+    value: 'other',
+    label: 'Other',
+    hint: 'None of these. You will be asked to say which.',
+  },
 ];
 
-export function categoryLabel(value: NetworkCategory): string {
+export function categoryLabel(value: NetworkCategory, categoryOther?: string | null): string {
+  if (value === 'other' && categoryOther) return categoryOther;
   return CATEGORIES.find((c) => c.value === value)?.label ?? value;
 }
 

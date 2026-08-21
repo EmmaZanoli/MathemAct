@@ -165,7 +165,8 @@ export interface QueueEntry {
   readonly url: string;
   readonly category: string;
   readonly description: string;
-  readonly relevance: string;
+  /** Retired on 2026-08-21; the description absorbed it. Null on anything submitted since. */
+  readonly relevance: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly author: QueueAuthor | null;
@@ -381,7 +382,7 @@ function toEntry(row: any): QueueEntry {
     url: row.url,
     category: row.category,
     description: row.description,
-    relevance: row.relevance,
+    relevance: row.relevance ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at ?? row.created_at,
     author: toAuthor(row.author),
