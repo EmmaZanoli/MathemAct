@@ -70,15 +70,66 @@
     }
   }
 
-  /* Sticky on wide screens only. Below that it is above the results in the source order,
-     which is where it belongs on a phone, and pinning it would eat the screen. */
-  @media (min-width: 56.0625rem) {
-    .filters {
-      position: sticky;
-      top: var(--space-sm);
-      max-height: calc(100vh - var(--space-xl));
-      overflow-y: auto;
-    }
+  /* A rail with no fieldsets in it, which is the empty corpus: the frame is rendered
+     anyway, because that is the one state in which everything a reader can see was posted
+     today and therefore came from the freshness overlay rather than the build. The overlay
+     creates the fieldsets it needs, and these two rules stop the page showing an empty
+     sidebar while it waits. They undo themselves the moment the first one exists. */
+  .listing:not(:has(.filters__group)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filters:not(:has(.filters__group)) {
+    display: none;
+  }
+
+  /* ── The filter rail ────────────────────────────────────────────────────────────────
+     One panel, identical on all three listings, rendered by src/components/Listing.astro
+     and driven by src/lib/listing-filters.ts. It is a sidebar above the grid's breakpoint
+     and a collapsed panel below it: ten fieldsets between a phone's address bar and the
+     first result is a listing nobody scrolls.
+
+     The collapse is a button and two data attributes rather than a <details>, and it only
+     exists once the engine has set `data-collapsible` on the form. Without a script the
+     rail stays open and the button stays hidden, which is the right shape for a page whose
+     JS never ran — a control that does nothing is worse than no control. */
+
+  /* "Show" and "Hide" in words rather than a chevron. A geometric glyph would have to come
+     from the font, and the Plex subsets do not carry one — the same reason the tombstone is
+     drawn in CSS and never typed. */
+  .filters__toggle {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-2xs) var(--space-xs);
+    border: var(--border);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-mono);
+    font-size: var(--size-1);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .filters__toggle::after {
+    content: 'Show';
+    color: var(--accent);
+  }
+
+  .filters[data-open='true'] .filters__toggle::after {
+    content: 'Hide';
+  }
+
+  /* The one thing on a closed rail that says whether anything is narrowing the list below
+     it. Without it a collapsed panel is indistinguishable from an unfiltered one, which is
+     how somebody loses track of why their result count is three. */
+  .filters__active {
+    margin-inline-end: auto;
+    color: var(--accent-strong);
+    text-transform: none;
   }
 
   .filters__group {
@@ -107,17 +158,41 @@
   .filters__options {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3xs);
     margin-block-start: var(--space-2xs);
   }
 
+  /* The whole row is the hit target, not the checkbox and its word. On a phone that is the
+     difference between a filter people use and one they poke at. The negative inline margin
+     keeps the text aligned with the legend above while the padded row extends past it. */
   .filters__option {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: baseline;
     gap: var(--space-2xs);
+    margin-inline: calc(var(--space-2xs) * -1);
+    padding: var(--space-3xs) var(--space-2xs);
+    border-radius: var(--radius-sm);
     font-size: var(--size-2);
     cursor: pointer;
+  }
+
+  .filters__option:hover {
+    background-color: var(--surface);
+  }
+
+  /* The ring goes on the row because the checkbox inside it is 13px square and a ring that
+     size reads as a rendering artefact. Same reasoning as `.choice` in forms.css. */
+  .filters__option:has(input:focus-visible) {
+    outline: var(--focus-ring);
+    outline-offset: 0;
+  }
+
+  /* Ticked. A wash and a left rule in the accent, which is the signature the chips in the
+     results column already carry — the two are the same fact shown in two places, and a
+     reader should be able to see that without reading either. */
+  .filters__option:has(input:checked) {
+    background-color: var(--accent-wash);
+    box-shadow: inset var(--border-width-thick) 0 0 var(--accent);
   }
 
   .filters__option input {
@@ -125,17 +200,86 @@
     accent-color: var(--accent);
   }
 
-  /* How many reports a filter would leave. Shown so that choosing one is an informed
-     click rather than a guess followed by an empty page. */
+  .filters__label {
+    text-wrap: pretty;
+  }
+
+  /* How many would be left if this one were ticked, given everything else already is.
+     Shown so that choosing a filter is an informed click rather than a guess followed by an
+     empty page. Tabular figures, so the column of counts stays put as they change rather
+     than shimmering. */
   .filters__tally {
     font-family: var(--font-mono);
     font-size: var(--size-0);
+    font-variant-numeric: tabular-nums;
     color: var(--ink-muted);
   }
 
-  .filters__option input:disabled + span,
+  /* An option that would return nothing is disabled rather than hidden, so the shape of the
+     corpus stays visible: "nothing here is about formalisation" is worth knowing, and a
+     vanishing checkbox says it by saying nothing. */
+  .filters__option:has(input:disabled),
+  .filters__option:has(input:disabled):hover {
+    background-color: transparent;
+    cursor: default;
+  }
+
+  .filters__option input:disabled + .filters__label,
   .filters__option:has(input:disabled) .filters__tally {
     color: var(--rule);
+  }
+
+  /* The fold on a long vocabulary — 32 arXiv subject areas, or however many tools the
+     corpus has come to mention. A rail that opens with all of them buries every dimension
+     under the first one. */
+  .filters__more {
+    margin-block-start: var(--space-3xs);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .filters__more:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
+  }
+
+  /* ── Where the rail collapses ───────────────────────────────────────────────────────
+     After the rules above, not before them. Everything here is one class deep, so these
+     tie on specificity with `.filters__toggle { display: flex }` and only win by coming
+     later in the layer. Written the other way round first, and the toggle stayed on screen
+     at every width — no error, just a phone control sitting in a desktop sidebar. */
+
+  /* Sticky on wide screens only. Below that it is above the results in the source order,
+     which is where it belongs on a phone, and pinning it would eat the screen. */
+  @media (min-width: 56.0625rem) {
+    .filters {
+      position: sticky;
+      top: var(--space-sm);
+      max-height: calc(100vh - var(--space-xl));
+      overflow-y: auto;
+    }
+
+    .filters__toggle {
+      display: none;
+    }
+  }
+
+  @media (max-width: 56rem) {
+    .filters[data-collapsible='true'] .filters__body {
+      display: none;
+    }
+
+    .filters[data-collapsible='true'][data-open='true'] .filters__body {
+      display: block;
+      margin-block-start: var(--space-sm);
+    }
   }
 
   /* ── Results header ─────────────────────────────────────────────────────────────── */
@@ -180,6 +324,7 @@
   .chips {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: var(--space-3xs);
     margin: 0;
     padding: 0;
@@ -188,6 +333,30 @@
 
   .chips:empty {
     display: none;
+  }
+
+  .chips:not(:empty) {
+    margin-block-end: var(--space-sm);
+  }
+
+  /* At the end of the row rather than in the rail: it belongs beside the thing it undoes,
+     and it is the only control here that is absent until there is something for it to do.
+     A permanent "clear all" over an unfiltered listing is a dead control. */
+  .chips__clear {
+    padding: var(--space-3xs) var(--space-2xs);
+    border: 0;
+    background: none;
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+    letter-spacing: var(--tracking-wide);
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .chips__clear:hover {
+    color: var(--accent-strong);
+    text-decoration: underline;
   }
 
   .results__dropped {

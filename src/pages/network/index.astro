@@ -4,22 +4,49 @@
  *
  * Unreachable entries (link_status = 'unreachable') are always shown — never silently
  * hidden — but sorted last and visibly marked. A broken link is a fact in the corpus.
+ * `unreachableLast` in src/lib/listings.ts holds that ordering ahead of whatever sort the
+ * reader picks, and the build emits the cards in the same order so the pre-script render
+ * agrees with the post-script one.
  *
  * Static build from data/network.json (written nightly by scripts/export.mjs).
+ *
+ * The rail, the count, the sort and the chips are `src/components/Listing.astro`, shared
+ * with /reports/ and /network/. What stood here before was a radio group with an Apply
+ * button that submitted a GET to a static host, so it reloaded the page and filtered
+ * nothing without JS and duplicated the JS path with it — and its `.listing__filters`,
+ * `.filter-set` and `.filter-chip` classes were only ever styled inside `search.astro`'s
+ * *scoped* block, so on this page they matched nothing and the whole rail rendered bare.
  */
 import Base from '../../layouts/Base.astro';
 import Badges from '../../components/Badges.astro';
+import Listing from '../../components/Listing.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
 import { CATEGORIES, categoryLabel, listNetwork } from '../../lib/network';
 import type { NetworkCategory } from '../../lib/network';
+import { ENTRY_DIMENSIONS, ENTRY_NOUN, ENTRY_SORTS, groupsFor } from '../../lib/listings';
 
 const all = listNetwork();
 
 const usedCategories = new Set(all.map((r) => r.category));
-const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
+
+const groups = groupsFor(ENTRY_DIMENSIONS, {
+  category: CATEGORIES.filter((c) => usedCategories.has(c.value)).map((c) => ({
+    value: c.value,
+    label: c.label,
+  })),
+});
+
+/** Reachable first, then unreachable, newest first within each group. The engine reasserts
+ *  this the moment it runs; doing it here as well means the page is not briefly wrong. */
+const ordered = [
+  ...all.filter((r) => r.linkStatus !== 'unreachable'),
+  ...all.filter((r) => r.linkStatus === 'unreachable'),
+].sort((a, b) =>
+  a.linkStatus === b.linkStatus ? b.createdAt.localeCompare(a.createdAt) : 0,
+);
 ---
 
 <Base
@@ -47,116 +74,101 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
       <a class="button button--primary" href={path('/network/new/')}>Submit an entry</a>
     </p>
 
-    {all.length === 0 ? (
-      <p class="corpus__empty">No entries have been published yet.</p>
-    ) : (
-      <div class="listing">
-        <aside class="listing__filters" aria-label="Filter entries">
-          <form method="get" action={path('/network/')}>
-            <fieldset class="filter-set">
-              <legend class="filter-set__legend">Category</legend>
-              <label class="filter-chip">
-                <input type="radio" name="cat" value="" />
-                <span>All</span>
-              </label>
-              {categories.map((c) => (
-                <label class="filter-chip">
-                  <input type="radio" name="cat" value={c.value} />
-                  <span>{c.label}</span>
-                </label>
-              ))}
-            </fieldset>
-            <button class="button button--secondary filter-apply" type="submit">Apply</button>
-          </form>
-        </aside>
-
-        <section class="listing__results" aria-label="Network" aria-live="polite">
-          <p class="listing__count" data-count aria-live="polite">
-            {all.length} {all.length === 1 ? 'entry' : 'entries'}
-          </p>
-
-          <ul class="entry-list" data-entry-list role="list">
-            {/* Reachable entries first, then unreachable — sorted by created_at desc within each group. */}
-            {[
-              ...all.filter((r) => r.linkStatus !== 'unreachable').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-              ...all.filter((r) => r.linkStatus === 'unreachable').sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-            ].map((entry) => (
-              <li
-                class="entry-card"
-                data-category={entry.category}
-                data-unreachable={entry.linkStatus === 'unreachable' ? 'true' : undefined}
-              >
-                <div class="entry-card__head">
-                  <a
-                    class="entry-card__title"
-                    href={entry.url}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                  >
-                    {entry.title}
-                  </a>
-                  {entry.linkStatus === 'unreachable' && (
-                    <span class="entry-card__unreachable" title="This link was unreachable at the last monthly check">
-                      Link may be broken
-                    </span>
-                  )}
-                  {entry.linkStatus === 'redirected' && (
-                    <span class="entry-card__redirected">Redirects</span>
-                  )}
-                </div>
-
-                <p class="entry-card__url mono">{entry.urlNormalised}</p>
-
-                <p class="entry-card__description">{entry.description}</p>
-
-                {/* Retired on 2026-08-21 — the description absorbed it. Only the entries
-                    submitted while it was collected still carry one. */}
-                {entry.relevance && <p class="entry-card__relevance">{entry.relevance}</p>}
-
-                <div class="entry-card__meta">
-                  <span class="entry-card__category mono">
-                    {categoryLabel(entry.category as NetworkCategory, entry.categoryOther)}
+    {/* Rendered whether or not the export had anything in it, so that an entry submitted
+        today is filtered like one from March. On an empty corpus that is every entry on the
+        page: the overlay creates the category fieldset it needs, and corpus.css hides a
+        rail with none yet and closes the grid up behind it. */}
+    <Listing groups={groups} sorts={ENTRY_SORTS} noun={ENTRY_NOUN} total={all.length}>
+      <ul class="entry-list" data-results role="list">
+          {ordered.map((entry) => (
+            <li
+              class="entry-card"
+              data-entry
+              data-category={entry.category}
+              data-created={entry.createdAt}
+              data-title={entry.title}
+              data-unreachable={entry.linkStatus === 'unreachable' ? 'true' : undefined}
+            >
+              <div class="entry-card__head">
+                <a
+                  class="entry-card__title"
+                  href={entry.url}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {entry.title}
+                </a>
+                {entry.linkStatus === 'unreachable' && (
+                  <span class="entry-card__unreachable" title="This link was unreachable at the last monthly check">
+                    Link may be broken
                   </span>
-                  {entry.submitter && (
-                    <Fragment>
-                      <span class="entry-card__submitter">
-                        Submitted by{' '}
-                        <a href={path(`/authors/${entry.submitter.id}/`)}>
-                          {entry.submitter.displayName}
-                          {entry.submitter.isPseudonym && ' (a pseudonym)'}
-                        </a>
-                      </span>
-                      {/* Compact, and a sibling rather than a child of the line above. The
-                          full badge block is a bordered card that also states Registered,
-                          which on every row of a list would be the loudest thing on the
-                          page — the same reasoning that gave comment headers this variant.
-                          Outside the span because `.badge-line` is a <p>, which is not
-                          phrasing content and may not sit inside one. */}
-                      <Badges institution={entry.submitter.institution} compact />
-                    </Fragment>
-                  )}
-                  {!entry.submitter && (
-                    <span class="entry-card__submitter entry-card__erased">
-                      Submitter since erased
+                )}
+                {entry.linkStatus === 'redirected' && (
+                  <span class="entry-card__redirected">Redirects</span>
+                )}
+              </div>
+
+              <p class="entry-card__url mono">{entry.urlNormalised}</p>
+
+              <p class="entry-card__description">{entry.description}</p>
+
+              {/* Retired on 2026-08-21 — the description absorbed it. Only the entries
+                  submitted while it was collected still carry one. */}
+              {entry.relevance && <p class="entry-card__relevance">{entry.relevance}</p>}
+
+              <div class="entry-card__meta">
+                <span class="entry-card__category mono">
+                  {categoryLabel(entry.category as NetworkCategory, entry.categoryOther)}
+                </span>
+                {entry.submitter && (
+                  <Fragment>
+                    <span class="entry-card__submitter">
+                      Submitted by{' '}
+                      <a href={path(`/authors/${entry.submitter.id}/`)}>
+                        {entry.submitter.displayName}
+                        {entry.submitter.isPseudonym && ' (a pseudonym)'}
+                      </a>
                     </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      </div>
-    )}
+                    {/* Compact, and a sibling rather than a child of the line above. The
+                        full badge block is a bordered card that also states Registered,
+                        which on every row of a list would be the loudest thing on the
+                        page — the same reasoning that gave comment headers this variant.
+                        Outside the span because `.badge-line` is a <p>, which is not
+                        phrasing content and may not sit inside one. */}
+                    <Badges institution={entry.submitter.institution} compact />
+                  </Fragment>
+                )}
+                {!entry.submitter && (
+                  <span class="entry-card__submitter entry-card__erased">
+                    Submitter since erased
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+      </ul>
+
+      {all.length === 0 && (
+        <div class="empty" data-empty-state>
+          <p class="empty__heading">No entries have been published yet.</p>
+          <p>
+            The first ones will be the links people already send each other — a proof
+            assistant's manual, a journal's policy, the seminar that is actually worth the
+            hour.
+          </p>
+        </div>
+      )}
+    </Listing>
 
     {/* Fresh entries link directly to the external URL — no view page needed, because
         an entry is a pointer to an external thing, not a page on this site. */}
     <template data-fresh-entry>
-      <li class="entry-card" data-fresh>
+      <li class="entry-card" data-entry data-fresh data-category="" data-created="" data-title="">
         <p class="card__fresh">
           <span class="mono">Published <span data-date></span></span>
         </p>
         <div class="entry-card__head">
-          <a class="entry-card__title" data-title rel="noopener noreferrer" target="_blank"></a>
+          <a class="entry-card__title" data-title-link rel="noopener noreferrer" target="_blank"></a>
         </div>
         <p class="entry-card__url mono" data-url></p>
         <p class="entry-card__description" data-description></p>
@@ -180,111 +192,64 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 
 <script>
   /**
-   * Client-side category filtering. The URL is the state: selecting a category
-   * updates ?cat= and the page reloads, making filtered views linkable.
-   * JS also hides non-matching cards without a round trip for fast switching.
+   * The listing, and at the bottom the freshness overlay.
+   *
+   * Filtering, sorting and the address bar are `createListing()` in
+   * src/lib/listing-filters.ts, the same engine /reports/ and /debates/ run on.
    */
-  const params = new URLSearchParams(window.location.search);
-  const activeCat = params.get('cat') ?? '';
+  import { createListing } from '../../lib/listing-filters';
+  import { ENTRY_DIMENSIONS, ENTRY_NOUN, ENTRY_SORTS, unreachableLast } from '../../lib/listings';
+  import { categoryLabel } from '../../lib/network';
+  import type { NetworkCategory } from '../../lib/network';
 
-  // Reflect the current filter in the radio inputs.
-  for (const input of document.querySelectorAll<HTMLInputElement>(
-    '.filter-set input[type="radio"]',
-  )) {
-    if (input.value === activeCat) {
-      input.checked = true;
-    }
-  }
-
-  // Filter cards in place and update the count.
-  const list = document.querySelector<HTMLElement>('[data-entry-list]');
-  const countEl = document.querySelector<HTMLElement>('[data-count]');
-  const cards = document.querySelectorAll<HTMLElement>('.entry-card');
-
-  function applyFilter(cat: string) {
-    let visible = 0;
-    for (const card of cards) {
-      const match = cat === '' || card.dataset.category === cat;
-      card.hidden = !match;
-      if (match) visible++;
-    }
-    if (countEl) {
-      countEl.textContent = `${visible} ${visible === 1 ? 'entry' : 'entries'}`;
-    }
-    // Sort: reachable first, then unreachable.
-    if (list) {
-      const items = [...list.querySelectorAll<HTMLElement>('.entry-card')];
-      const reachable = items.filter((c) => !c.hidden && c.dataset.unreachable !== 'true');
-      const unreachable = items.filter((c) => !c.hidden && c.dataset.unreachable === 'true');
-      for (const item of [...reachable, ...unreachable]) list.appendChild(item);
-    }
-  }
-
-  applyFilter(activeCat);
-
-  for (const input of document.querySelectorAll<HTMLInputElement>(
-    '.filter-set input[type="radio"]',
-  )) {
-    input.addEventListener('change', () => {
-      const url = new URL(window.location.href);
-      if (input.value) {
-        url.searchParams.set('cat', input.value);
-      } else {
-        url.searchParams.delete('cat');
-      }
-      window.history.pushState({}, '', url);
-      applyFilter(input.value);
-    });
-  }
+  const listing = createListing({
+    cards: [...document.querySelectorAll<HTMLElement>('[data-results] > [data-entry]')],
+    dimensions: ENTRY_DIMENSIONS,
+    sorts: ENTRY_SORTS,
+    noun: ENTRY_NOUN,
+    primary: unreachableLast,
+    injectLabel: (key, value) =>
+      key === 'category' ? categoryLabel(value as NetworkCategory) : value,
+    // This page filtered on `?cat=` before the shared engine existed. A linkable filter
+    // that stops being linkable is a broken promise rather than a rename, so the old
+    // parameter is still read — it just is not written any more.
+    legacyParams: { cat: 'category' },
+  });
 
   // ── Freshness overlay ─────────────────────────────────────────────────────────────────
   //
-  // Network link to external URLs, so fresh cards carry the real link directly — no
-  // view page needed. Everything here fails silently; see src/lib/fresh.ts.
+  // Entries link to external URLs, so fresh cards carry the real link directly — no view
+  // page needed. Everything here fails silently; see src/lib/fresh.ts.
 
   void (async () => {
     const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
-    const entryList = document.querySelector<HTMLElement>('[data-entry-list]');
+    const list = document.querySelector<HTMLElement>('[data-results]');
     const template = document.querySelector<HTMLTemplateElement>('[data-fresh-entry]');
-    const emptyEl = document.querySelector<HTMLElement>('.corpus__empty');
 
-    if (!since || !template) return;
+    if (!since || !list || !template) return;
 
     const { networkSince } = await import('../../lib/fresh');
     const { longDate } = await import('../../lib/format');
-    const { categoryLabel } = await import('../../lib/network');
 
     const fresh = await networkSince(since);
     if (fresh.length === 0) return;
 
-    // If the page was empty (no exported entries), hide the empty message and
-    // create a list to receive the fresh cards.
-    let targetList = entryList;
-    if (!targetList) {
-      // Where the empty message is, which is where the list would have been. Anchored on
-      // that element rather than on the submit button it used to sit above: the button has
-      // moved to the top of the page, and the last child of [data-corpus] is now the
-      // <template> these cards are cloned from — appending past it would put the listing
-      // below the fold of the page for no reason. No message means no insertion point, and
-      // nothing to do.
-      if (!emptyEl) return;
-
-      targetList = document.createElement('ul');
-      targetList.className = 'entry-list';
-      targetList.setAttribute('role', 'list');
-      targetList.dataset.entryList = '';
-
-      emptyEl.insertAdjacentElement('afterend', targetList);
-      emptyEl.hidden = true;
-    }
+    const added: HTMLElement[] = [];
 
     for (const entry of fresh) {
       const node = (template.content.cloneNode(true) as DocumentFragment)
         .firstElementChild as HTMLElement;
 
+      // The attributes the filter and the two sorts read. Nothing this new has been
+      // link-checked, so it is not marked unreachable and sorts with the rest.
       node.dataset.category = entry.category;
+      node.dataset.created = entry.createdAt;
+      node.dataset.title = entry.title;
 
-      const titleEl = node.querySelector<HTMLAnchorElement>('[data-title]');
+      // `data-title-link`, not `data-title`: the <li> carries `data-title` for the A–Z
+      // sort, and a descendant with the same name is one rename away from a sort key
+      // written into the visible link text.
+      const titleEl = node.querySelector<HTMLAnchorElement>('[data-title-link]');
       if (titleEl) {
         titleEl.textContent = entry.title;
         titleEl.href = entry.url;
@@ -303,20 +268,24 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
       else relEl?.remove();
 
       const catEl = node.querySelector<HTMLElement>('[data-category-label]');
-      if (catEl) catEl.textContent = categoryLabel(entry.category as Parameters<typeof categoryLabel>[0], entry.categoryOther);
+      if (catEl) {
+        catEl.textContent = categoryLabel(entry.category as NetworkCategory, entry.categoryOther);
+      }
 
       const dateEl = node.querySelector<HTMLElement>('[data-date]');
       if (dateEl) dateEl.textContent = longDate(entry.createdAt);
 
-      targetList.prepend(node);
+      added.push(node);
     }
 
-    // Update the visible count.
-    const countEl = document.querySelector<HTMLElement>('[data-count]');
-    if (countEl) {
-      const total = targetList.querySelectorAll('.entry-card:not([hidden])').length;
-      countEl.textContent = `${total} ${total === 1 ? 'entry' : 'entries'}`;
-    }
+    list.prepend(...added);
+
+    // Filtered, counted and sorted like everything else, and add() offers the category
+    // filter for a value no exported entry has — on an empty corpus, for every category.
+    listing?.add(added);
+
+    const empty = document.querySelector<HTMLElement>('[data-empty-state]');
+    if (empty) empty.hidden = true;
   })();
 </script>
 
@@ -351,11 +320,6 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
   .network-nav__link--active {
     color: var(--ink);
     border-block-end-color: var(--accent);
-  }
-
-  .corpus__empty {
-    color: var(--ink-muted);
-    font-size: var(--size-3);
   }
 
   .entry-list {
@@ -452,16 +416,5 @@ const categories = CATEGORIES.filter((c) => usedCategories.has(c.value));
 
   .entry-card__erased {
     font-style: italic;
-  }
-
-  .filter-apply {
-    margin-block-start: var(--space-sm);
-    font-size: var(--size-2);
-  }
-
-  @media (max-width: 48rem) {
-    .listing {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

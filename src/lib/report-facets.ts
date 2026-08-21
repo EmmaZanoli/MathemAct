@@ -77,6 +77,22 @@ export const RECENCY_LABELS: Record<string, string> = {
 };
 
 /**
+ * The three "includes" toggles, in the order the rail offers them.
+ *
+ * These used to live in the listing's client script, on the grounds that they are a
+ * filter's labels rather than a fact about a report. That stopped being true when the
+ * listing's markup moved into a shared component: the build renders the checkboxes and the
+ * freshness overlay injects any the build did not, so two consumers need the same words and
+ * this is where the other two label maps already are. Same shape as them, and indexed by
+ * `string` for the same reason — see the note above TIME_BAND_LABELS.
+ */
+export const HAS_LABELS: Record<string, string> = {
+  prompts: 'The prompts',
+  transcript: 'A transcript',
+  code: 'Code or a formalisation',
+};
+
+/**
  * Whether a report links to something a reader could run or check for themselves — code, a
  * notebook, or a formalisation.
  *

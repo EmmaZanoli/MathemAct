@@ -11,8 +11,15 @@
  * When the corpus outgrows one page — several thousand reports, on the order of a few
  * megabytes of HTML — this becomes a build-time split by area with the same URL contract.
  * Not before: a filter that needs a round trip is a filter people stop using.
+ *
+ * The rail, the count, the sort, the chips and the "nothing matches" box are
+ * `src/components/Listing.astro`, shared with /debates/ and /network/; the ten dimensions
+ * and the six sorts are `REPORT_DIMENSIONS` and `REPORT_SORTS` in `src/lib/listings.ts`,
+ * read both here and by the client script below. What is left in this file is the corpus
+ * itself, which vocabularies to offer, and the freshness overlay.
  */
 import Base from '../../layouts/Base.astro';
+import Listing from '../../components/Listing.astro';
 import ReportCard from '../../components/ReportCard.astro';
 import Tombstone from '../../components/Tombstone.astro';
 import '../../styles/corpus.css';
@@ -27,12 +34,14 @@ import {
   TASK_TYPES,
 } from '../../lib/report-schema';
 import {
+  HAS_LABELS,
   RECENCY_LABELS,
   TIME_BAND_LABELS,
   hasRunnableReference,
   recencyBands,
   timeBand,
 } from '../../lib/report-facets';
+import { REPORT_DIMENSIONS, REPORT_NOUN, REPORT_SORTS, groupsFor } from '../../lib/listings';
 import { listReports, listToolNames, listUsedTags, listAllTags, listInteractionCounts } from '../../lib/reports';
 
 const reports = await listReports();
@@ -60,7 +69,7 @@ const usedRecency = new Set(
 const usedTimeBands = new Set(reports.map((report) => timeBand(report.timeSpentMinutes)));
 
 /** The three "includes" toggles, which are one dimension so that ticking two means both.
- *  See the AND note in the client script. */
+ *  See the `mode: 'all'` note on REPORT_DIMENSIONS. */
 const usedHas = new Set(
   reports.flatMap((report) => [
     report.prompts ? 'prompts' : '',
@@ -69,81 +78,40 @@ const usedHas = new Set(
   ]),
 );
 
-const groups = [
-  {
-    key: 'area',
-    legend: 'Area',
-    options: AREAS.filter((choice) => usedAreas.has(choice.value)).map((choice) => ({
-      value: choice.value,
-      label: choice.label,
-    })),
-  },
-  {
-    key: 'task',
-    legend: 'Task type',
-    options: TASK_TYPES.filter((choice) => usedTaskTypes.has(choice.value)).map((choice) => ({
-      value: choice.value,
-      label: choice.label,
-    })),
-  },
-  {
-    key: 'outcome',
-    legend: 'Outcome',
-    options: OUTCOME_CHOICES.filter((choice) => usedOutcomes.has(choice.value)).map((choice) => ({
-      value: choice.value,
-      label: choice.label,
-    })),
-  },
-  {
-    key: 'tag',
-    legend: 'Subject area',
-    options: tags.map((tag) => ({ value: tag.code, label: tag.label })),
-  },
-  {
-    key: 'tool',
-    legend: 'Tool',
-    options: tools.map((tool) => ({ value: tool.toLowerCase(), label: tool })),
-  },
-  {
-    key: 'career',
-    legend: 'Career stage',
-    options: CAREER_STAGES.filter((choice) => usedCareerStages.has(choice.value)).map(
-      (choice) => ({ value: choice.value, label: choice.label }),
-    ),
-  },
-  {
-    key: 'recency',
-    legend: 'Recency',
-    options: (['6m', '12m'] as const)
-      .filter((band) => usedRecency.has(band))
-      .map((band) => ({ value: band, label: RECENCY_LABELS[band] })),
-  },
-  {
-    key: 'time',
-    legend: 'Time spent',
-    options: (['lt30', '30to120', 'gt120'] as const)
-      .filter((band) => usedTimeBands.has(band))
-      .map((band) => ({ value: band, label: TIME_BAND_LABELS[band] })),
-  },
-  {
-    key: 'has',
-    legend: 'Includes',
-    options: (
-      [
-        { value: 'prompts', label: 'The prompts' },
-        { value: 'transcript', label: 'A transcript' },
-        { value: 'code', label: 'Code or a formalisation' },
-      ] as const
-    ).filter((option) => usedHas.has(option.value)),
-  },
-  {
-    key: 'generalises',
-    legend: 'Generalises',
-    options: GENERALISATIONS.filter((choice) => usedGeneralises.has(choice.value)).map(
-      (choice) => ({ value: choice.value, label: choice.label }),
-    ),
-  },
-].filter((group) => group.options.length > 0);
+/** Keyed by dimension. `groupsFor()` puts them in the order the engine reads them and drops
+ *  anything empty, so the rail cannot drift out of step with what is being filtered. */
+const groups = groupsFor(REPORT_DIMENSIONS, {
+  area: AREAS.filter((choice) => usedAreas.has(choice.value)).map((choice) => ({
+    value: choice.value,
+    label: choice.label,
+  })),
+  task: TASK_TYPES.filter((choice) => usedTaskTypes.has(choice.value)).map((choice) => ({
+    value: choice.value,
+    label: choice.label,
+  })),
+  outcome: OUTCOME_CHOICES.filter((choice) => usedOutcomes.has(choice.value)).map((choice) => ({
+    value: choice.value,
+    label: choice.label,
+  })),
+  tag: tags.map((tag) => ({ value: tag.code, label: tag.label })),
+  tool: tools.map((tool) => ({ value: tool.toLowerCase(), label: tool })),
+  career: CAREER_STAGES.filter((choice) => usedCareerStages.has(choice.value)).map((choice) => ({
+    value: choice.value,
+    label: choice.label,
+  })),
+  recency: (['6m', '12m'] as const)
+    .filter((band) => usedRecency.has(band))
+    .map((band) => ({ value: band, label: RECENCY_LABELS[band] })),
+  time: (['lt30', '30to120', 'gt120'] as const)
+    .filter((band) => usedTimeBands.has(band))
+    .map((band) => ({ value: band, label: TIME_BAND_LABELS[band] })),
+  has: (['prompts', 'transcript', 'code'] as const)
+    .filter((flag) => usedHas.has(flag))
+    .map((flag) => ({ value: flag, label: HAS_LABELS[flag] })),
+  generalises: GENERALISATIONS.filter((choice) => usedGeneralises.has(choice.value)).map(
+    (choice) => ({ value: choice.value, label: choice.label }),
+  ),
+});
 ---
 
 <Base
@@ -172,104 +140,39 @@ const groups = [
       <a class="button button--primary" href={path('/reports/new/')}>Post a report</a>
     </p>
 
-    {
-      reports.length === 0 ? (
-        <>
-          {/* The overlay's landing place when the export is empty. This is not a corner
-              case: it is the state the site is in on the day the first report is posted,
-              and without it that report would sit under "nothing has been published yet"
-              until the next nightly build. */}
-          <div class="listing listing--fresh" data-fresh-only hidden>
-            <div class="results">
-              <div data-results />
-            </div>
-          </div>
+    {/* Rendered whether or not the export had anything in it. An empty corpus is the state
+        in which *everything* a reader can see was posted today and arrived through the
+        freshness overlay — and it used to be the one state with no filters at all, because
+        the rail sat inside the `length > 0` branch. The overlay creates the fieldsets it
+        needs; corpus.css hides a rail that has none yet and closes the grid up behind it. */}
+    <Listing groups={groups} sorts={REPORT_SORTS} noun={REPORT_NOUN} total={reports.length}>
+      <div data-results>
+        {reports.map((report) => (
+          <ReportCard
+            report={report}
+            interactionCount={
+              report.staleness.confirmationCount + (extraInteractions.get(report.id) ?? 0)
+            }
+          />
+        ))}
+      </div>
 
-          <div class="empty" data-empty-state>
-            <p class="empty__heading">Nothing has been published yet.</p>
-            <p>
-              The corpus is empty because it has not started. Every account in it will have
-              been written by somebody who did the work and then took ten minutes to say
-              what happened — including, and especially, when it did not go well.
-            </p>
-            {/* No second "post" button here. The one above this box does the same thing,
-                and two filled reds on one screen makes neither of them the thing to do. */}
-            <p class="actions">
-              <a class="button" href={path('/about/')}>What this is for</a>
-            </p>
-          </div>
-        </>
-      ) : (
-        <div class="listing">
-          <form class="filters" data-filters>
-            {groups.map((group) => (
-              <fieldset class="filters__group" data-group={group.key}>
-                <legend class="filters__legend">{group.legend}</legend>
-                <div class="filters__options">
-                  {group.options.map((option) => (
-                    <label class="filters__option">
-                      <input type="checkbox" name={group.key} value={option.value} />
-                      <span>{option.label}</span>
-                      <span class="filters__tally" data-tally={`${group.key}:${option.value}`} />
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-            ))}
-          </form>
-
-          <div class="results">
-            <div class="results__head">
-              <p class="results__count" data-count aria-live="polite">
-                {reports.length} reports
-              </p>
-
-              <p class="results__sort">
-                <label for="sort">Sort by</label>
-                {/* The three rating sorts are sorts and deliberately not filters. A range
-                    filter on a self-reported 0-to-10 scale invites over-reading — "reports
-                    where helpfulness ≥ 8" reads as a measurement — where an ordering is
-                    honest about being rough. Anything unanswered sorts last, always. */}
-                <select id="sort" data-sort>
-                  <option value="recent">Most recent</option>
-                  <option value="activity">Confirmation activity</option>
-                  <option value="popularity">Most popular</option>
-                  <option value="helpful">Most helpful</option>
-                  <option value="effort">Least work to check</option>
-                  <option value="novelty">Highest novelty</option>
-                </select>
-              </p>
-            </div>
-
-            {/* A cited link may name a tag that has since been retired or a tool nothing
-                uses any more. Dropping those silently would show the reader more than the
-                sender saw, without either of them finding out. */}
-            <p class="results__dropped" data-dropped hidden></p>
-
-            <ul class="chips" data-chips role="list" />
-
-            <div data-results>
-              {reports.map((report) => (
-                <ReportCard
-                  report={report}
-                  interactionCount={
-                    report.staleness.confirmationCount + (extraInteractions.get(report.id) ?? 0)
-                  }
-                />
-              ))}
-            </div>
-
-            <div class="empty" data-no-results hidden>
-              <p class="empty__heading">Nothing matches all of those filters.</p>
-              <p data-suggestion />
-              <p class="actions">
-                <button class="button" type="button" data-clear>Clear all filters</button>
-              </p>
-            </div>
-          </div>
+      {reports.length === 0 && (
+        <div class="empty" data-empty-state>
+          <p class="empty__heading">Nothing has been published yet.</p>
+          <p>
+            The corpus is empty because it has not started. Every account in it will have
+            been written by somebody who did the work and then took ten minutes to say
+            what happened — including, and especially, when it did not go well.
+          </p>
+          {/* No second "post" button here. The one above this box does the same thing,
+              and two filled reds on one screen makes neither of them the thing to do. */}
+          <p class="actions">
+            <a class="button" href={path('/about/')}>What this is for</a>
+          </p>
         </div>
-      )
-    }
+      )}
+    </Listing>
 
     {/* A card for something posted since the export.
 
@@ -309,15 +212,18 @@ const groups = [
 
 <script>
   /**
-   * Filtering, sorting, and the URL — and, at the bottom, the freshness overlay.
+   * The listing, and at the bottom the freshness overlay.
    *
-   * The address bar is the state. Every change writes to it with replaceState, and the page
-   * reads it on load and on back-navigation, so a filtered view survives being copied,
-   * bookmarked, or arrived at from a tag link on a report page.
+   * Filtering, sorting and the address bar are `createListing()` in
+   * src/lib/listing-filters.ts, shared with /debates/ and /network/. What is left here is
+   * the part that is only true of reports: which vocabulary names a value that arrived on a
+   * fresh card, and how to build such a card in the first place.
    */
   import { reportsSince } from '../../lib/fresh';
   import type { FreshReport } from '../../lib/fresh';
   import { longDate } from '../../lib/format';
+  import { createListing } from '../../lib/listing-filters';
+  import { REPORT_DIMENSIONS, REPORT_NOUN, REPORT_SORTS } from '../../lib/listings';
   import { path } from '../../lib/paths';
   import {
     areaLabel,
@@ -327,6 +233,7 @@ const groups = [
     taskTypeLabel,
   } from '../../lib/report-schema';
   import {
+    HAS_LABELS,
     RECENCY_LABELS,
     TIME_BAND_LABELS,
     hasRunnableReference,
@@ -336,460 +243,56 @@ const groups = [
   } from '../../lib/report-facets';
   import { OUTCOME, tombstoneName } from '../../lib/status';
 
-  /** The three "includes" toggles. Their words live here rather than in report-facets.ts
-   *  because they are a filter's labels rather than a fact about a report. */
-  const HAS_LABELS: Record<string, string> = {
-    prompts: 'The prompts',
-    transcript: 'A transcript',
-    code: 'Code or a formalisation',
-  };
+  const tagVocab: Record<string, string> = JSON.parse(
+    document.querySelector<HTMLElement>('[data-corpus]')?.dataset.tagsVocab ?? '{}',
+  );
 
-  const filterForm = document.querySelector<HTMLFormElement>('[data-filters]');
-
-  if (filterForm) {
-    /**
-     * The same form, aliased so the null check above survives into everything below.
-     *
-     * TypeScript keeps a `const` narrowing inside arrow functions but drops it inside hoisted
-     * `function` declarations, so every `filters.` inside `injectGroup()` and `injectOption()`
-     * was an error while the identical use in `filters.addEventListener` a few lines further
-     * down was fine. The file had six `filters!` assertions from working around that one use at
-     * a time, and three places where it had not been worked around. Aliasing settles it once.
-     *
-     * The nullable check itself stays: `[data-filters]` genuinely is absent on an empty corpus,
-     * which is what the `if (!filterForm)` branch at the foot of this script is for.
-     */
-    const filters = filterForm;
-
-    const results = document.querySelector<HTMLElement>('[data-results]')!;
-    const count = document.querySelector<HTMLElement>('[data-count]')!;
-    const chips = document.querySelector<HTMLElement>('[data-chips]')!;
-    const noResults = document.querySelector<HTMLElement>('[data-no-results]')!;
-    const suggestion = document.querySelector<HTMLElement>('[data-suggestion]')!;
-    const sort = document.querySelector<HTMLSelectElement>('[data-sort]')!;
-    const clear = document.querySelector<HTMLButtonElement>('[data-clear]')!;
-
-    const cards = [...results.querySelectorAll<HTMLElement>('[data-report]')];
-    const DIMENSIONS = [
-      'area', 'task', 'outcome', 'tag', 'tool',
-      'career', 'recency', 'time', 'has', 'generalises',
-    ] as const;
-    type Dimension = (typeof DIMENSIONS)[number];
-
-    const LEGEND: Record<Dimension, string> = {
-      area: 'Area',
-      task: 'Task',
-      outcome: 'Outcome',
-      tag: 'Subject',
-      tool: 'Tool',
-      career: 'Career stage',
-      recency: 'Recency',
-      time: 'Time spent',
-      has: 'Includes',
-      generalises: 'Generalises',
-    };
-
-    /**
-     * The card attribute each dimension filters on, whether it holds a list, and how the
-     * values within it combine.
-     *
-     * `any` is the right default and is what every dimension but one uses: "research or
-     * teaching" is the useful question, where "research and teaching" would always be empty.
-     * `has` is the exception, because its three values are not alternatives — somebody who
-     * ticks "the prompts" and "code or a formalisation" wants the reports with both, and
-     * OR'ing them would quietly widen the result instead of narrowing it.
-     */
-    const FIELD: Record<Dimension, { attr: string; multi: boolean; mode?: 'all' }> = {
-      area: { attr: 'area', multi: false },
-      // Primary and secondary together. A session whose second task was proof drafting did
-      // proof drafting, and a filter that said otherwise would understate the corpus.
-      task: { attr: 'tasks', multi: true },
-      outcome: { attr: 'outcome', multi: false },
-      tag: { attr: 'tags', multi: true },
-      tool: { attr: 'tools', multi: true },
-      career: { attr: 'career', multi: false },
-      recency: { attr: 'recency', multi: true },
-      time: { attr: 'time', multi: false },
-      has: { attr: 'has', multi: true, mode: 'all' },
-      generalises: { attr: 'generalises', multi: false },
-    };
-
-    function selected(): Record<Dimension, string[]> {
-      const chosen = {} as Record<Dimension, string[]>;
-
-      for (const dimension of DIMENSIONS) {
-        chosen[dimension] = [
-          ...filters.querySelectorAll<HTMLInputElement>(
-            `input[name="${dimension}"]:checked`,
-          ),
-        ].map((input) => input.value);
+  /**
+   * The words for a value the build never saw, because it arrived on a card the freshness
+   * overlay added — the first report to use a tag, a tool nothing else mentions.
+   *
+   * `tool` is the awkward one and is why this takes the card: the dimension filters on
+   * lower-cased keys in `data-tools`, and the display names sit in a parallel
+   * `data-tools-names`, so the label has to be found by position.
+   */
+  function injectLabel(key: string, value: string, card: HTMLElement): string {
+    switch (key) {
+      case 'area':
+        return areaLabel(value);
+      case 'task':
+        return taskTypeLabel(value);
+      case 'outcome':
+        return outcomeLabel(value);
+      case 'career':
+        return careerStageLabel(value);
+      case 'generalises':
+        return generalisesLabel(value);
+      case 'recency':
+        return RECENCY_LABELS[value] ?? value;
+      case 'time':
+        return TIME_BAND_LABELS[value] ?? value;
+      case 'has':
+        return HAS_LABELS[value] ?? value;
+      case 'tag':
+        return tagVocab[value] ?? value;
+      case 'tool': {
+        const index = (card.dataset.tools ?? '').split('|').indexOf(value);
+        return (card.dataset.toolsNames ?? '').split('|')[index] ?? value;
       }
-
-      return chosen;
+      default:
+        return value;
     }
-
-    /** Whether one card satisfies one dimension. An empty selection matches everything. */
-    function matchesDimension(card: HTMLElement, dimension: Dimension, values: string[]): boolean {
-      if (values.length === 0) return true;
-
-      const field = FIELD[dimension];
-      const raw = card.dataset[field.attr] ?? '';
-
-      // Dimensions are always AND'd with each other. Within a dimension it is OR, except
-      // for `has` — see the note on FIELD.
-      if (!field.multi) return values.includes(raw);
-
-      const held = raw.split('|').filter(Boolean);
-      return field.mode === 'all'
-        ? values.every((value) => held.includes(value))
-        : held.some((entry) => values.includes(entry));
-    }
-
-    function matches(card: HTMLElement, chosen: Record<Dimension, string[]>): boolean {
-      return DIMENSIONS.every((dimension) => matchesDimension(card, dimension, chosen[dimension]));
-    }
-
-    function apply(pushUrl: boolean): void {
-      const chosen = selected();
-      const visible = cards.filter((card) => matches(card, chosen));
-
-      for (const card of cards) card.hidden = !visible.includes(card);
-
-      count.textContent =
-        visible.length === cards.length
-          ? `${cards.length} reports`
-          : `${visible.length} of ${cards.length} reports`;
-
-      order();
-      paintChips(chosen);
-      paintTallies(chosen);
-
-      noResults.hidden = visible.length > 0;
-      if (visible.length === 0) suggestion.textContent = suggest(chosen);
-
-      if (pushUrl) writeUrl(chosen);
-    }
-
-    /**
-     * Which single filter to loosen. For each active dimension, count what dropping it
-     * alone would return, and name the one that unlocks the most — a dead end with a way
-     * out of it is a different thing from a dead end.
-     */
-    function suggest(chosen: Record<Dimension, string[]>): string {
-      let best: { dimension: Dimension; gain: number } | null = null;
-
-      for (const dimension of DIMENSIONS) {
-        if (chosen[dimension].length === 0) continue;
-
-        const relaxed = { ...chosen, [dimension]: [] as string[] };
-        const gain = cards.filter((card) => matches(card, relaxed)).length;
-
-        if (gain > 0 && (!best || gain > best.gain)) best = { dimension, gain };
-      }
-
-      if (!best) {
-        return 'Clearing the filters brings back the whole corpus, which is the only thing left to try.';
-      }
-
-      return (
-        `Removing the ${LEGEND[best.dimension].toLowerCase()} filter would show ` +
-        `${best.gain} ${best.gain === 1 ? 'report' : 'reports'}. It is the one narrowing this most.`
-      );
-    }
-
-    function paintChips(chosen: Record<Dimension, string[]>): void {
-      chips.replaceChildren();
-
-      for (const dimension of DIMENSIONS) {
-        for (const value of chosen[dimension]) {
-          const input = filters.querySelector<HTMLInputElement>(
-            `input[name="${dimension}"][value="${CSS.escape(value)}"]`,
-          );
-          const label = input?.nextElementSibling?.textContent ?? value;
-
-          const chip = document.createElement('li');
-          chip.className = 'chip';
-
-          const kind = document.createElement('span');
-          kind.className = 'chip__kind';
-          kind.textContent = LEGEND[dimension];
-
-          const text = document.createElement('span');
-          text.textContent = label;
-
-          const remove = document.createElement('button');
-          remove.type = 'button';
-          remove.textContent = '×';
-          remove.setAttribute('aria-label', `Remove the ${LEGEND[dimension].toLowerCase()} filter ${label}`);
-          remove.addEventListener('click', () => {
-            if (input) input.checked = false;
-            apply(true);
-          });
-
-          chip.append(kind, text, remove);
-          chips.append(chip);
-        }
-      }
-    }
-
-    /** How many reports each option would leave, given everything else already chosen.
-     *  An option that would return nothing is disabled rather than hidden, so the shape of
-     *  the corpus stays visible. */
-    function paintTallies(chosen: Record<Dimension, string[]>): void {
-      for (const dimension of DIMENSIONS) {
-        for (const input of filters.querySelectorAll<HTMLInputElement>(
-          `input[name="${dimension}"]`,
-        )) {
-          const probe = { ...chosen, [dimension]: [input.value] };
-          const total = cards.filter((card) => matches(card, probe)).length;
-
-          const tally = filters.querySelector<HTMLElement>(
-            `[data-tally="${dimension}:${CSS.escape(input.value)}"]`,
-          );
-          if (tally) tally.textContent = String(total);
-
-          input.disabled = total === 0 && !input.checked;
-        }
-      }
-    }
-
-    /**
-     * A rating as a sort key, with unanswered always last.
-     *
-     * An unanswered scale is the empty string on the element, and it has to be
-     * distinguishable from a zero: a report scored 0 for helpfulness is a finding, and a
-     * report nobody scored is not. `-Infinity` for a descending sort and `Infinity` for an
-     * ascending one puts it at the bottom either way.
-     */
-    function rating(card: HTMLElement, attr: string, missing: number): number {
-      const raw = card.dataset[attr] ?? '';
-      return raw === '' ? missing : Number(raw);
-    }
-
-    function order(): void {
-      const by = sort.value;
-
-      const sorted = [...cards].sort((a, b) => {
-        if (by === 'helpful' || by === 'novelty') {
-          const attr = by === 'helpful' ? 'helpfulness' : 'novelty';
-          const left = rating(a, attr, -Infinity);
-          const right = rating(b, attr, -Infinity);
-          if (left !== right) return right - left;
-        }
-
-        if (by === 'effort') {
-          // Ascending: least work to check first. Unanswered goes to the bottom, which is
-          // why the missing value is +Infinity here and -Infinity above.
-          const left = rating(a, 'effort', Infinity);
-          const right = rating(b, 'effort', Infinity);
-          if (left !== right) return left - right;
-        }
-
-        if (by === 'activity') {
-          // Most recently confirmed first. A report nobody has checked sorts last
-          // whatever its date, because this ordering is about attention rather than age.
-          const left = a.dataset.confirmed || '';
-          const right = b.dataset.confirmed || '';
-          if (left !== right) return right.localeCompare(left);
-        }
-
-        if (by === 'popularity') {
-          // Most interactions first (confirmations + comments + citations).
-          // Reports with equal counts fall through to most recent.
-          const left = Number(a.dataset.interactions ?? 0);
-          const right = Number(b.dataset.interactions ?? 0);
-          if (left !== right) return right - left;
-        }
-
-        return (b.dataset.created ?? '').localeCompare(a.dataset.created ?? '');
-      });
-
-      for (const card of sorted) results.append(card);
-    }
-
-    function writeUrl(chosen: Record<Dimension, string[]>): void {
-      const params = new URLSearchParams();
-
-      for (const dimension of DIMENSIONS) {
-        if (chosen[dimension].length) params.set(dimension, chosen[dimension].join(','));
-      }
-      if (sort.value !== 'recent') params.set('sort', sort.value);
-
-      const query = params.toString();
-      window.history.replaceState(
-        {},
-        '',
-        query ? `${window.location.pathname}?${query}` : window.location.pathname,
-      );
-    }
-
-    function readUrl(): void {
-      const params = new URLSearchParams(window.location.search);
-      const dropped: string[] = [];
-
-      for (const dimension of DIMENSIONS) {
-        const values = (params.get(dimension) ?? '').split(',').filter(Boolean);
-        const offered = new Set<string>();
-
-        for (const input of filters.querySelectorAll<HTMLInputElement>(
-          `input[name="${dimension}"]`,
-        )) {
-          offered.add(input.value);
-          input.checked = values.includes(input.value);
-        }
-
-        for (const value of values) {
-          if (!offered.has(value)) dropped.push(`${LEGEND[dimension].toLowerCase()} ${value}`);
-        }
-      }
-
-      // Said out loud rather than swallowed. Somebody following a link deserves to know
-      // that they are seeing a wider view than the person who sent it.
-      const notice = document.querySelector<HTMLElement>('[data-dropped]');
-      if (notice) {
-        notice.hidden = dropped.length === 0;
-        notice.textContent = dropped.length
-          ? `This link also filtered on ${dropped.join(', ')}, which nothing in the corpus ` +
-            `currently has. Those filters are not applied, so you are seeing more than the ` +
-            `person who sent it.`
-          : '';
-      }
-
-      // Checked against the options the page actually offers, so a stale link naming a sort
-      // that has since gone falls back to "most recent" rather than to an empty select.
-      const wanted = params.get('sort');
-      if (wanted && [...sort.options].some((option) => option.value === wanted)) {
-        sort.value = wanted;
-      }
-    }
-
-    /** Return the filter fieldset for `dimension`, creating it if fresh cards introduce a
-     *  value for a dimension that no static report uses (e.g. tags on a corpus with none). */
-    function ensureGroup(dimension: Dimension): HTMLElement {
-      const existing = filters.querySelector<HTMLElement>(`[data-group="${dimension}"]`);
-      if (existing) return existing;
-
-      const LEGEND_FULL: Record<Dimension, string> = {
-        area: 'Area',
-        task: 'Task type',
-        outcome: 'Outcome',
-        tag: 'Subject area',
-        tool: 'Tool',
-        career: 'Career stage',
-        recency: 'Recency',
-        time: 'Time spent',
-        has: 'Includes',
-        generalises: 'Generalises',
-      };
-
-      const fieldset = document.createElement('fieldset');
-      fieldset.className = 'filters__group';
-      fieldset.dataset.group = dimension;
-
-      const legend = document.createElement('legend');
-      legend.className = 'filters__legend';
-      legend.textContent = LEGEND_FULL[dimension];
-
-      const opts = document.createElement('div');
-      opts.className = 'filters__options';
-
-      fieldset.append(legend, opts);
-      filters.append(fieldset);
-      return fieldset;
-    }
-
-    /** Add a single filter option if nothing with that dimension+value already exists. */
-    function injectOption(
-      dimension: Dimension,
-      value: string,
-      labelOf: (v: string) => string,
-    ): void {
-      if (!value) return;
-      if (filters.querySelector(`input[name="${dimension}"][value="${CSS.escape(value)}"]`)) return;
-
-      const group = ensureGroup(dimension);
-      const optionsContainer = group.querySelector<HTMLElement>('.filters__options')!;
-
-      const label = document.createElement('label');
-      label.className = 'filters__option';
-
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.name = dimension;
-      input.value = value;
-
-      const text = document.createElement('span');
-      text.textContent = labelOf(value);
-
-      const tally = document.createElement('span');
-      tally.className = 'filters__tally';
-      tally.dataset.tally = `${dimension}:${value}`;
-
-      label.append(input, text, tally);
-      optionsContainer.append(label);
-    }
-
-    /** Inject filter options for any value a fresh card carries that has no checkbox yet.
-     *  Must run before apply() so paintTallies() sees the new inputs. */
-    function injectMissingOptions(freshCards: HTMLElement[]): void {
-      const tagVocab: Record<string, string> = JSON.parse(
-        document.querySelector<HTMLElement>('[data-corpus]')?.dataset.tagsVocab ?? '{}',
-      );
-
-      for (const card of freshCards) {
-        injectOption('area', card.dataset.area ?? '', areaLabel);
-        injectOption('outcome', card.dataset.outcome ?? '', outcomeLabel);
-        injectOption('career', card.dataset.career ?? '', careerStageLabel);
-        injectOption('generalises', card.dataset.generalises ?? '', generalisesLabel);
-        injectOption('time', card.dataset.time ?? '', (band) => TIME_BAND_LABELS[band] ?? band);
-
-        for (const task of (card.dataset.tasks ?? '').split('|').filter(Boolean)) {
-          injectOption('task', task, taskTypeLabel);
-        }
-
-        for (const band of (card.dataset.recency ?? '').split('|').filter(Boolean)) {
-          injectOption('recency', band, (b) => RECENCY_LABELS[b] ?? b);
-        }
-
-        for (const flag of (card.dataset.has ?? '').split('|').filter(Boolean)) {
-          injectOption('has', flag, (f) => HAS_LABELS[f] ?? f);
-        }
-
-        for (const code of (card.dataset.tags ?? '').split('|').filter(Boolean)) {
-          injectOption('tag', code, (c) => tagVocab[c] ?? c);
-        }
-
-        const toolKeys = (card.dataset.tools ?? '').split('|').filter(Boolean);
-        const toolNames = (card.dataset.toolsNames ?? '').split('|');
-        toolKeys.forEach((key, i) => injectOption('tool', key, () => toolNames[i] ?? key));
-      }
-    }
-
-    filters.addEventListener('change', () => apply(true));
-    sort.addEventListener('change', () => apply(true));
-    clear.addEventListener('click', () => {
-      filters.reset();
-      apply(true);
-    });
-
-    // Back and forward should move between filtered views, not out of the page.
-    window.addEventListener('popstate', () => {
-      readUrl();
-      apply(false);
-    });
-
-    readUrl();
-    apply(false);
-
-    // Anything posted since the export joins the cards the filters already know about, so
-    // it is filtered, counted and sorted like everything else rather than pinned above the
-    // listing as a separate thing.
-    void overlay((added) => {
-      injectMissingOptions(added);
-      cards.push(...added);
-      apply(false);
-    });
   }
+
+  const listing = createListing({
+    cards: [
+      ...document.querySelectorAll<HTMLElement>('[data-results] > [data-report]'),
+    ],
+    dimensions: REPORT_DIMENSIONS,
+    sorts: REPORT_SORTS,
+    noun: REPORT_NOUN,
+    injectLabel,
+  });
 
   // ── The freshness overlay ───────────────────────────────────────────────────────────
   //
@@ -799,18 +302,7 @@ const groups = [
   // error message about a database, on a page that is showing its content, would teach
   // readers this site depends on something it does not.
 
-  if (!filterForm) {
-    // The empty corpus. Nothing to filter, so the fresh cards go into their own container
-    // and the "nothing has been published yet" message steps aside.
-    void overlay(() => {
-      const only = document.querySelector<HTMLElement>('[data-fresh-only]');
-      const empty = document.querySelector<HTMLElement>('[data-empty-state]');
-      if (only) only.hidden = false;
-      if (empty) empty.hidden = true;
-    });
-  }
-
-  async function overlay(absorb: (added: HTMLElement[]) => void): Promise<void> {
+  void (async () => {
     const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
     const results = document.querySelector<HTMLElement>('[data-results]');
     const template = document.querySelector<HTMLTemplateElement>('[data-fresh-card]');
@@ -824,8 +316,16 @@ const groups = [
 
     const added = fresh.map((report) => card(template, report));
     results.prepend(...added);
-    absorb(added);
-  }
+
+    // Joins the cards the filters already know about, so something posted an hour ago is
+    // filtered, counted, tallied and sorted exactly like one from March rather than pinned
+    // above the listing as a separate thing. add() also offers a checkbox for any value the
+    // build had no report to justify — on an empty corpus that is every checkbox there is.
+    listing?.add(added);
+
+    const empty = document.querySelector<HTMLElement>('[data-empty-state]');
+    if (empty) empty.hidden = true;
+  })();
 
   function card(template: HTMLTemplateElement, report: FreshReport): HTMLElement {
     const node = (template.content.cloneNode(true) as DocumentFragment)
@@ -950,12 +450,7 @@ const groups = [
   }
 </script>
 
-<style>
-  /* `.card__fresh` is now in corpus.css — both reports and entries use it. */
-
-  /* The container the overlay uses when the corpus is empty. It has no filters and no
-     results head, so it needs the top rule that .listing would otherwise provide. */
-  .listing--fresh {
-    margin-block-end: var(--space-xl);
-  }
-</style>
+{/* No scoped styles. `.card__fresh` is in corpus.css — reports and entries both show it,
+    and a scoped rule here would not reach the cloned template node on the other page. The
+    `.listing--fresh` block that used to live here went with the separate empty-corpus
+    container: there is one listing now, in every state. */}

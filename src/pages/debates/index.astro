@@ -13,19 +13,38 @@
  *
  * No aggregate anywhere on this page, not even a count of raters. A listing that showed
  * "42 raters, median 8" would tell a reader where the community landed before they had
- * opened the question, which is exactly what the debate page is careful not to do.
+ * opened the question, which is exactly what the debate page is careful not to do. That is
+ * also why the only filter here is area: a "has answers" or "most disagreed" filter would
+ * leak the same thing one bit at a time. The popularity sort orders the list without
+ * reporting a number about any single debate, which is the line.
+ *
+ * The rail, the count, the sort and the chips are `src/components/Listing.astro`, shared
+ * with /reports/ and /network/, so the three behave identically down to the address bar.
  */
 import Base from '../../layouts/Base.astro';
+import Listing from '../../components/Listing.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { longDate } from '../../lib/format';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
-import { areaLabel } from '../../lib/report-schema';
+import { AREAS, areaLabel } from '../../lib/report-schema';
+import { DEBATE_DIMENSIONS, DEBATE_NOUN, DEBATE_SORTS, groupsFor } from '../../lib/listings';
 import { listDebates, listDebateInteractionCounts } from '../../lib/debates';
 
 const debates = await listDebates();
 const debateInteractions = listDebateInteractionCounts();
+
+/** Only the areas something is actually filed under. An area nothing uses is a dead end
+ *  with a zero beside it, and on a corpus this size most of them would be. */
+const usedAreas = new Set(debates.map((debate) => debate.area));
+
+const groups = groupsFor(DEBATE_DIMENSIONS, {
+  area: AREAS.filter((choice) => usedAreas.has(choice.value)).map((choice) => ({
+    value: choice.value,
+    label: choice.label,
+  })),
+});
 ---
 
 <Base
@@ -57,66 +76,55 @@ const debateInteractions = listDebateInteractionCounts();
       <a class="button button--primary" href={path('/debates/new/')}>Suggest a debate</a>
     </p>
 
-    {debates.length > 0 && (
-      <p class="results__sort">
-        <label for="debate-sort">Sort by</label>
-        <select id="debate-sort" data-sort>
-          <option value="recent">Most recent</option>
-          <option value="popularity">Most popular</option>
-        </select>
-      </p>
-    )}
-
-    {
-      debates.length === 0 ? (
-        <>
-          {/* Where the overlay puts anything suggested since the export. The first
-              debate ever written arrives here, on a page that would otherwise say
-              there are none until the next nightly build. */}
-          <ul class="debate-list" role="list" data-fresh-list hidden />
-
-          <div class="empty" data-empty-state>
-            <p class="empty__heading">No debates yet.</p>
-            <p>
-              The first ones will come from members who noticed an argument worth settling —
-              or worth showing is not settled.
+    {/* Rendered whether or not the export had anything in it, so that a debate suggested
+        today is filtered like one from March. On an empty corpus that is every debate on
+        the page: the overlay creates the area fieldset it needs, and corpus.css hides a
+        rail with none yet and closes the grid up behind it. */}
+    <Listing groups={groups} sorts={DEBATE_SORTS} noun={DEBATE_NOUN} total={debates.length}>
+      <ul class="debate-list" role="list" data-results>
+        {debates.map((debate) => (
+          <li
+            class="debate-item"
+            data-debate
+            data-area={debate.area}
+            data-created={debate.createdAt}
+            data-interactions={debateInteractions.get(debate.id) ?? 0}
+          >
+            <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
+              {debate.statement}
+            </a>
+            <p class="card__facts debate-item__facts">
+              <span>{areaLabel(debate.area)}</span>
+              <span class="meta">Posted {longDate(debate.createdAt)}</span>
             </p>
-            {/* The button that used to be here is now above this box, where it also stands
-                for the populated page. */}
-          </div>
-        </>
-      ) : (
-        // The one list. It is also where the freshness overlay puts anything written since
-        // the export, which is why it carries data-fresh-list as well.
-        <ul class="debate-list" role="list" data-debate-list="all" data-fresh-list>
-          {debates.map((debate) => (
-            <li
-              class="debate-item"
-              data-debate
-              data-created={debate.createdAt}
-              data-interactions={debateInteractions.get(debate.id) ?? 0}
-            >
-              <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
-                {debate.statement}
-              </a>
-              <p class="card__facts debate-item__facts">
-                <span>{areaLabel(debate.area)}</span>
-                <span class="meta">Posted {longDate(debate.createdAt)}</span>
-              </p>
-            </li>
-          ))}
-        </ul>
-      )
-    }
+          </li>
+        ))}
+      </ul>
+
+      {debates.length === 0 && (
+        <div class="empty" data-empty-state>
+          <p class="empty__heading">No debates yet.</p>
+          <p>
+            The first ones will come from members who noticed an argument worth settling —
+            or worth showing is not settled.
+          </p>
+          {/* The button that used to be here is now above this box, where it also stands
+              for the populated page. */}
+        </div>
+      )}
+    </Listing>
 
     {/* One suggested since the export. Links to /debates/view/?id=<id>, the
         client-rendered viewer, because /debates/<id>/ is generated at build time
         from the export and does not exist yet for rows newer than the last build. */}
     <template data-fresh-debate>
-      <li class="debate-item" data-fresh data-debate data-created="" data-interactions="0">
+      <li class="debate-item" data-fresh data-debate data-area="" data-created="" data-interactions="0">
         <a class="debate-item__link" data-statement></a>
         <p class="card__facts debate-item__facts">
-          <span data-area></span>
+          {/* `data-area-label`, not `data-area`: the <li> above carries `data-area` for the
+              filter to read, and a querySelector for the same name inside it would be one
+              rename away from writing the filter's value into the visible text. */}
+          <span data-area-label></span>
           <span class="meta" data-date></span>
         </p>
       </li>
@@ -126,117 +134,79 @@ const debateInteractions = listDebateInteractionCounts();
 
 <script>
   /**
-   * Sort and freshness overlay for the debates listing.
+   * The listing, and at the bottom the freshness overlay.
    *
-   * Sort runs entirely in the browser over already-rendered `<li>` elements. It iterates
-   * over every `[data-debate-list]` rather than the one there now, which is left as it was:
-   * the page had two lists until the active/proposed split went, and a loop that assumes one
-   * would have to be rewritten by whoever brings a second one back.
+   * Filtering, sorting and the address bar are `createListing()` in
+   * src/lib/listing-filters.ts, the same engine /reports/ and /network/ run on. This page
+   * used to carry its own sort loop over `[data-debate-list]` and no filters at all.
    *
    * Nothing about ratings is touched. The aggregate is never built into a page, so there is
-   * no stale copy of one to refresh: a debate page fetches its distribution live, after
-   * the reader has answered, and this listing shows no aggregate at all by design.
+   * no stale copy of one to refresh: a debate page fetches its distribution live, after the
+   * reader has answered, and this listing shows no aggregate at all by design.
    */
   import { debatesSince } from '../../lib/fresh';
   import { longDate } from '../../lib/format';
+  import { createListing } from '../../lib/listing-filters';
+  import { DEBATE_DIMENSIONS, DEBATE_NOUN, DEBATE_SORTS } from '../../lib/listings';
   import { areaLabel } from '../../lib/report-schema';
 
-  const sort = document.querySelector<HTMLSelectElement>('[data-sort]');
-
-  function order(): void {
-    if (!sort) return;
-    const by = sort.value;
-
-    for (const list of document.querySelectorAll<HTMLElement>('[data-debate-list]')) {
-      const items = [...list.querySelectorAll<HTMLElement>('[data-debate]')];
-
-      const sorted = items.sort((a, b) => {
-        if (by === 'popularity') {
-          const left = Number(a.dataset.interactions ?? 0);
-          const right = Number(b.dataset.interactions ?? 0);
-          if (left !== right) return right - left;
-        }
-        return (b.dataset.created ?? '').localeCompare(a.dataset.created ?? '');
-      });
-
-      for (const item of sorted) list.append(item);
-    }
-  }
-
-  function writeUrl(): void {
-    if (!sort) return;
-    const params = new URLSearchParams(window.location.search);
-    if (sort.value === 'recent') {
-      params.delete('sort');
-    } else {
-      params.set('sort', sort.value);
-    }
-    const query = params.toString();
-    window.history.replaceState(
-      {},
-      '',
-      query ? `${window.location.pathname}?${query}` : window.location.pathname,
-    );
-  }
-
-  function readUrl(): void {
-    if (!sort) return;
-    const wanted = new URLSearchParams(window.location.search).get('sort');
-    if (wanted === 'popularity' || wanted === 'recent') sort.value = wanted;
-  }
-
-  if (sort) {
-    sort.addEventListener('change', () => {
-      order();
-      writeUrl();
-    });
-    window.addEventListener('popstate', () => {
-      readUrl();
-      order();
-    });
-    readUrl();
-    order();
-  }
+  const listing = createListing({
+    cards: [...document.querySelectorAll<HTMLElement>('[data-results] > [data-debate]')],
+    dimensions: DEBATE_DIMENSIONS,
+    sorts: DEBATE_SORTS,
+    noun: DEBATE_NOUN,
+    injectLabel: (key, value) => (key === 'area' ? areaLabel(value) : value),
+  });
 
   // ── Freshness overlay ─────────────────────────────────────────────────────────────────
+  //
+  // Fails silently at every step; see src/lib/fresh.ts. The page is already correct without
+  // it.
 
-  const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
-  const list = document.querySelector<HTMLElement>('[data-fresh-list]');
-  const template = document.querySelector<HTMLTemplateElement>('[data-fresh-debate]');
+  void (async () => {
+    const since = document.querySelector<HTMLElement>('[data-corpus]')?.dataset.exportedAt;
+    const list = document.querySelector<HTMLElement>('[data-results]');
+    const template = document.querySelector<HTMLTemplateElement>('[data-fresh-debate]');
 
-  if (since && list && template) {
-    void (async () => {
-      const fresh = await debatesSince(since);
-      if (fresh.length === 0) return;
+    if (!since || !list || !template) return;
 
-      for (const debate of fresh.reverse()) {
-        const node = (template.content.cloneNode(true) as DocumentFragment)
-          .firstElementChild as HTMLElement;
+    const fresh = await debatesSince(since);
+    if (fresh.length === 0) return;
 
-        const statement = node.querySelector<HTMLAnchorElement>('[data-statement]');
-        const area = node.querySelector<HTMLElement>('[data-area]');
-        if (statement) {
-          statement.textContent = debate.statement;
-          statement.href = `view/?id=${debate.id}`;
-        }
-        if (area) area.textContent = areaLabel(debate.area);
-        const dateEl = node.querySelector<HTMLElement>('[data-date]');
-        if (dateEl) dateEl.textContent = `Proposed ${longDate(debate.createdAt)}`;
-        node.dataset.created = debate.createdAt;
+    const added: HTMLElement[] = [];
 
-        list.prepend(node);
+    for (const debate of fresh) {
+      const node = (template.content.cloneNode(true) as DocumentFragment)
+        .firstElementChild as HTMLElement;
+
+      // The attributes the filter and sort read, written before the node is absorbed. The
+      // interactions count stays at 0: a debate this new has no aggregate to ask for, and
+      // this page would not show one if it did.
+      node.dataset.area = debate.area;
+      node.dataset.created = debate.createdAt;
+
+      const statement = node.querySelector<HTMLAnchorElement>('[data-statement]');
+      if (statement) {
+        statement.textContent = debate.statement;
+        statement.href = `view/?id=${debate.id}`;
       }
 
-      list.hidden = false;
-      // Whichever of these the page happens to be showing: "nothing waiting" under a
-      // populated Proposed section, or the whole empty state.
-      for (const selector of ['[data-none]', '[data-empty-state]']) {
-        const element = document.querySelector<HTMLElement>(selector);
-        if (element) element.hidden = true;
-      }
+      const area = node.querySelector<HTMLElement>('[data-area-label]');
+      if (area) area.textContent = areaLabel(debate.area);
 
-      // Re-sort to place fresh items in the right position.
-      order();
-    })();
-  }
+      const dateEl = node.querySelector<HTMLElement>('[data-date]');
+      if (dateEl) dateEl.textContent = `Posted ${longDate(debate.createdAt)}`;
+
+      added.push(node);
+    }
+
+    list.prepend(...added);
+
+    // Filtered, counted and sorted like everything else, and add() offers the area filter
+    // for a value no exported debate has — on an empty corpus, for every area there is.
+    listing?.add(added);
+
+    const empty = document.querySelector<HTMLElement>('[data-empty-state]');
+    if (empty) empty.hidden = true;
+  })();
 </script>

@@ -2655,3 +2655,81 @@ Not built, and the reason it is now a stated limitation on the page rather than 
 **no automated accessibility check runs anywhere.** `test-db.yml` gates the schema and
 `auth-config.yml` catches dashboard drift, but every claim on `/accessibility/` was verified by
 hand on one day and nothing goes red if one regresses.
+
+## 2026-08-21 — One filter engine behind all three listings
+
+`/reports/`, `/debates/` and `/network/` had drifted into three unrelated things. Reports had
+ten filter dimensions with tallies, chips, a linkable URL and a "which filter to loosen"
+suggestion, all written inside the page. Debates had a sort menu and no filters. Network had a
+category radio group and an Apply button that submitted a GET to a static host, so without JS
+it reloaded the page and filtered nothing, and with JS it duplicated a path the script already
+handled — and its `.listing__filters`, `.filter-set` and `.filter-chip` classes were only ever
+styled inside `search.astro`'s *scoped* block, so on `/network/` they matched nothing and the
+whole rail shipped bare. That is the `Field.astro` slot trap in another costume: valid markup,
+no warning, and a feature that reads as unimplemented rather than as CSS thrown away.
+
+Now: **`src/lib/listing-filters.ts`** is the engine, **`src/components/Listing.astro`** is the
+frame, and **`src/lib/listings.ts`** holds each listing's dimensions, sorts and noun. The last
+of those is read twice — by the page's frontmatter to render the rail and the sort menu, and by
+the same page's client script to run the engine — because defining them apart is how a sort
+option ends up in a menu with no comparator behind it.
+
+**Debates and network get one dimension each, deliberately.** Area, and category. A report
+answers fifteen structured sections; a debate is a sentence with an area on it. Offering a
+filter the data cannot support reads as a corpus that is empty rather than as a question nobody
+asked. The rail is the same rail on all three — a short one is fine, and a dimension added later
+extends it rather than re-laying out the page. Nothing on `/debates/` filters on ratings, for
+the reason the page already exists to serve: a "has answers" or "most disagreed" filter leaks
+where the community landed, one bit at a time, to a reader who has not answered yet.
+
+Three things are new to all three rather than carried over: the rail collapses on a phone behind
+a **button and two data attributes rather than a `<details>`** — `<details>` hides its own
+content through the UA stylesheet in a way an author rule cannot reliably reach, so a panel
+collapsed narrow and then widened would strand the reader with a summary corpus.css has hidden;
+`data-collapsible` is set by the engine, not the markup, so a page whose script never ran shows
+an open rail and no button instead of a dead control. A vocabulary longer than eight folds
+behind **"show all N"**, set with `hidden` rather than a CSS `nth-child` rule, because the
+freshness overlay appends options at runtime and a rule counting positions would silently start
+hiding the wrong ones — and a group with a ticked option past the fold opens itself, or a link
+would filter on something the reader cannot see or undo. And **"clear all" sits at the end of
+the chips row**, absent until there is something for it to undo.
+
+`?cat=` still works on `/network/`. The dimension is `category` now and that is what gets
+written, but a linkable filter that stops being linkable is a broken promise rather than a
+rename, so `legacyParams` maps the old name forward on read.
+
+### The part that was actually broken: filters and what was posted today
+
+Two bugs, both in the same place, and both invisible on a populated corpus.
+
+**The rail lived inside the `length > 0` branch.** So on an empty export there were no filters
+at all — and an empty export is precisely the state in which *everything* a reader can see was
+posted today and arrived through the freshness overlay. The first day the site has content was
+the one day none of it could be filtered. The frame is now rendered in every state; the overlay
+creates the fieldsets it needs through `ensureGroup()`, and corpus.css hides a rail with no
+fieldsets in it and closes the grid up behind it, so nothing shows an empty sidebar while it
+waits.
+
+**`readUrl()` ran once, before the overlay had resolved.** A link filtering on a value only
+today's content carries — `/debates/?area=outreach` when the one outreach debate went up this
+morning — found no checkbox for it, applied nothing, and told the reader "nothing in the corpus
+currently has this". Both halves wrong: the filter silently lost, and the notice saying the
+opposite of the truth. `add()` now re-reads the address bar after injecting options. Safe
+unconditionally: either the reader has not touched the rail, in which case the URL is still the
+link they followed, or they have, in which case `apply(true)` already wrote their state there
+and reading it back is a no-op that also clears a notice which no longer applies.
+
+The general rule, which is worth holding on to for anything else built on these pages: **a
+listing is built from a nightly export and then asks the database for what is newer, so any
+feature that reads the corpus has to work on both halves.** A card the overlay added carries
+the same data attributes as one the build wrote — that is what `src/lib/report-facets.ts`
+exists to guarantee — and it is counted, sorted, tallied and filtered identically.
+
+One limit, unchanged and deliberate: `src/lib/fresh.ts` caps the overlay at two dozen rows. On
+a day when more than that is posted, the filters see the newest two dozen and the rest arrives
+with the next nightly build.
+
+Not done, and left as a known gap: none of this is covered by an automated test. The engine was
+verified by hand against a seeded corpus and a fake PostgREST answering the three overlay
+queries — populated and empty, desktop and mobile, filtered by URL, no-results, retired-value
+notice, legacy `?cat=`, and a value that exists only on a row posted today.
