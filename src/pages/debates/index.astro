@@ -11,15 +11,15 @@
  * Nothing is endorsed by being listed here, and the page still says so in the paragraph
  * below, which is where that claim always belonged.
  *
- * **No aggregate is rendered anywhere on this page, not even a count of raters** — and that is
- * still true now that two of the sorts are computed from aggregates. The line is between
- * ordering the corpus and reporting on one claim: a card reading "42 positions, median 8" tells
- * a reader where the community landed before they opened the question, where "most divided
- * first" tells them which arguments are live. The first is what the debate page withholds; the
- * second is what a listing is for.
+ * **Cards show a shape as of 2026-08-22**, which reverses what this file used to say. The page
+ * rendered no aggregate at all — not even a count of raters — on the grounds that a figure on a
+ * card tells a reader where the community landed before they opened the question. It now carries
+ * a sparkline and one statistics line, because the alternative was a list of sentences a reader
+ * had no way to choose between. `DebateCard.astro` holds the argument, the limits, and the note
+ * about how this pulls against the debate page's withholding.
  *
- * The only filter is area, for the same reason: a "has answers" or "median above 7" checkbox
- * would hand over the first thing one bit at a time.
+ * The mean is still on no card. The only filter is still area: an ordering is honest about being
+ * rough where a threshold on a self-reported 0-to-10 scale is not.
  *
  * The rail, the count, the sort and the chips are `src/components/Listing.astro`, shared
  * with /reports/ and /network/, so the three behave identically down to the address bar.
@@ -28,11 +28,11 @@ import Base from '../../layouts/Base.astro';
 import Listing from '../../components/Listing.astro';
 import '../../styles/corpus.css';
 import '../../styles/forms.css';
-import { longDate } from '../../lib/format';
 import { exportedAt } from '../../lib/manifest';
 import { path } from '../../lib/paths';
-import { AREAS, areaLabel } from '../../lib/report-schema';
+import { AREAS } from '../../lib/report-schema';
 import { DEBATE_DIMENSIONS, DEBATE_NOUN, DEBATE_SORTS, groupsFor } from '../../lib/listings';
+import DebateCard from '../../components/DebateCard.astro';
 import { listDebates, listDebateStats } from '../../lib/debates';
 import { debateCardAttrs } from '../../lib/debate-facets';
 
@@ -42,6 +42,11 @@ const debates = await listDebates();
  *  ineligible for the two aggregate sorts — see `debateCardAttrs`, which writes the empty
  *  string rather than a zero for exactly that case. */
 const stats = listDebateStats();
+
+/** Said on the page rather than hard-coded into the sentence, so the copy cannot come to
+ *  disagree with `SORTABLE_MINIMUM` in scripts/export.mjs. Ten when the export has told us
+ *  nothing yet, which is what it is. */
+const threshold = [...stats.values()][0]?.sortableMinimum ?? 10;
 
 /** Only the areas something is actually filed under. An area nothing uses is a dead end
  *  with a zero beside it, and on a corpus this size most of them would be. */
@@ -91,6 +96,38 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
         the page: the overlay creates the area fieldset it needs, and corpus.css hides a
         rail with none yet and closes the grid up behind it. */}
     <Listing groups={groups} sorts={DEBATE_SORTS} noun={DEBATE_NOUN} total={debates.length}>
+      {/* Beside the control, not in a tooltip. Two of these orderings rank disagreement, and an
+          opaque ranking of disagreement is the least trustworthy thing this site could put in
+          front of this audience — so what each measures, and what it takes to qualify at all,
+          is on the page in words. */}
+      <dl class="sortnote" slot="sort-note">
+        <div>
+          <dt>Most divided</dt>
+          <dd>
+            Twice the smaller of the two sides — the share answering 0 to 4 against the share
+            answering 6 to 10. Highest where a debate splits evenly, zero where everyone is on
+            one side. The neutral 5s count in neither side, so a debate where everybody sits at
+            5 is not divided.
+          </dd>
+        </div>
+        <div>
+          <dt>Most agreed on</dt>
+          <dd>
+            The largest share held by any one band: 0–1, 2–4, 5, 6–8, or 9–10. Bands rather
+            than single scores, because 7 and 8 are not a disagreement.
+          </dd>
+        </div>
+        <div>
+          <dt>Both</dt>
+          <dd>
+            Run over the scored positions only — “no opinion, or outside my expertise” is in
+            neither — and a debate needs at least {threshold} scored positions to appear in
+            either ordering at all. Below that a share is arithmetic rather than a finding: two
+            people at opposite ends are perfectly divided and tell you nothing.
+          </dd>
+        </div>
+      </dl>
+
       <ul class="debate-list" role="list" data-results>
         {debates.map((debate) => (
           <li
@@ -105,15 +142,10 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
               /* Only the two shares decide eligibility, so the whole stats object goes in and
                  `debateCardAttrs` reads what it needs. */
               shares: stats.get(debate.id) ?? null,
+              lastActivityAt: stats.get(debate.id)?.lastActivityAt ?? null,
             })}
           >
-            <a class="debate-item__link" href={path(`/debates/${debate.id}/`)}>
-              {debate.statement}
-            </a>
-            <p class="card__facts debate-item__facts">
-              <span>{areaLabel(debate.area)}</span>
-              <span class="meta">Posted {longDate(debate.createdAt)}</span>
-            </p>
+            <DebateCard debate={debate} stats={stats.get(debate.id)} />
           </li>
         ))}
       </ul>
@@ -141,16 +173,27 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
         would rank a brand-new claim among the ones the community has been shown to agree
         about. `data-interactions` is the exception and is genuinely `0`: nobody has answered a
         debate posted an hour ago, and that is a fact rather than an absence. */}
+    {/* This mirrors `DebateCard.astro` **minus the sparkline and the statistics line**, and the
+        omission is the design rather than an unfinished copy of it. Aggregates are an
+        export-time product; a debate posted an hour ago has none, and a zero histogram reads as
+        unanimous disagreement, which is the most wrong thing a card could say about a claim
+        nobody has answered.
+
+        The classes are duplicated here because a `<template>` cannot instantiate a component.
+        What is *not* duplicated is the attribute list — `debateCardAttrs()` writes those on both
+        paths, which is the half that would silently break a sort if it drifted. */}
     <template data-fresh-debate>
-      <li class="debate-item" data-fresh data-debate data-area="" data-created="" data-interactions="0" data-divided="" data-consensus="">
-        <a class="debate-item__link" data-statement></a>
-        <p class="card__facts debate-item__facts">
-          {/* `data-area-label`, not `data-area`: the <li> above carries `data-area` for the
-              filter to read, and a querySelector for the same name inside it would be one
-              rename away from writing the filter's value into the visible text. */}
-          <span data-area-label></span>
-          <span class="meta" data-date></span>
-        </p>
+      <li class="debate-item" data-fresh data-debate data-area="" data-created="" data-interactions="0" data-divided="" data-consensus="" data-active="">
+        <div class="debate-card">
+          <a class="debate-card__claim" data-statement></a>
+          <p class="card__facts debate-card__facts">
+            {/* `data-area-label`, not `data-area`: the <li> above carries `data-area` for the
+                filter to read, and a querySelector for the same name inside it would be one
+                rename away from writing the filter's value into the visible text. */}
+            <span data-area-label></span>
+            <span class="meta" data-date></span>
+          </p>
+        </div>
       </li>
     </template>
   </div>

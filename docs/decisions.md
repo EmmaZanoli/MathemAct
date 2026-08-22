@@ -1649,3 +1649,110 @@ after reading what other people argued is the thing it is for.
 
 It sits with the numbers rather than in the page's introduction because that is where somebody
 reading a count of movements actually is.
+
+## 2026-08-22 — A debate card shows a shape, which reverses "a card may not show an aggregate"
+
+From the day the shared listing engine landed until now, `/debates/` rendered no aggregate at
+all — no count, no median, no share — and `src/lib/listings.ts` argued the case: a figure on a
+card tells a reader where the community landed before they have opened the question, which is
+exactly what the debate page withholds.
+
+**Reversed.** A card now carries a distribution sparkline and one statistics line,
+`N positions · C contributions · K changed position`.
+
+What changed is not the analysis but the judgement about which failure costs more. A list of bare
+sentences gives a reader no way to choose what to read, so they open whatever is at the top; a
+claim four people answered and a claim that has split ninety look identical. The section's second
+most important flow — a reader understanding where the community stands in about thirty seconds —
+never starts, because nothing on the page tells them which claim is worth thirty seconds. The
+shape is what makes a claim worth opening.
+
+What survives of the old rule is the whole of the constraint:
+
+- **Positions lead**, never a contribution count, and **never the mean.** A card is where a
+  single number gets mistaken for the finding, and on a bimodal debate the mean is the number
+  most likely to be mistaken for it. It stays on the debate page, beside the median and the
+  chart.
+- **No axes, no numbers, no ranking figure.** Nothing says where a card came in under the
+  current sort, and neither `divided` nor `consensus` is printed anywhere.
+- **One colour, the accent.** A ramp from disagreement to agreement would assert that one end is
+  the bad end, on a page whose entire point is that the site takes no position — and it would
+  collide with the outcome semantics, the only place on this site where red and green mean
+  anything.
+- **A card the overlay added shows neither the sparkline nor the statistics line.** Aggregates
+  are an export-time product, and a zero histogram reads as unanimous disagreement.
+
+### The consequence, stated rather than buried
+
+**This pulls against *Do not reveal the aggregate until the user has rated*.** The sparkline
+shows the shape of a debate to somebody who has not answered it, which is the effect that rule
+exists to prevent — and on 2026-08-21 the choice was made deliberately to keep that rule real,
+by leaving the debate page's distribution as a live fetch rather than baking it into the page.
+
+The two are not fully reconcilable and the split is now: the **listing gives away the shape**,
+and the **debate page still withholds the precise distribution, the median, the mean, and the
+reader's own place in it**. That is a real trade, not a technicality — bandwagoning is driven
+more by shape than by precision.
+
+If the effect is judged to matter more than orientation does, **the sparkline is the thing to
+remove.** The statistics line does not carry the shape, and neither do the sorts. Removing it is
+one conditional in `DebateCard.astro`.
+
+## 2026-08-22 — "Recently active" needed a definition, and it went where the others are
+
+The brief said to surface five orderings and not to define them here, because prompt 3 had put
+them in `src/lib/listings.ts`. Four were there; *Recently active* was not.
+
+The prohibition is against defining a sort **on the page** — that is what puts a listing on two
+definitions and lets the build and the freshness overlay disagree. So the definition went into
+`DEBATE_SORTS` beside the others, and the export gained the value it reads.
+
+`lastActivityAt` is the later of the newest contribution and the newest rating activity, falling
+back to the debate's own date so a claim nobody has touched sorts by when it was asked rather
+than sorting last for want of a value. The ratings side uses `max(updated_at)` and not
+`created_at`, because somebody changing their answer is activity and it is the kind this section
+most wants to notice.
+
+**It is a timestamp and nothing else.** It says *when*, never who moved or to what, so it is not
+a way back into the per-person history `public.rating_changes` deliberately withholds.
+
+It is deliberately last in the menu. It is the only ordering here that is about attention rather
+than about the claim, and a listing of claims that opened ordered by whatever was touched most
+recently would be a feed.
+
+## 2026-08-22 — What "most divided" measures is on the page, not in a tooltip
+
+Two of these orderings rank disagreement, and an opaque ranking of disagreement is the least
+trustworthy thing this site could put in front of this audience. So both are defined in words
+beside the control: what each measures, that both run over the scored positions only, that the
+neutral 5s count in neither side, and that a debate needs at least ten scored positions to appear
+in either at all.
+
+The threshold is read from the export's own `sortableMinimum` rather than typed into the
+sentence, so the copy cannot come to disagree with `SORTABLE_MINIMUM` in `scripts/export.mjs`.
+
+`Listing.astro` gained a named `sort-note` slot for it. Two traps met in one change: Astro
+**drops** content addressed to a slot that is not declared, without a warning — so the slot had
+to be added there rather than assumed — and slotted content carries the **page's** scope
+attribute rather than the component's, so the styles live in `corpus.css`.
+
+## 2026-08-22 — Debates have no tag vocabulary, and this is the seam
+
+`public.debates` has no tag table: `tags` and `report_tags` are the reports' vocabulary, and
+nothing else has one. So tag filtering is not half-built here.
+
+An empty "Subject area" fieldset would be a rail of dead ends with a zero beside every option,
+which reads as a corpus that is empty rather than as a question nobody asked — the same argument
+that keeps unused areas out of the area filter. When debates get tags, it is one entry in
+`DEBATE_DIMENSIONS` and one line in `DebateCard.astro`, and both places say so.
+
+## 2026-08-22 — The card's styles are global, because a `<template>` cannot be a component
+
+The freshness overlay builds its card by cloning a `<template>` in the page, since a template
+cannot instantiate an Astro component. That markup therefore carries the **page's** scope
+attribute and not `DebateCard.astro`'s — so a scoped `.debate-card__claim` in the component would
+style every built card and leave every fresh one bare.
+
+The styles are in `corpus.css`. What is *not* duplicated between the two paths is the attribute
+list: `debateCardAttrs()` writes those on both, which is the half whose drift would silently
+break a sort rather than merely look wrong.

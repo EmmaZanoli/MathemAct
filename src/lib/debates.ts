@@ -137,6 +137,14 @@ export interface DebateStats extends Aggregate {
   readonly consensus: number | null;
   /** The threshold the two above need. Carried so the page can say it rather than hard-code it. */
   readonly sortableMinimum: number;
+  /**
+   * When anything last happened on this debate — the later of its newest contribution and its
+   * newest rating activity, falling back to its own date.
+   *
+   * A timestamp and nothing else. It says *when*, never who moved or to what, so it is not a
+   * back door into the per-person history `public.rating_changes` deliberately withholds.
+   */
+  readonly lastActivityAt: string | null;
 }
 
 export type Result<T> =
@@ -248,6 +256,7 @@ export function listDebateStats(): Map<string, DebateStats> {
       divided: row.divided ?? null,
       consensus: row.consensus ?? null,
       sortableMinimum: row.sortableMinimum ?? 10,
+      lastActivityAt: row.lastActivityAt ?? null,
     });
   }
 

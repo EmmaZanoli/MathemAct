@@ -45,6 +45,7 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | Discussion on reports, the citation graph, and the flag queue |
 | ✅ | Contributions on debates: grouped by position or flat, sorted, no replies |
 | ✅ | Endorsement — two actions, counted in words, withdrawable, and never a vote |
+| ✅ | The debates listing: a shape per card, five orderings, and what they mean stated |
 | ✅ | Moderation: flag-led, audited, explained to both sides, and erasure that erases |
 | ✅ | Account bans: reachable, reversible, and explained to the account holder |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |

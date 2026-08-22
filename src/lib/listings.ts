@@ -136,10 +136,16 @@ export const REPORT_SORTS: readonly Sort[] = [
  * Area, and nothing else.
  *
  * A debate is a single sentence, an optional rationale and an area, so area is the whole of
- * what there is to filter on. **Nothing here filters on ratings**, and that is still the rule:
- * a "has answers" or "median above 7" checkbox would tell a reader where the community landed
- * before they had opened the question, one bit at a time, and no number about any single debate
- * appears on a card.
+ * what there is to filter on. **Nothing here filters on ratings**, and that is still the rule
+ * even though cards now show a distribution: a filter is a claim that the corpus divides along
+ * that axis, and "median above 7" invites reading a rough 0-to-10 self-report as a measurement.
+ * An ordering is honest about being rough; a threshold is not.
+ *
+ * **Tags: there is no vocabulary for debates and this is the seam.** `public.debates` has no tag
+ * table — `tags` and `report_tags` are the reports' — so a "Subject area" fieldset here would be
+ * an empty rail with a zero beside every option, which reads as a corpus that is empty rather
+ * than as a question nobody asked. When debates get tags, one entry here and one line in
+ * `DebateCard.astro` is the whole change.
  */
 export const DEBATE_DIMENSIONS: readonly Dimension[] = [
   { key: 'area', legend: 'Area', chipKind: 'Area' },
@@ -155,9 +161,15 @@ export const DEBATE_DIMENSIONS: readonly Dimension[] = [
  * debate, to a reader who has not answered — which is the thing the debate page withholds and
  * a listing must not hand over instead.
  *
- * So: the sorts exist, the cards stay silent, and no count, median, mean or share is rendered
- * on this page. A reader who reorders the list learns the shape of the corpus and still has to
- * open a claim and answer it to learn the shape of that claim.
+ * **The second half of that stopped being true on 2026-08-22.** A card now carries a
+ * distribution sparkline and `N positions · C contributions · K changed position`, because a
+ * list of bare sentences gave a reader no way to choose what to read. See the header of
+ * `DebateCard.astro` for the argument and for what survives of the old rule — chiefly that
+ * positions lead, that the **mean** appears on no card and on no sort control, and that a card
+ * the overlay added shows no distribution at all rather than a row of zeros.
+ *
+ * What is still true is the part these sorts depend on: **no ranking figure.** Nothing on a card
+ * says where it came in, and neither `divided` nor `consensus` is printed anywhere.
  *
  * Both are export-time aggregates read off `data-divided` and `data-consensus`. A debate with
  * fewer than ten scored positions, and every debate the freshness overlay added, carries the
@@ -184,6 +196,18 @@ export const DEBATE_SORTS: readonly Sort[] = [
     value: 'consensus',
     label: 'Most agreed on',
     compare: descending('consensus'),
+  },
+  {
+    value: 'active',
+    label: 'Recently active',
+    // The later of the newest contribution and the newest rating activity, compared as an ISO
+    // string. Same shape as the reports listing's `activity` sort, and for the same reason: a
+    // date comparison needs no parsing and an absent one sorts last by itself.
+    //
+    // The only sort here that is about attention rather than about the claim, which is why it
+    // is last: a listing of claims should not open ordered by whatever was touched most
+    // recently, or the page becomes a feed.
+    compare: (a, b) => (b.dataset.active || '').localeCompare(a.dataset.active || ''),
   },
 ];
 

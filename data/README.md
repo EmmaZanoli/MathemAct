@@ -144,7 +144,8 @@ wrote it, and one attributable answer would undo the promise the whole scale res
   "positionChanges": 4,
   "divided": 0.222,
   "consensus": 0.556,
-  "sortableMinimum": 10
+  "sortableMinimum": 10,
+  "lastActivityAt": "2026-08-21T09:14:02.881Z"
 }
 ```
 
@@ -175,6 +176,11 @@ people, not edits, so somebody who moved 6 → 8 → 3 counts once. There is no 
 in this dataset and there will not be one: a trail through somebody's changes of mind is a
 public voting record for a rating that is deliberately private. The count is the only shape in
 which that table leaves the database.
+
+`lastActivityAt` is the later of the newest contribution and the newest rating activity on the
+debate, falling back to the debate's own date. It is a timestamp and nothing else — it says
+*when* something happened, never who moved or to what — so it is not a way back into the
+per-person history this dataset deliberately withholds.
 
 `divided` and `consensus` are two shares of the histogram, and both are **null** below
 `sortableMinimum` scored positions rather than zero — a debate with four answers has not

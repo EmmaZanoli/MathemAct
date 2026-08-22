@@ -270,7 +270,21 @@ const AGGREGATES = `
     r.no_opinion_count::int as no_opinion_count,
     r.coverage,
     contributions.count::int as contribution_count,
-    movement.count::int      as position_changes
+    movement.count::int      as position_changes,
+
+    -- When anything last happened here, for the "recently active" ordering. The later of the
+    -- newest contribution and the newest rating activity, falling back to the debate's own date
+    -- so a claim nobody has touched still sorts by when it was asked rather than sorting last
+    -- for want of a value.
+    --
+    -- The ratings side uses max(updated_at) and not max(created_at): somebody changing their
+    -- answer is activity, and it is the kind this section most wants to notice. It reports
+    -- **when**, never who or to what — a timestamp is not a position.
+    greatest(
+      contributions.latest,
+      activity.latest,
+      q.created_at
+    ) as last_activity_at
   from public.debate_ratings r
   join public.debates q on q.id = r.debate_id
 
@@ -279,12 +293,18 @@ const AGGREGATES = `
   -- so it is part of what the distribution is made of; dropping it here would make the count
   -- under the chart disagree with the rows above it.
   left join lateral (
-    select count(*) as count
+    select count(*) as count, max(c.created_at) as latest
       from public.comments c
      where c.parent_type = 'debate'
        and c.parent_id = r.debate_id
        and c.status = 'published'
   ) contributions on true
+
+  left join lateral (
+    select max(r2.updated_at) as latest
+      from public.ratings r2
+     where r2.debate_id = r.debate_id
+  ) activity on true
 
   -- **How many people changed position, and nothing else.** Distinct users, not rows: somebody
   -- who moved 6 to 8 to 3 changed their position once as far as this number is concerned,
@@ -711,6 +731,7 @@ function toAggregate(row) {
     contributionCount: Number(row.contribution_count ?? 0),
     // How many people the arguments moved. A number, and nothing else — see the query.
     positionChanges: Number(row.position_changes ?? 0),
+    lastActivityAt: iso(row.last_activity_at),
     // Null below the threshold, so a consumer cannot mistake "not established" for "zero".
     divided,
     consensus,

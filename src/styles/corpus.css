@@ -985,6 +985,100 @@
     margin-block-start: var(--space-2xs);
   }
 
+  /* ── What the orderings mean ──────────────────────────────────────────────────────
+     Slotted into Listing.astro by /debates/, so it is styled here rather than in either file:
+     slotted content carries the page's scope attribute, and the page has no style block. */
+  .sortnote {
+    display: grid;
+    gap: var(--space-2xs);
+    margin: 0 0 var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border: var(--border);
+    border-radius: var(--radius-md);
+    background: var(--ground);
+    font-size: var(--size-1);
+  }
+
+  .sortnote dt {
+    font-family: var(--font-mono);
+    letter-spacing: var(--tracking-wide);
+    color: var(--ink);
+  }
+
+  .sortnote dd {
+    max-width: var(--measure);
+    margin: 0;
+    color: var(--ink-muted);
+  }
+
+  /* ── The debate card ──────────────────────────────────────────────────────────────
+     Global rather than scoped inside DebateCard.astro, because the freshness overlay builds a
+     reduced version of this card from a <template> in the page — which carries the page's scope
+     attribute, not the component's. A scoped rule would style the built cards and leave every
+     fresh one bare. See the header of DebateCard.astro. */
+
+  .debate-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+  }
+
+  .debate-card__claim {
+    font-family: var(--font-serif);
+    font-size: var(--size-4);
+    line-height: var(--leading-snug);
+    text-wrap: balance;
+  }
+
+  .debate-card__lead {
+    max-width: var(--measure);
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
+  }
+
+  .debate-card__shape {
+    margin-block-start: var(--space-2xs);
+  }
+
+  /* Eleven bars, no axes, no ticks, no numbers. Small enough to read as a shape rather than as
+     a chart somebody is expected to measure against. */
+  .spark {
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    align-items: end;
+    gap: 2px;
+    width: min(14rem, 100%);
+    height: 2rem;
+    padding-block-end: 2px;
+    border-block-end: var(--border);
+  }
+
+  /* One colour for every bar. See the header: a ramp would assert that one end of the scale is
+     the bad end. */
+  .spark__bar {
+    height: var(--height);
+    min-height: 1px;
+    background: color-mix(in srgb, var(--accent) 42%, var(--surface));
+  }
+
+  .debate-card__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs) 0;
+    margin: 0;
+  }
+
+  .debate-card__stats > span + span::before {
+    content: '·';
+    margin-inline: var(--space-2xs);
+    color: var(--rule);
+  }
+
+  .debate-card__facts {
+    margin-block-start: var(--space-3xs);
+  }
+
   /* ── Debate guidance ────────────────────────────────────────────────────────────── */
 
   .guidance dt {

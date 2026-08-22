@@ -1,0 +1,149 @@
+---
+/**
+ * One debate on the listing, as a claim with a shape rather than a post with a comment count.
+ *
+ * **This reverses a rule this project held until 2026-08-22**, and the reversal is worth being
+ * explicit about because the old rule was not arbitrary. The debates listing rendered no
+ * aggregate at all — no count, no median, no share — on the grounds that a figure on a card
+ * tells a reader where the community landed before they have opened the question, which is
+ * exactly what the debate page withholds. `src/lib/listings.ts` still carries the argument.
+ *
+ * What changed is the judgement about which failure is worse. A list of bare sentences gives a
+ * reader no way to choose what to read, so they open whatever is at the top; a claim answered by
+ * four people and a claim that has split ninety look identical, and the section's second most
+ * important flow — understanding where the community stands in about thirty seconds — never
+ * starts. The shape is what makes a claim worth opening.
+ *
+ * The limits that survive from the old rule, and they are the whole of it:
+ *
+ *   **Positions lead.** Never a contribution count, and never the mean. A card is where a
+ *   single number gets mistaken for the finding, and the mean is the number most likely to be
+ *   mistaken for it — on a bimodal debate it reports mild agreement for a community split
+ *   cleanly in two. It appears on the debate page beside the median and the chart, and nowhere
+ *   else.
+ *
+ *   **No ranking figure.** The sparkline has no axes and no numbers, and nothing on the card
+ *   says where it came in under the current sort.
+ *
+ *   **One colour, the accent.** No ramp from disagreement to agreement: a gradient asserts that
+ *   one end is bad on a page whose entire point is that the site takes no position, and it would
+ *   collide with the outcome semantics, which are the only place on this site where red and
+ *   green mean anything.
+ *
+ * A debate the freshness overlay added renders **neither** the sparkline nor the statistics
+ * line. Aggregates are an export-time product, and a zero histogram reads as unanimous
+ * disagreement — the most wrong thing this card could say about a claim nobody has answered yet.
+ *
+ * **The styles are in `src/styles/corpus.css`, not here.** The freshness overlay builds its own
+ * reduced card from a `<template>` in `/debates/index.astro`, because a template cannot
+ * instantiate a component — and that markup carries the *page's* scope attribute rather than
+ * this component's, so a scoped `.debate-card__claim` here would style the built cards and leave
+ * every fresh one unstyled. Global is the only place both can reach.
+ */
+import { longDate } from '../lib/format';
+import { path } from '../lib/paths';
+import { areaLabel } from '../lib/report-schema';
+import { SCALE_POINTS } from '../lib/debates';
+import type { Debate, DebateStats } from '../lib/debates';
+
+interface Props {
+  debate: Debate;
+  /** Undefined for a debate the export has no aggregates for, which is what makes the
+   *  sparkline and the statistics line absent rather than zero. */
+  stats?: DebateStats;
+}
+
+const { debate, stats }: Props = Astro.props;
+
+/**
+ * About two lines of the opening reasoning.
+ *
+ * Cut on a word boundary and only when there is enough to be worth cutting, so a rationale
+ * three characters over does not gain an ellipsis for nothing. Plain text rather than rendered
+ * markdown: a card is not the place to set a formula, and half a rendered formula is worse than
+ * none.
+ */
+const LEAD = 180;
+const rationale = debate.rationale?.trim() ?? '';
+const lead =
+  rationale.length > LEAD + 20
+    ? `${rationale.slice(0, rationale.lastIndexOf(' ', LEAD))}…`
+    : rationale;
+
+const histogram = stats?.histogram;
+/** Bars are a proportion of the tallest column, not of the total — otherwise a distribution
+ *  whose largest group is nine out of ninety is a row of invisible stubs and the shape, which is
+ *  the entire point, is lost. */
+const tallest = histogram ? Math.max(1, ...histogram) : 1;
+
+/** Both counts can be null on an export that predates them; the line drops the parts it does
+ *  not have rather than printing a zero nobody counted. */
+const hasStats =
+  !!stats && (stats.totalRaters > 0 || stats.contributionCount !== null);
+---
+
+<div class="debate-card">
+  <a class="debate-card__claim" href={path(`/debates/${debate.id}/`)} data-statement>
+    {debate.statement}
+  </a>
+
+  {lead && <p class="debate-card__lead">{lead}</p>}
+
+  {
+    histogram && (
+      <div class="debate-card__shape">
+        {/* Decoration over data the text equivalent states properly. A bar chart carries its
+            content entirely through height and position, neither of which reaches a screen
+            reader — and an aria-label reading "distribution of positions" tells somebody
+            nothing they could act on. */}
+        <div class="spark" aria-hidden="true">
+          {SCALE_POINTS.map((point) => (
+            <span
+              class="spark__bar"
+              style={`--height: ${Math.round(((histogram[point] ?? 0) / tallest) * 100)}%`}
+            />
+          ))}
+        </div>
+
+        {/* The counts, in scale order, and no interpretation of them. "Mostly agreement" would
+            be this card taking a position; the numbers let a reader tell a bimodal debate from a
+            consensus one, which is the only thing that matters here. */}
+        <span class="visually-hidden">
+          Positions by score, 0 to 10: {histogram.join(', ')}.
+        </span>
+      </div>
+    )
+  }
+
+  {
+    hasStats && (
+      <p class="debate-card__stats meta" data-card-stats>
+        {/* Positions first, always. */}
+        <span>
+          {stats!.totalRaters} {stats!.totalRaters === 1 ? 'position' : 'positions'}
+        </span>
+
+        {stats!.contributionCount !== null && (
+          <span>
+            {stats!.contributionCount}{' '}
+            {stats!.contributionCount === 1 ? 'contribution' : 'contributions'}
+          </span>
+        )}
+
+        {stats!.positionChanges !== null && stats!.positionChanges > 0 && (
+          <span>{stats!.positionChanges} changed position</span>
+        )}
+      </p>
+    )
+  }
+
+  {/* Area, and the seam where tags would go. `public.debates` has no tag table — `tags` and
+      `report_tags` are the reports' vocabulary — so there is nothing to render and nothing to
+      filter on. Adding an empty "Subject area" fieldset to the rail would be a dead end with a
+      zero beside it, which is worse than an absent filter. When debates get tags, this is where
+      they render and `DEBATE_DIMENSIONS` is where the filter goes; both are one line. */}
+  <p class="card__facts debate-card__facts">
+    <span data-area-label>{areaLabel(debate.area)}</span>
+    <span class="meta" data-date>Posted {longDate(debate.createdAt)}</span>
+  </p>
+</div>

@@ -35,6 +35,13 @@ export interface DebateFacetInput {
   /** Positions plus contributions. Zero is a true statement about a debate posted an hour ago. */
   readonly interactions: number;
   readonly shares?: DebateShares | null;
+  /**
+   * When anything last happened. Absent on a card the overlay built, which sorts it last under
+   * "recently active" — mildly wrong for the newest thing on the page, and the alternative is
+   * inventing an activity date for a debate whose activity the export has not seen. Its
+   * `createdAt` is not that date: it is when the claim was asked.
+   */
+  readonly lastActivityAt?: string | null;
 }
 
 /**
@@ -69,6 +76,7 @@ export function debateCardAttrs(input: DebateFacetInput): Record<string, string>
     'data-interactions': String(input.interactions),
     'data-divided': shareValue(input.shares?.divided),
     'data-consensus': shareValue(input.shares?.consensus),
+    'data-active': input.lastActivityAt ?? '',
   };
 }
 
