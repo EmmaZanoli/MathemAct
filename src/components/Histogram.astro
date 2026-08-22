@@ -23,10 +23,11 @@
  * and position, both of which are unavailable to a screen reader, and a chart with an
  * `aria-label` saying "histogram of ratings" tells somebody nothing they can act on.
  *
- * Nothing is carried by colour alone. The reader's own answer is marked with the word
- * "you" above its bar and a thicker border; the median is marked with the word "median"
- * under its column and a rule. Both survive being printed in grey, and both are in the
- * table.
+ * Nothing is carried by colour alone. The reader's own answer is marked with the word "you"
+ * above its bar and the bar filled solid rather than tinted; the median is marked with the word
+ * "median" under its column and a rule. **The two sit on opposite sides of the axis**, which is
+ * what lets both appear on one column — the commonest case on a small debate is that your own
+ * answer is the median. Both survive being printed in grey, and both are in the table.
  *
  * Rendered empty and filled by script: the aggregate is deliberately not in the page source
  * until the reader has answered. See the header of src/lib/debates.ts.
@@ -93,14 +94,6 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     <span class="histogram__figure" data-figure="changed" hidden><b data-stat="changed">0</b> changed position</span>
   </p>
 
-  {/* One sentence, under the numbers, and it is the frame the whole section asks to be read
-      in. "K changed position" above is a count of deliberation, not turnout, and without a line
-      saying so it reads as a defect rate. */}
-  <p class="histogram__frame">
-    This records deliberation rather than polling. Changing position after reading what other
-    people argued is the thing it is for, and every such move is counted above.
-  </p>
-
   <details class="histogram__why">
     <summary>Why is the median given more weight than the mean?</summary>
     <p class="histogram__note">
@@ -129,7 +122,8 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
   }
 
   .histogram__col {
-    position: relative;
+    /* No `position: relative` any more: it existed only to anchor the absolutely positioned
+       dashed line that used to strike through this column's own numbers. */
     display: grid;
     /* you · count · bar · tick · anchor · median. Fixed rows so every column's tick sits on
        the same line however tall its bar is. */
@@ -178,19 +172,39 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     background: color-mix(in srgb, var(--accent) 42%, var(--surface));
   }
 
-  /* The reader's own answer: a dashed vertical line through the column and the word "you"
-     above it. The outline is removed in favour of the line so the bar stays the same tint. */
-  .histogram__col[data-mine]::after {
-    content: '';
-    position: absolute;
-    top: 1rem;
-    bottom: 3.8rem;
-    left: 50%;
-    border-inline-start: 1px dashed var(--accent-strong);
-  }
+  /* ── Marking your answer, and marking the median ──────────────────────────────────
+     These two collide constantly, because the commonest case on a small debate is that your
+     own answer *is* the median — and the column that carries both is the one that used to carry
+     a vertical dashed line straight through its own numbers.
+
+     Three things went wrong there and all three are fixed by not overlaying anything:
+
+       The dashed line was `position: absolute; left: 50%`, running from row 1 to the axis. The
+       count and the tick are centred, so the line passed exactly through the middle of both
+       digits and read as a strikethrough on them.
+
+       The word "you" carried a `::before` diamond with `display: block`, which is two stacked
+       lines of text in a row 1.5rem tall. It overflowed downwards onto the count.
+
+       That diamond was U+25C6, which is outside the self-hosted `latin` and `latin-ext`
+       subsets — so it was a fallback glyph beside IBM Plex, the same problem as U+25A0 in the
+       tombstone and U+2192 in the movement badge. It is gone rather than redrawn: the word and
+       the bar identify the column, and a glyph was never carrying meaning here.
+
+     What marks them now, with nothing absolutely positioned and nothing overlapping:
+
+       **Yours** — the word above the column, and the bar filled solid instead of tinted. Above
+       the axis.
+       **The median** — a rule and the word, below the axis.
+
+     So the two live on opposite sides of the axis and can both appear on one column without
+     touching. Neither is carried by colour alone: each has its word, and both are in the
+     visually-hidden table regardless. */
 
   .histogram__col[data-mine] .histogram__bar {
-    outline: none;
+    /* Solid where every other bar is 42% tinted. Not a colour *by position* — the accent is the
+       same at 0 as at 10 — just the one bar the reader has a claim on. */
+    background: var(--accent);
   }
 
   .histogram__you,
@@ -198,22 +212,23 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     font-family: var(--font-mono);
     font-size: var(--size-0);
     letter-spacing: var(--tracking-wide);
+    /* One line, always. The row is 1.5rem and two lines do not fit in it — which is how the
+       overflow onto the count happened in the first place. */
+    white-space: nowrap;
+    line-height: 1;
   }
 
   .histogram__you {
     color: var(--accent-strong);
     font-family: var(--font-sans);
     font-weight: var(--weight-semibold);
-  }
-
-  .histogram__you::before {
-    content: '◆';
-    display: block;
-    font-size: var(--size-0);
+    /* Sat at the bottom of its row, so it reads as belonging to the column under it rather
+       than floating above the whole chart. */
+    align-self: end;
   }
 
   .histogram__median {
-    padding-block-start: 2px;
+    padding-block-start: var(--space-3xs);
     border-block-start: var(--border-width-thick) solid var(--ink);
     color: var(--ink);
     align-self: start;

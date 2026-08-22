@@ -1641,15 +1641,6 @@ already are, read collectively. It will be smaller than K, and the difference is
 rather than a bug — more people change their mind than write about it. Anything rendering both
 has to label them so that gap is legible.
 
-## 2026-08-22 — One sentence framing the numbers as deliberation
-
-"K changed position" reads as a defect rate without a line saying what it is. So there is one,
-under the statistics line: this records deliberation rather than polling, and changing position
-after reading what other people argued is the thing it is for.
-
-It sits with the numbers rather than in the page's introduction because that is where somebody
-reading a count of movements actually is.
-
 ## 2026-08-22 — A debate card shows a shape, which reverses "a card may not show an aggregate"
 
 From the day the shared listing engine landed until now, `/debates/` rendered no aggregate at
