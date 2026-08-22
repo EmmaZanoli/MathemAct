@@ -1574,3 +1574,78 @@ This is the trap CLAUDE.md records about accumulating `!`s, arriving from the ot
 not a narrowing lost inside a hoisted function, but an assertion that stayed true-looking after
 the thing it asserted about was deleted. It was found by re-reading the file to add a line to
 it, which is not a strategy.
+
+## 2026-08-22 — The movement badge reads "6 to 9", because U+2192 is not in the font
+
+The design called for "6 → 9". It renders as "6 to 9", and the reason is typographic rather
+than editorial.
+
+The self-hosted IBM Plex subsets are `latin` and `latin-ext`. U+2192 is in neither, so an arrow
+would be drawn by whatever the browser fell back to — a different weight and a different shape
+sitting directly beside IBM Plex Mono digits, in front of an audience this project describes as
+unusually sensitive to typographic sloppiness. It is the same problem as U+25A0, which the
+tombstone draws in CSS for exactly this reason. A word costs two characters and is set in the
+right typeface.
+
+`movementLabel()` in `src/lib/positions.ts` is the one place it is worded, which also makes the
+off-scale case fall out for free: moving to or from "no opinion" is a position change like any
+other and gets the same badge with words where the number would be — "no opinion to 9".
+
+Noted while checking this: **the `←` in the breadcrumbs has the same problem** and predates all
+of it. Not fixed here, because changing every breadcrumb on the site is not this branch's, but
+it is the same fallback in the same place and is worth a decision of its own.
+
+## 2026-08-22 — The edit window is shown, and read from the stamp rather than the counts
+
+The database enforces the window and raises; the interface agrees with it. So the author sees
+the time remaining, and where it is shut, **which rule shut it** — "somebody has said this
+captures their view" rather than a disabled button with no account of itself.
+
+It reads `comments.endorsed_at`, which meant carrying that column into the export. The
+tempting shortcut was to infer "endorsed" from the endorsement counts, which are already
+exported — and it is wrong in a way that only shows up after a withdrawal. The stamp is set by
+the first endorsement and **never cleared**, so a contribution every endorser has since
+withdrawn from has both counts at zero and a window that is still shut. Inferring from the
+counts would offer an Edit button the guard refuses, which is precisely the interface
+substituting for the database rather than agreeing with it.
+
+The remaining time is computed in the browser. Rendered at build time it would be hours stale
+before anybody read it, and it is deliberately coarse — "about 3 more hours" — because nobody
+needs the seconds and a countdown nobody asked for is worse than a rounding.
+
+Deleting is unaffected at any age. A contribution is withdrawable whenever, and its position
+stays in the distribution either way.
+
+## 2026-08-22 — A position change invites a contribution; it does not require one
+
+The movement is already recorded by the time the invitation appears: the rating update wrote a
+`rating_changes` row by trigger, and the earlier contribution keeps its text, its group and its
+score with a link forward. So the invitation is an offer above a control that stays exactly as
+collapsed as it was — not an auto-opened box, not a step in a flow. Somebody who moved and has
+nothing to add has already done the part that counts.
+
+`justChanged` is set for exactly one reveal and cleared immediately after. A first answer is not
+a position change, and neither is arriving on a page you had already answered — both would
+otherwise show an invitation to rewrite something in response to nothing.
+
+## 2026-08-22 — The count of changes is all `rating_changes` may produce
+
+The statistics line carries "K changed position" and there is no list behind it, by design.
+Ratings are private on this site, so a per-person history of who moved and when is a public
+voting record for something deliberately hidden — which is why the table has no grant to any
+browser role and the export takes a `count(distinct user_id)` out of it and nothing else.
+
+If a list is ever wanted, it is built from **superseded contributions** instead: the people
+whose positions are public because they chose to write them down. That is what the badges
+already are, read collectively. It will be smaller than K, and the difference is the finding
+rather than a bug — more people change their mind than write about it. Anything rendering both
+has to label them so that gap is legible.
+
+## 2026-08-22 — One sentence framing the numbers as deliberation
+
+"K changed position" reads as a defect rate without a line saying what it is. So there is one,
+under the statistics line: this records deliberation rather than polling, and changing position
+after reading what other people argued is the thing it is for.
+
+It sits with the numbers rather than in the page's introduction because that is where somebody
+reading a count of movements actually is.

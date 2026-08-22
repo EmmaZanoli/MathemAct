@@ -76,6 +76,15 @@ export interface Comment {
   readonly supersededBy: string | null;
   /** The same relation from the other end: this one replaced an earlier contribution. */
   readonly supersedesEarlier: boolean;
+  /**
+   * When the edit window closed early, or null while it is still open on that count.
+   *
+   * Stamped by the first endorsement and **never cleared**, so it stays set after every
+   * endorsement has been withdrawn. That is why the interface reads this rather than inferring
+   * from the counts: both counts can be zero on a contribution whose text is fixed, and an Edit
+   * button offered there is one the guard refuses.
+   */
+  readonly endorsedAt: string | null;
   /** Counts, never endorsers. Naming them would publish their positions by inference. */
   readonly endorsements: {
     readonly capturesMyView: number;
@@ -132,6 +141,7 @@ async function readComments(): Promise<Comment[]> {
     positionKnown: comment.parentType !== 'debate' || 'agreementScore' in comment,
     supersededBy: comment.supersededBy ?? null,
     supersedesEarlier: comment.supersedesEarlier ?? false,
+    endorsedAt: comment.endorsedAt ?? null,
     endorsements: {
       capturesMyView: comment.endorsements?.capturesMyView ?? 0,
       agreePositionNotReason: comment.endorsements?.agreePositionNotReason ?? 0,
@@ -154,7 +164,7 @@ async function readComments(): Promise<Comment[]> {
  */
 const SELECT = [
   'id,parent_type,parent_id,in_reply_to,body,created_at,updated_at,deleted_at',
-  'agreement_score,superseded_by',
+  'agreement_score,superseded_by,endorsed_at',
   'author:profiles!comments_author_id_fkey(id,display_name,is_pseudonym,institution_name,institution_country,institution_verified_at)',
 ].join(',');
 
@@ -169,6 +179,7 @@ interface RawComment {
   deleted_at: string | null;
   agreement_score: number | null;
   superseded_by: string | null;
+  endorsed_at: string | null;
   author: {
     id: string;
     display_name: string;
@@ -194,6 +205,7 @@ function toComment(row: RawComment): Comment {
     // here is the off-scale answer and nothing else.
     positionKnown: true,
     supersededBy: row.superseded_by ?? null,
+    endorsedAt: row.endorsed_at ?? null,
     // Both unavailable over PostgREST — see the note on SELECT. A live-fetched contribution
     // renders with no endorsement count and no movement flag, and picks both up at the next
     // build.

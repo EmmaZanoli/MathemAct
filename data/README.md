@@ -203,6 +203,7 @@ it decides which of the fields below mean anything.
   "agreementScore": 8,
   "supersededBy": null,
   "supersedesEarlier": true,
+  "endorsedAt": null,
   "endorsements": { "capturesMyView": 6, "agreePositionNotReason": 2 },
   "author": { "…": "…" }
 }
@@ -228,6 +229,11 @@ observed. Debates are a map of positions; a reply is a position on a position.
 not deleted, moved, or rewritten** — it keeps its text, its date and its original
 `agreementScore`, because somebody changing their mind is the most valuable event this section
 records and erasing the earlier reasoning would destroy the evidence that it happened.
+
+`endorsedAt` is when the contribution was first endorsed, and it is what closed its author's
+edit window. It is **never cleared**, so it stays set after every endorsement has been withdrawn
+— which is why it exists in this file separately from the counts below: a contribution can have
+`endorsedAt` set and both counts at zero, and its text is still fixed.
 
 `endorsements` are **counts, never names**. Endorsing requires holding a rating on the debate,
 and ratings are private, so a list of endorsers would leak the position of everyone on it by

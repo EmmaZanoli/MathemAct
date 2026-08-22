@@ -385,6 +385,12 @@ const COMMENTS = `
     -- The forward link, when its author has since written another one on the same debate.
     c.superseded_by,
 
+    -- When the edit window closed early. Carried because the interface has to agree with the
+    -- guard rather than guess at it: the counts below cannot stand in for this, since an
+    -- endorsement that was withdrawn leaves the stamp set and the window shut while both counts
+    -- read zero. Inferring from the counts would offer an Edit button the database refuses.
+    c.endorsed_at,
+
     -- And the same relation from the other end: whether this contribution is the one that
     -- replaced an earlier one. Both directions are carried because they are rendered in
     -- different places — the earlier row gets the movement badge, the later one is what the
@@ -755,6 +761,7 @@ function toComment(row) {
     agreementScore: row.agreement_score === null ? null : Number(row.agreement_score),
     supersededBy: row.superseded_by ?? null,
     supersedesEarlier: row.supersedes_earlier ?? false,
+    endorsedAt: iso(row.endorsed_at),
     endorsements: {
       capturesMyView: Number(row.endorsed_captures_my_view ?? 0),
       agreePositionNotReason: Number(row.endorsed_agree_position_not_reason ?? 0),

@@ -97,6 +97,27 @@ for (const contribution of ordered) {
   else groups.set(key, [contribution]);
 }
 
+/**
+ * The two directions of a position change, resolved once.
+ *
+ * `supersededBy` on a contribution is the id of the one that replaced it, so the forward lookup
+ * is a map by id. The backward one is the same relation read the other way: the contribution
+ * whose `supersededBy` points at this one. Building both here means `Contribution.astro` renders
+ * one row without scanning the debate.
+ */
+const byId = new Map(ordered.map((contribution) => [contribution.id, contribution]));
+const replacedBy = new Map<string, Comment>();
+for (const contribution of ordered) {
+  if (contribution.supersededBy) replacedBy.set(contribution.supersededBy, contribution);
+}
+
+/** `{ id, score }` or null, which is the shape the badge needs and all of it. */
+function movement(id: string | null | undefined) {
+  if (!id) return null;
+  const other = byId.get(id);
+  return other ? { id: other.id, score: other.agreementScore } : null;
+}
+
 const countIn = (key: string): number => groups.get(key)?.length ?? 0;
 const countInFamily = (familyKey: string): number =>
   keysInFamily(familyKey).reduce((total, key) => total + countIn(key), 0);
@@ -205,6 +226,8 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
                             contribution={contribution}
                             html={rendered.get(contribution.id) ?? ''}
                             positionKey={key}
+                            supersededBy={movement(contribution.supersededBy)}
+                            supersedes={movement(replacedBy.get(contribution.id)?.id)}
                           />
                         ))}
                       </ol>
@@ -251,6 +274,8 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
                     contribution={contribution}
                     html={rendered.get(contribution.id) ?? ''}
                     positionKey={OFF_SCALE_KEY}
+                    supersededBy={movement(contribution.supersededBy)}
+                    supersedes={movement(replacedBy.get(contribution.id)?.id)}
                   />
                 ))}
               </ol>
@@ -284,6 +309,8 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
                     contribution={contribution}
                     html={rendered.get(contribution.id) ?? ''}
                     positionKey={UNRECORDED_KEY}
+                    supersededBy={movement(contribution.supersededBy)}
+                    supersedes={movement(replacedBy.get(contribution.id)?.id)}
                   />
                 ))}
               </ol>
@@ -320,6 +347,12 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
       Ships hidden and stays hidden without JavaScript, because posting needs the database
       anyway — there is nothing here a reader with no script could have used. */}
   <div class="compose" data-compose hidden>
+    {/* Shown only just after a position change, and it **invites** rather than requires: the
+        control below stays exactly as collapsed as it was. Somebody who moved and has nothing
+        new to say has already done the thing that mattered — the movement is recorded, and the
+        contribution is optional. */}
+    <p class="compose__invite" data-compose-invite hidden></p>
+
     <button class="link-button compose__reveal" type="button" data-compose-reveal>
       None of these captures it — write my own
     </button>
@@ -712,10 +745,53 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
         const actions = item.querySelector<HTMLElement>(':scope > [data-comment-actions]');
         if (!actions) continue;
 
-        show(actions, 'edit', mine && !removed);
+        /**
+         * Editing follows the window; deleting does not.
+         *
+         * A contribution is withdrawable at any age — its position stays in the distribution
+         * either way — so Delete is offered for as long as it is theirs. Edit is offered only
+         * while the guard would allow it, and where it would not, the reason is stated instead
+         * of the button. The remaining time is computed here rather than at build time, where
+         * it would be hours stale before anybody read it.
+         */
+        const window_ = actions.querySelector<HTMLElement>('[data-edit-window]');
+        const closed = actions.dataset.editOpen !== 'true';
+        const expired = expiredNow(window_);
+
+        show(actions, 'edit', mine && !removed && !closed && !expired);
         show(actions, 'delete', mine && !removed);
         show(actions, 'flag', allowed && !mine && !removed);
+
+        if (window_) {
+          if (expired && window_.dataset.editWindow === 'open') {
+            // Open when the page was built, past twenty-four hours by the time it was read.
+            window_.textContent = 'Editing is closed: the 24 hours have passed.';
+          } else if (!closed && !expired) {
+            window_.textContent = `You can still edit this for ${remaining(window_)}.`;
+          }
+
+          window_.hidden = !mine || removed;
+        }
       }
+
+    /** Whether the twenty-four hours have run out since the page was built. */
+    function expiredNow(window_: HTMLElement | null): boolean {
+      const at = Number(window_?.dataset.closesAt ?? '');
+      return Number.isFinite(at) && at > 0 && at <= Date.now();
+    }
+
+    /** Coarse on purpose: nobody needs the seconds, and "3 hours" ageing into "2 hours" while
+     *  somebody reads is less odd than a countdown they did not ask for. */
+    function remaining(window_: HTMLElement): string {
+      const at = Number(window_.dataset.closesAt ?? '');
+      if (!Number.isFinite(at)) return 'a little longer';
+
+      const minutes = Math.max(0, Math.round((at - Date.now()) / 60_000));
+      if (minutes < 60) return minutes === 1 ? '1 more minute' : `${minutes} more minutes`;
+
+      const hours = Math.round(minutes / 60);
+      return hours === 1 ? 'about 1 more hour' : `about ${hours} more hours`;
+    }
 
       await applyEndorsements();
     }
@@ -1179,6 +1255,7 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
     const composeForm = root.querySelector<HTMLFormElement>('[data-compose-form]');
     const composeStatus = root.querySelector<HTMLElement>('[data-compose-status]');
     const composeBody = root.querySelector<HTMLTextAreaElement>('#contribution-body');
+    const invite = root.querySelector<HTMLElement>('[data-compose-invite]');
 
     if (composeForm) wireCounters(composeForm);
 
@@ -1288,6 +1365,7 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
         noOpinionCount?: number;
         score?: number | null;
         rated?: boolean;
+        changed?: boolean;
       };
 
       annotate(detail.histogram, detail.noOpinionCount);
@@ -1308,6 +1386,24 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
       iHaveAnswered = true;
       void applyEndorsements();
       placeComposer(detail.score ?? null);
+
+      /**
+       * A position change invites a new contribution, and only invites one.
+       *
+       * The movement is already recorded by then — the rating update wrote a `rating_changes`
+       * row by trigger, and the earlier contribution keeps its text, its group and its score
+       * with a link forward to whatever comes next. So this is an offer rather than a step:
+       * somebody who moved and has nothing to add has already done the part that counts.
+       */
+      if (detail.changed && invite) {
+        invite.textContent =
+          detail.score === null
+            ? 'You have moved to no opinion. Whatever you wrote before stays where it was, ' +
+              'with a note of the move — write again if your reason has changed too.'
+            : `You have moved to ${detail.score}. Whatever you wrote before stays where it ` +
+              'was, with a note of the move — write again if your reason has changed too.';
+        invite.hidden = false;
+      }
     });
 
     function annotate(histogram?: readonly number[], noOpinionCount?: number): void {
@@ -1536,6 +1632,15 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
   .compose__form {
     max-width: none;
     margin-block-start: var(--space-xs);
+  }
+
+  /* The invitation after a position change. Same restraint as the note below it: bordered
+     rather than filled, and nothing that reads as the page pushing. */
+  .compose__invite {
+    max-width: var(--measure);
+    margin: 0 0 var(--space-2xs);
+    color: var(--ink-muted);
+    font-size: var(--size-1);
   }
 
   .compose__note {

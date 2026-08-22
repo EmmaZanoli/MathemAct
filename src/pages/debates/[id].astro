@@ -286,6 +286,11 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
   let iRated = false;
   let myScore: number | null = null;
 
+  /** Set for one reveal only: the one immediately after a rating that *changed*. A first
+   *  answer is not a position change, and neither is arriving on the page already having
+   *  answered — so it is turned off again as soon as the reveal has read it. */
+  let justChanged = false;
+
   subscribeToSession((state) => {
     if (state.status === 'loading') return;
 
@@ -386,6 +391,9 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
         detail: {
           rated: iRated,
           score: myScore,
+          // True only when this reveal follows a *change*, not a first answer or a
+          // page load. A position change is an event; answering the first time is not.
+          changed: justChanged,
           histogram: aggregate.value.histogram,
           noOpinionCount: aggregate.value.noOpinionCount,
         },
@@ -439,7 +447,9 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
     myScore = score;
     submit.textContent = 'Update my answer';
 
+    justChanged = editing;
     await reveal();
+    justChanged = false;
 
     // Shown on the results panel now, because `reveal()` has just hidden the block the status
     // element sits in. `#rate-status` is inside the form on purpose — it is the form's own

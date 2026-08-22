@@ -93,6 +93,14 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     <span class="histogram__figure" data-figure="changed" hidden><b data-stat="changed">0</b> changed position</span>
   </p>
 
+  {/* One sentence, under the numbers, and it is the frame the whole section asks to be read
+      in. "K changed position" above is a count of deliberation, not turnout, and without a line
+      saying so it reads as a defect rate. */}
+  <p class="histogram__frame">
+    This records deliberation rather than polling. Changing position after reading what other
+    people argued is the thing it is for, and every such move is counted above.
+  </p>
+
   <details class="histogram__why">
     <summary>Why is the median given more weight than the mean?</summary>
     <p class="histogram__note">
@@ -277,6 +285,13 @@ import { SCALE_ANCHORS, SCALE_POINTS } from '../lib/debates';
     margin: 0;
     font-size: var(--size-2);
     color: var(--ink-muted);
+  }
+
+  .histogram__frame {
+    max-width: var(--measure);
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: var(--size-2);
   }
 
   .histogram__why {

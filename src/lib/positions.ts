@@ -124,3 +124,26 @@ export function positionLabel(score: number | null, known = true): string {
   if (!known) return 'position not recorded';
   return score === null ? OFF_SCALE_POSITION : `position ${score}`;
 }
+
+/** A position as it appears inside a movement: the bare number, or words off the scale. */
+export function scoreWord(score: number | null): string {
+  return score === null ? 'no opinion' : String(score);
+}
+
+/**
+ * The movement between two positions, as a badge reads it.
+ *
+ * **"6 to 9" and not "6 → 9", and the reason is the font rather than the wording.** The
+ * self-hosted IBM Plex subsets are `latin` and `latin-ext`; U+2192 is in neither, so an arrow
+ * here would render in whatever the browser fell back to — a different weight and a different
+ * shape sitting directly beside IBM Plex Mono digits, in front of an audience the brief
+ * describes as unusually sensitive to typographic sloppiness. It is the same problem as U+25A0
+ * in the tombstone, which is drawn in CSS for exactly this reason. A word costs two characters
+ * and is set in the right typeface.
+ *
+ * Moving to or from the off-scale answer is a position change like any other and gets the same
+ * badge, worded rather than numbered: "no opinion to 9".
+ */
+export function movementLabel(from: number | null, to: number | null): string {
+  return `${scoreWord(from)} to ${scoreWord(to)}`;
+}
