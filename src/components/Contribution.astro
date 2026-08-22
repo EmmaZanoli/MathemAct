@@ -19,6 +19,7 @@
  * three. Linking the ones who happen to qualify would produce a page for some names and a 404
  * for the rest.
  */
+import { ENDORSEMENT_ACTIONS, endorsementSentence } from '../lib/endorsements';
 import { longDate } from '../lib/format';
 import { positionLabel } from '../lib/positions';
 import type { Comment } from '../lib/comments';
@@ -34,6 +35,8 @@ interface Props {
 
 const { contribution, html, positionKey }: Props = Astro.props;
 
+/** Both counts together, as the sort key. Written onto the element rather than recomputed,
+ *  because the "most endorsed" order is one number and this is where it is defined. */
 const endorsements =
   contribution.endorsements.capturesMyView + contribution.endorsements.agreePositionNotReason;
 ---
@@ -77,30 +80,67 @@ const endorsements =
     )
   }
 
-  {/* Spelled out in words, and never beside a heart, a thumb, an arrow or a +1. This counts how
-      many people hold a reason; it is not a score for the argument. The buttons that produce it
-      are prompt 6's — these are read from the export, because public.comment_endorsements is
-      readable only by its own author and a browser cannot count them. */}
-  {
-    endorsements > 0 && (
-      <p class="contribution__endorsements meta">
-        {contribution.endorsements.capturesMyView > 0 && (
-          <span>
-            {contribution.endorsements.capturesMyView === 1
-              ? '1 person says this captures their view'
-              : `${contribution.endorsements.capturesMyView} people say this captures their view`}
+  {/* ── Endorsement, which is not a vote ─────────────────────────────────────────────
+      **No heart, no thumb, no arrow, no +1, no karma, and nothing coloured to read as a
+      score.** A vote count and a shared-reason count render identically as a number and do
+      opposite things: one ranks contributions against each other and rewards whoever phrased it
+      most sharply, the other measures how many people hold a reason. The label carries the whole
+      distinction, so it is spelled out in words every time — which is also why the counts below
+      are sentences rather than digits beside an icon.
+
+      Counts come from the nightly export and are rendered here for everybody, signed in or not.
+      A browser cannot count these rows: `comment_endorsements_select_own` returns one person's
+      own, because endorsing requires a rating and ratings are private. **There is nothing here
+      that names an endorser, and nothing that could be extended to.**
+
+      The actions and the "answer first" pointer both ship hidden. Which one a reader sees is
+      decided in Contributions.astro once the session and their rating are known — and on their
+      own contribution the whole block is removed rather than disabled. */}
+  <div class="endorse" data-endorse>
+    <p class="endorse__counts meta" data-endorse-counts>
+      {ENDORSEMENT_ACTIONS.map((action) => {
+        const count =
+          action.kind === 'captures_my_view'
+            ? contribution.endorsements.capturesMyView
+            : contribution.endorsements.agreePositionNotReason;
+
+        return (
+          <span
+            class={`endorse__count${action.primary ? '' : ' endorse__count--aside'}`}
+            data-endorse-count={action.kind}
+            data-base={count}
+            hidden={count === 0}
+          >
+            {endorsementSentence(action.kind, count)}
           </span>
-        )}
-        {contribution.endorsements.agreePositionNotReason > 0 && (
-          <span>
-            {contribution.endorsements.agreePositionNotReason === 1
-              ? '1 person agrees with the position but not this reason'
-              : `${contribution.endorsements.agreePositionNotReason} people agree with the position but not this reason`}
-          </span>
-        )}
-      </p>
-    )
-  }
+        );
+      })}
+    </p>
+
+    <div class="endorse__actions" data-endorse-actions hidden>
+      {ENDORSEMENT_ACTIONS.map((action) => (
+        <button
+          class={action.primary ? 'button button--quiet endorse__primary' : 'link-button'}
+          type="button"
+          data-endorse-kind={action.kind}
+          aria-pressed="false"
+        >
+          {action.label}
+        </button>
+      ))}
+    </div>
+
+    {/* Pointed at the scale, not at a sign-in wall — for an anonymous reader as much as for a
+        signed-in one who has not answered. The thing standing between them and this control is
+        not having a position, and the scale is where a position comes from; it says what signing
+        in is for by itself. */}
+    <p class="endorse__locked meta" data-endorse-locked hidden>
+      <button class="link-button" type="button" data-goto-scale>Answer the debate</button>
+      {' '}to say whether this captures your view.
+    </p>
+
+    <p class="form-status endorse__status" data-endorse-status role="status" tabindex="-1" hidden></p>
+  </div>
 
   <div class="contribution__actions" data-comment-actions>
     <button class="link-button" type="button" data-action="edit" hidden>Edit</button>
@@ -156,11 +196,55 @@ const endorsements =
     font-style: italic;
   }
 
-  .contribution__endorsements {
+  .endorse {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    margin-block-start: var(--space-xs);
+  }
+
+  .endorse__counts {
     display: flex;
     flex-direction: column;
     gap: var(--space-3xs);
-    margin-block-start: var(--space-2xs);
+    margin: 0;
+  }
+
+  /* The secondary count is quieter than the primary one, and neither is a headline. No number
+     here is set larger than the prose around it. */
+  .endorse__count--aside {
+    font-size: var(--size-0);
+  }
+
+  .endorse__actions {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  /* The primary action is a quiet button and the secondary is a plain link-button. That is the
+     whole of the emphasis: no fill, no accent block, nothing that reads as the page urging a
+     click. */
+  .endorse__primary {
+    font-size: var(--size-1);
+    padding-block: var(--space-3xs);
+  }
+
+  /* Taken, rather than offered. Marked by `aria-pressed` first — this only follows it, so the
+     state is never carried by appearance alone. */
+  .endorse__actions [aria-pressed='true'] {
+    font-weight: var(--weight-semibold);
+    color: var(--ink);
+  }
+
+  .endorse__actions [aria-pressed='true']::before {
+    content: '✓ ';
+  }
+
+  .endorse__locked,
+  .endorse__status {
+    margin: 0;
   }
 
   .contribution__actions {

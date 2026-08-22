@@ -300,6 +300,78 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
       </>
     )
   }
+
+  {/* Where the composer goes when the reader's own position group has no disclosure to sit
+      inside — an inert position, or a debate with no contributions yet. Both are the case where
+      somebody is writing the first contribution at their position. */}
+  <div class="compose-fallback" data-compose-fallback hidden></div>
+
+  {/* ── Writing one ───────────────────────────────────────────────────────────────────
+      Rendered once, here, and **moved** into the reader's own position group once that group is
+      known — which is when the debate page tells this section their score. One textarea, one
+      counter and one set of ids however many groups the page has; twelve composers would be
+      twelve places for a draft to be stranded.
+
+      **Collapsed, not gated.** The control is a plain button: not disabled, not behind a
+      warning, and not conditional on having endorsed anything first. Somebody with a genuinely
+      new point loses one click. Somebody about to retype an argument that is already three rows
+      above sees it first, which is the entire reason the box starts closed.
+
+      Ships hidden and stays hidden without JavaScript, because posting needs the database
+      anyway — there is nothing here a reader with no script could have used. */}
+  <div class="compose" data-compose hidden>
+    <button class="link-button compose__reveal" type="button" data-compose-reveal>
+      None of these captures it — write my own
+    </button>
+
+    <form class="form compose__form" data-compose-form hidden novalidate>
+      {/* One line, above the box, and only ever seen by somebody who has just decided to write.
+          It is not a warning and it is not a nudge away from posting: it says what endorsing
+          buys that a variant does not, which is a count of how many people hold the reason. */}
+      <p class="compose__note">
+        If something already here says the same thing, endorsing it counts for more than posting
+        a variant — it shows how many people hold that reason.
+      </p>
+
+      <div class="field">
+        <label class="field__label" for="contribution-body">Your contribution</label>
+        <div class="field__hint" id="contribution-body-hint">
+          <p>
+            Say what your position is a reason for. Markdown, and TeX between dollar signs:
+            <code>$\pi_1(X)$</code>. Formatting and formulas are set when the site next builds.
+          </p>
+        </div>
+        <textarea
+          class="field__control"
+          id="contribution-body"
+          name="contribution-body"
+          rows={6}
+          maxlength={5000}
+          aria-describedby="contribution-body-hint contribution-body-error"></textarea>
+        {/* `Field.astro` renders a counter but cannot animate it, and this is not Field.astro
+            anyway — a bespoke field, because that component has no `input` slot and would ship
+            its own default control. Either way the counter is inert until `wireCounters(form)`
+            runs, which the script below does. */}
+        <p class="field__counter" data-counter-for="contribution-body" data-max="5000">
+          <span data-counter-value>0</span> / 5000
+        </p>
+        <p class="field__error" id="contribution-body-error" hidden></p>
+      </div>
+
+      <div class="actions">
+        <button class="button button--primary" type="submit">Post</button>
+        <button class="button button--quiet" type="button" data-compose-cancel>Cancel</button>
+      </div>
+
+      <p class="form-status" data-compose-status role="status" tabindex="-1" hidden></p>
+
+      <p class="field__hint">
+        You can edit it for 24 hours, and only until somebody says it captures their view — they
+        agreed to the words in front of them. Your position is recorded with it and does not
+        change if you later answer differently.
+      </p>
+    </form>
+  </div>
 </section>
 
 <script>
@@ -307,10 +379,19 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
     deleteComment,
     editComment,
     fileFlag,
+    postComment,
     FLAG_REASONS,
     type FlagReason,
   } from '../lib/comments';
-  import { hideStatus, setBusy, showStatus } from '../lib/forms';
+  import {
+    ENDORSEMENT_ACTIONS,
+    endorsementSentence,
+    loadMyEndorsements,
+    setEndorsement,
+    withdrawEndorsement,
+    type EndorsementKind,
+  } from '../lib/endorsements';
+  import { hideStatus, setBusy, showStatus, syncCounters, wireCounters } from '../lib/forms';
   import { loadProfile, mayPost } from '../lib/profile';
   import {
     FAMILIES,
@@ -618,6 +699,7 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
     async function applyViewer(): Promise<void> {
       const id = viewerId;
       const allowed = id ? await loadProfile(id).then((r) => r.ok && mayPost(r.value)) : false;
+      mayWrite = allowed;
 
       for (const item of items) {
         const mine = !!id && item.dataset.commentAuthor === id;
@@ -634,6 +716,8 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
         show(actions, 'delete', mine && !removed);
         show(actions, 'flag', allowed && !mine && !removed);
       }
+
+      await applyEndorsements();
     }
 
     function show(actions: HTMLElement, action: string, visible: boolean): void {
@@ -894,6 +978,299 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
       slot.append(form);
     }
 
+
+    // ── Endorsement, which is not a vote ─────────────────────────────────────────────
+    /**
+     * Three states per contribution, and the third is the one worth getting right.
+     *
+     *   **Their own contribution** — the whole block is removed. Not a disabled button, not a
+     *   greyed label, nothing. A control that explains why you cannot use it is still a control
+     *   telling you it exists, and endorsing your own reason is counting yourself twice: the
+     *   contribution already carries your position.
+     *
+     *   **Signed in and answered** — both actions, the primary one first.
+     *
+     *   **Everybody else** — the counts, and a pointer at the scale. Not a sign-in wall, and
+     *   the same message for an anonymous reader as for a signed-in one who has not answered,
+     *   because the thing standing between them and this is not having a position. The scale
+     *   says what signing in is for by itself.
+     */
+    let mayWrite = false;
+    let iHaveAnswered = false;
+
+    /** What the reader has endorsed **now**, and what they had endorsed when the page loaded.
+     *  Both are needed: the exported count may or may not already include them, so the only
+     *  honest optimistic arithmetic is relative to the state the page was showing. */
+    const mine = new Map<string, EndorsementKind>();
+    const mineAtLoad = new Map<string, EndorsementKind>();
+
+    async function applyEndorsements(): Promise<void> {
+      const id = viewerId;
+
+      for (const item of items) {
+        const block = item.querySelector<HTMLElement>(':scope > [data-endorse]');
+        if (!block) continue;
+
+        const removed = !!item.querySelector(':scope > .contribution__removed');
+        const actions = block.querySelector<HTMLElement>('[data-endorse-actions]');
+        const locked = block.querySelector<HTMLElement>('[data-endorse-locked]');
+
+        /**
+         * On the reader's own contribution, **both controls are removed from the document** —
+         * not disabled, not greyed, not left in the accessibility tree. A control that explains
+         * why you cannot use it is still a control telling you it exists, and endorsing your own
+         * reason is counting yourself twice: the contribution already carries your position.
+         *
+         * The counts stay. They are export data rendered for every reader including anonymous
+         * ones, they name nobody, and hiding them from the one person the number is about would
+         * withhold the feature's entire output from its subject. "Nothing renders" is a rule
+         * about the actions, which is what a disabled button would have been.
+         */
+        if (id && item.dataset.commentAuthor === id) {
+          actions?.remove();
+          locked?.remove();
+          continue;
+        }
+
+        const eligible = mayWrite && iHaveAnswered && !removed;
+
+        if (actions) actions.hidden = !eligible;
+        // A deleted contribution has no reason left to hold, so neither control is offered and
+        // the pointer would be pointing at nothing.
+        if (locked) locked.hidden = eligible || removed;
+      }
+
+      if (!id || !mayWrite) return;
+
+      // One query for the page. It can only ever return the caller's own rows.
+      const loaded = await loadMyEndorsements(
+        items.map((item) => item.dataset.commentId ?? ''),
+        id,
+      );
+
+      if (!loaded.ok) return;
+
+      mine.clear();
+      mineAtLoad.clear();
+      for (const [commentId, kind] of loaded.value) {
+        mine.set(commentId, kind);
+        mineAtLoad.set(commentId, kind);
+      }
+
+      for (const item of items) paintEndorsements(item);
+    }
+
+    /**
+     * Repaint one contribution's counts and button states from `mine`.
+     *
+     * The count shown is the exported base, adjusted only by what the reader has changed since
+     * the page loaded. The export's number already includes their endorsement if they made it
+     * before the last run and excludes it otherwise, and nothing in the file says which — so
+     * adjusting at load would be a guess. Adjusting relative to load is not: it reflects exactly
+     * the action they just took, and the total settles overnight like every other number here.
+     */
+    function paintEndorsements(item: HTMLElement): void {
+      const block = item.querySelector<HTMLElement>(':scope > [data-endorse]');
+      if (!block) return;
+
+      const id = item.dataset.commentId ?? '';
+      const now = mine.get(id);
+      const atLoad = mineAtLoad.get(id);
+
+      for (const action of ENDORSEMENT_ACTIONS) {
+        const base = Number(
+          block.querySelector<HTMLElement>(`[data-endorse-count="${action.kind}"]`)?.dataset
+            .base ?? 0,
+        );
+
+        const shown =
+          base + (now === action.kind ? 1 : 0) - (atLoad === action.kind ? 1 : 0);
+
+        const count = block.querySelector<HTMLElement>(
+          `[data-endorse-count="${action.kind}"]`,
+        );
+        if (count) {
+          count.textContent = endorsementSentence(action.kind, shown);
+          count.hidden = shown <= 0;
+        }
+
+        const button = block.querySelector<HTMLButtonElement>(
+          `[data-endorse-kind="${action.kind}"]`,
+        );
+        if (button) {
+          const taken = now === action.kind;
+          button.setAttribute('aria-pressed', String(taken));
+          button.textContent = taken ? action.chosen : action.label;
+        }
+      }
+    }
+
+    root.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+
+      const pointer = target.closest<HTMLButtonElement>('[data-goto-scale]');
+      if (pointer) {
+        // The asking block is on the page and visible for exactly the readers who see this
+        // pointer — it is hidden only once somebody has answered. A DOM query rather than a
+        // shared module: two components, one page, and nothing to couple.
+        const scale = document.querySelector<HTMLElement>('[data-rate-ask]');
+        scale?.scrollIntoView({ block: 'center' });
+        scale?.querySelector<HTMLInputElement>('input[name="score"]')?.focus();
+        return;
+      }
+
+      const button = target.closest<HTMLButtonElement>('[data-endorse-kind]');
+      if (button) void endorse(button);
+    });
+
+    /**
+     * Optimistic, and rolled back **in prose** rather than by silently putting the number back.
+     *
+     * A count that reverts with no explanation reads as the page having a glitch; a sentence
+     * saying what happened is what lets somebody decide whether to try again. Mutually
+     * exclusive: choosing one replaces the other, and choosing the one already taken withdraws
+     * it, which is a real delete.
+     */
+    async function endorse(button: HTMLButtonElement): Promise<void> {
+      const item = button.closest<HTMLElement>('[data-contribution]');
+      const id = item?.dataset.commentId;
+      if (!item || !id || !viewerId) return;
+
+      const status = item.querySelector<HTMLElement>(':scope > [data-endorse] [data-endorse-status]');
+      if (status) hideStatus(status);
+
+      const kind = button.dataset.endorseKind as EndorsementKind;
+      const previous = mine.get(id);
+      const withdrawing = previous === kind;
+
+      // Shown before the request, put back if it fails.
+      if (withdrawing) mine.delete(id);
+      else mine.set(id, kind);
+      paintEndorsements(item);
+
+      for (const control of item.querySelectorAll<HTMLButtonElement>('[data-endorse-kind]')) {
+        control.disabled = true;
+      }
+
+      const result = withdrawing
+        ? await withdrawEndorsement(id, viewerId)
+        : await setEndorsement(id, viewerId, kind);
+
+      for (const control of item.querySelectorAll<HTMLButtonElement>('[data-endorse-kind]')) {
+        control.disabled = false;
+      }
+
+      if (!result.ok) {
+        if (previous === undefined) mine.delete(id);
+        else mine.set(id, previous);
+        paintEndorsements(item);
+
+        if (status) showStatus(status, 'error', result.message);
+      }
+    }
+
+    // ── Writing one ──────────────────────────────────────────────────────────────────
+    // The sequence this exists to create: the reader's own position opens, they read what
+    // people who answered the same way have already written, each of those offers "this also
+    // captures my view" — and then, below all of them, one control to write their own.
+
+    const compose = root.querySelector<HTMLElement>('[data-compose]');
+    const composeReveal = root.querySelector<HTMLButtonElement>('[data-compose-reveal]');
+    const composeForm = root.querySelector<HTMLFormElement>('[data-compose-form]');
+    const composeStatus = root.querySelector<HTMLElement>('[data-compose-status]');
+    const composeBody = root.querySelector<HTMLTextAreaElement>('#contribution-body');
+
+    if (composeForm) wireCounters(composeForm);
+
+    composeReveal?.addEventListener('click', () => {
+      if (!composeForm) return;
+      composeForm.hidden = false;
+      composeReveal.hidden = true;
+      composeBody?.focus();
+    });
+
+    root.querySelector<HTMLButtonElement>('[data-compose-cancel]')?.addEventListener(
+      'click',
+      () => {
+        if (!composeForm || !composeReveal) return;
+        composeForm.hidden = true;
+        composeReveal.hidden = false;
+        if (composeStatus) hideStatus(composeStatus);
+      },
+    );
+
+    /** Moved into the group the reader answered from, below what is already there. One composer
+     *  on the page however many groups it has — twelve would be twelve stranded drafts. */
+    function placeComposer(score: number | null): void {
+      if (!compose) return;
+
+      const key = score === null ? OFF_SCALE_KEY : String(score);
+
+      /**
+       * Two homes, and the second is not a nicety.
+       *
+       * A position nobody has written from renders as an inert paragraph rather than a
+       * disclosure, and a debate with no contributions at all renders no groups — so in both
+       * cases there is no seam to move into. Those are exactly the moments somebody is about to
+       * write the *first* contribution at their position, which is the last case that should
+       * have nowhere to type. The fallback sits at the end of the section.
+       */
+      const seam =
+        root.querySelector<HTMLElement>(`[data-compose-seam="${key}"]`) ??
+        root.querySelector<HTMLElement>('[data-compose-fallback]');
+
+      if (!seam) return;
+
+      seam.hidden = false;
+      seam.append(compose);
+      compose.hidden = false;
+    }
+
+    composeForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (composeStatus) hideStatus(composeStatus);
+
+      const submit = composeForm.querySelector<HTMLButtonElement>('button[type="submit"]');
+      const body = composeBody?.value.trim() ?? '';
+
+      if (!body || !viewerId) {
+        if (composeStatus) {
+          showStatus(
+            composeStatus,
+            'error',
+            'Write something first — what your position is a reason for.',
+          );
+        }
+        return;
+      }
+
+      if (submit) setBusy(submit, true, 'Posting…');
+      const result = await postComment('debate', root.dataset.parentId ?? '', viewerId, body, null);
+      if (submit) setBusy(submit, false);
+
+      if (!result.ok) {
+        if (composeStatus) showStatus(composeStatus, 'error', result.message);
+        return;
+      }
+
+      // Posted. The markdown is set at build time, so what the browser can honestly show is the
+      // text as typed, marked as not yet set — the same as the edit path. Reloading instead
+      // would lose the reader's place in a page they just navigated into.
+      if (composeBody) composeBody.value = '';
+      syncCounters(composeForm);
+      composeForm.hidden = true;
+      if (composeReveal) composeReveal.hidden = false;
+
+      if (composeStatus) {
+        showStatus(
+          composeStatus,
+          'success',
+          'Posted. Its formatting and any formulas are set when the site next builds, and it is ' +
+            'recorded as written from the position you answered from.',
+        );
+      }
+    });
+
     // ── What only the distribution knows ─────────────────────────────────────────────
     /**
      * "People answered at this position and none of them wrote anything" is the interesting
@@ -914,7 +1291,23 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
       };
 
       annotate(detail.histogram, detail.noOpinionCount);
-      if (detail.rated) selectOwn(detail.score ?? null);
+
+      if (!detail.rated) return;
+
+      /**
+       * The sequence, in this order, and the order is the point.
+       *
+       * Their own position opens, so the first thing they read is what people who answered the
+       * same way have already written. Each of those now offers "this also captures my view" —
+       * the prominent action at exactly that moment. And the composer moves in below all of
+       * them, collapsed, so somebody about to retype an argument already on the page sees it
+       * first and somebody with a genuinely new point loses one click.
+       */
+      selectOwn(detail.score ?? null);
+
+      iHaveAnswered = true;
+      void applyEndorsements();
+      placeComposer(detail.score ?? null);
     });
 
     function annotate(histogram?: readonly number[], noOpinionCount?: number): void {
@@ -1126,6 +1519,36 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
     margin: 0;
     padding: 0 0 var(--space-md);
     list-style: none;
+  }
+
+  /* The composer, which lives inside a position group once it has been moved there. */
+  .compose {
+    padding-block-start: var(--space-sm);
+    border-block-start: var(--border);
+  }
+
+  /* A link-button and not a primary one. The prominent action at this moment is endorsing
+     something already written; this is the way out of that, not the page's recommendation. */
+  .compose__reveal {
+    font-size: var(--size-1);
+  }
+
+  .compose__form {
+    max-width: none;
+    margin-block-start: var(--space-xs);
+  }
+
+  .compose__note {
+    max-width: var(--measure);
+    margin: 0 0 var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-inline-start: var(--border-width-thick) solid var(--rule);
+    color: var(--ink-muted);
+    font-size: var(--size-1);
+  }
+
+  .position__compose {
+    padding-block-end: var(--space-sm);
   }
 
   /* Everything from `.contribution` down lives in Contribution.astro, because a parent's

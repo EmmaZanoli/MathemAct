@@ -1478,3 +1478,99 @@ script, so the selection popover — quote a passage into a comment, cite one in
 not on debate pages at present. It is not an oversight and it is not restorable on its own: the
 affordance exists to put a passage into a composer, and there is no composer on this surface
 yet. It belongs with the writing box.
+
+## 2026-08-22 — An endorsement is withdrawable, so a count may go down
+
+`20260821120200` shipped `public.comment_endorsements` with no DELETE policy and no grant, and
+said in as many words that withdrawal was a decision about whether a count may go down rather
+than a gap. `20260822100000` decides it: yes.
+
+The alternative is worse in a specific way. "This also captures my view" is an assertion about
+what somebody currently thinks, and this whole section rests on people being able to change
+their minds and on that being visible. An endorsement given and never retractable would be the
+one claim on the page its author was stuck with.
+
+**A hard delete, and the second on the site** after `public.citations`, for the same reason:
+nothing is threaded under it, there is no attribution to preserve and no prose. A soft delete
+would leave a row saying "this person once said this captured their view", which is a record
+nobody asked for and which the select policy would then have to hide from its own author.
+
+**A banned account cannot withdraw**, matching the update policy, which already re-tests the
+ban. A ban closes write paths and removes nothing already posted — their reports stay up, their
+contributions stay up, their endorsements stay counted — and permitting this one write would
+make a ban a way to retract things quietly. Note this clause sits on a DELETE policy and is
+therefore **not** one of the nine `not p.is_banned` INSERT clauses the count in
+docs/moderation.md refers to.
+
+`public.comments.endorsed_at` is **not** cleared, so the edit window stays shut. The text was
+frozen when somebody said it was theirs too, and other people have read it since on that basis;
+reopening it because the one endorser changed their mind would let the words move under
+everybody who read them. `022_debate_contributions.test.sql` asserts that directly.
+
+## 2026-08-22 — The optimistic count is relative to what the page was showing
+
+The export's count already includes the reader's own endorsement if they made it before the last
+nightly run, and excludes it otherwise — and **nothing in the file says which.** So adjusting the
+number at page load would be a guess in one direction or the other.
+
+What is not a guess is the change the reader just made. The displayed count is
+`base + (now === kind) - (atLoad === kind)`: zero adjustment until they act, and exactly one
+either way when they do. It can be off by one against the true total, which is the same accuracy
+every other number on this site has between exports, and the prompt for this work says so.
+
+Failure rolls back **in prose**, not by silently restoring the number. A count that reverts with
+no explanation reads as the page glitching; a sentence saying what happened is what lets somebody
+decide whether to try again.
+
+## 2026-08-22 — "Nothing renders on your own contribution" is a rule about the controls
+
+Both actions and the "answer the debate" pointer are **removed from the document** on the
+reader's own contribution — not disabled, not greyed, not left in the accessibility tree. A
+control that explains why you cannot use it is still a control telling you it exists.
+
+The **counts stay**, and that is a reading of the rule rather than an exception to it. They are
+export data rendered for every reader including anonymous ones, they name nobody, and hiding them
+from the one person the number is about would withhold the feature's entire output from its
+subject. The clarifying phrase in the rule is "not a disabled button", which is what the actions
+would have been.
+
+## 2026-08-22 — Not having answered is pointed at the scale, not at a sign-in wall
+
+The same message for an anonymous reader as for a signed-in one who has not answered, because
+the thing standing between either of them and this control is not having a position — and the
+scale, which is on the same page and visible for exactly these readers, says what signing in is
+for by itself. A sign-in wall would answer a question neither of them asked.
+
+## 2026-08-22 — The composer moves, and it has a second home
+
+One composer on the page, moved into the reader's own position group once that group is known.
+Twelve would be twelve places for a draft to be stranded, and one textarea means one counter and
+one set of ids — the same argument `CommentThread.astro` makes for relocating its own.
+
+The sequence is the deliverable rather than the button: their position opens, they read what
+people who answered the same way have already written, each of those offers "this also captures
+my view", and *then* one control below all of them opens the box. **Collapsed, not gated** — a
+plain button, not disabled, not behind a warning, not conditional on having endorsed anything.
+Somebody with a genuinely new point loses one click; somebody about to retype an argument three
+rows above sees it first.
+
+The second home matters more than it looks. A position nobody has written from renders as an
+inert paragraph rather than a disclosure, and a debate with no contributions renders no groups at
+all — so in both cases there is no seam to move into, and both are precisely the moment somebody
+is about to write the **first** contribution at their position. `[data-compose-fallback]` at the
+end of the section is where it goes instead. Without it the one case that most needs a box would
+not have had one.
+
+## 2026-08-22 — A `!` that outlived the element it asserted about
+
+`/debates/view/` set the contributions section's id through
+`document.querySelector('[data-thread]')!` — and `[data-thread]` is `CommentThread.astro`, which
+that page stopped using when debates moved to `Contributions.astro` on 2026-08-22.
+
+The non-null assertion silenced the null the type system had correctly inferred. `astro check`
+passed, the build passed, and the line would have thrown a TypeError on the next `.dataset`
+access, taking the rest of the function — including the reveal of the page content — with it.
+This is the trap CLAUDE.md records about accumulating `!`s, arriving from the other direction:
+not a narrowing lost inside a hoisted function, but an assertion that stayed true-looking after
+the thing it asserted about was deleted. It was found by re-reading the file to add a line to
+it, which is not a strategy.

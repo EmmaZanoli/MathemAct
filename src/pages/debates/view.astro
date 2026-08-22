@@ -205,11 +205,25 @@ import { path } from '../../lib/paths';
     const rateSection = query<HTMLElement>('[data-rate]');
     rateSection.dataset.debateId = debateId;
 
-    const thread = document.querySelector<HTMLElement>('[data-thread]')!;
-    thread.dataset.parentId = debateId;
-    thread.dataset.nodeTitle = debate.statement;
-    thread.dataset.nodeHref = path(`/debates/${debateId}/`);
-    thread.dispatchEvent(new CustomEvent('thread-ready'));
+    /**
+     * The contributions section, which needs the id it was rendered without.
+     *
+     * This read `[data-thread]` with a `!` on it until 2026-08-22, and `[data-thread]` is
+     * `CommentThread.astro` — which this page stopped using when debates moved to
+     * `Contributions.astro`. The assertion silenced the null the type system had correctly
+     * inferred, so the line survived `astro check` and would have thrown a TypeError on the
+     * next `.dataset` access, taking the rest of this function with it. That is the trap
+     * CLAUDE.md records about accumulating `!`s, arriving by a different route.
+     *
+     * Written rather than captured: the composer reads `parentId` at call time for exactly
+     * this reason — on this page the id does not exist until the fetch above has landed.
+     */
+    const section = document.querySelector<HTMLElement>('[data-contributions]');
+    if (section) {
+      section.dataset.parentId = debateId;
+      section.dataset.nodeTitle = debate.statement;
+      section.dataset.nodeHref = path(`/debates/${debateId}/`);
+    }
 
     // Reveal the content.
     loadingEl.hidden = true;
@@ -316,6 +330,21 @@ import { path } from '../../lib/paths';
       // count and no position-change count, and the line ends after the mean rather than
       // claiming both are zero.
       renderHistogram(histogram, aggregate.value, myScore, iRated);
+
+      // The same event /debates/<id>/ sends, and it matters more here than there: this page is
+      // what a debate posted since the last build looks like, so the person answering it is
+      // frequently about to write its first contribution. Without this the contributions section
+      // never learns they have answered, and the composer never appears.
+      document.dispatchEvent(
+        new CustomEvent('mathemact:rated', {
+          detail: {
+            rated: iRated,
+            score: myScore,
+            histogram: aggregate.value.histogram,
+            noOpinionCount: aggregate.value.noOpinionCount,
+          },
+        }),
+      );
     }
 
     again.addEventListener('click', () => {

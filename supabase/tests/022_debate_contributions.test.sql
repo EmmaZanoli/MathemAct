@@ -44,7 +44,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(32);
+select plan(36);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 -- Six, because auth.users has a partial unique index on email and each of these has to be a
@@ -501,6 +501,77 @@ select is(
   (select count(*)::int from public.rating_changes),
   1,
   'and re-saving the same score writes no second row'
+);
+
+-- ── Withdrawing an endorsement ──────────────────────────────────────────────────────
+-- Added with the DELETE policy in 20260822100000. **A DELETE refused by row level security
+-- does not raise** — it matches no rows and reports success — so every assertion here checks
+-- whether the row is still there rather than whether the statement threw. A `throws_ok` would
+-- pass against a policy that permitted everything.
+
+-- An endorsement for the banned account, inserted as the owner because the insert policy
+-- refuses it. This is the row the ban has to fail to remove.
+insert into public.comment_endorsements (comment_id, user_id, kind)
+values ('e4444444-0000-0000-0000-000000000002',
+        'e1111111-0000-0000-0000-000000000004', 'captures_my_view');
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"e1111111-0000-0000-0000-000000000003","role":"authenticated"}';
+
+delete from public.comment_endorsements
+ where comment_id = 'e4444444-0000-0000-0000-000000000001';
+
+reset role;
+
+select is(
+  (select count(*)::int from public.comment_endorsements
+    where comment_id = 'e4444444-0000-0000-0000-000000000001'),
+  1,
+  'somebody else''s endorsement cannot be withdrawn, and the attempt removes nothing'
+);
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"e1111111-0000-0000-0000-000000000004","role":"authenticated"}';
+
+delete from public.comment_endorsements
+ where comment_id = 'e4444444-0000-0000-0000-000000000002';
+
+reset role;
+
+-- A ban closes write paths and removes nothing already posted. Withdrawing would be a way to
+-- retract quietly, which is not what a ban is for — and the update policy already re-tests the
+-- ban, so admitting a delete without it would be one rule applied two ways one policy apart.
+select is(
+  (select count(*)::int from public.comment_endorsements
+    where comment_id = 'e4444444-0000-0000-0000-000000000002'),
+  1,
+  'a banned account cannot withdraw one either: their endorsements stay counted'
+);
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"e1111111-0000-0000-0000-000000000002","role":"authenticated"}';
+
+delete from public.comment_endorsements
+ where comment_id = 'e4444444-0000-0000-0000-000000000001';
+
+reset role;
+
+select is(
+  (select count(*)::int from public.comment_endorsements
+    where comment_id = 'e4444444-0000-0000-0000-000000000001'),
+  0,
+  'but its own author can withdraw it outright'
+);
+
+-- The rule that survives withdrawal, and the one most likely to be assumed away: the stamp is
+-- never cleared. The text was frozen when somebody said it captured their view, and other
+-- people have read it since on that basis — reopening the window because the one endorser
+-- changed their mind would let the words move under everybody who read them.
+select isnt(
+  (select endorsed_at from public.comments
+    where id = 'e4444444-0000-0000-0000-000000000001'),
+  null::timestamptz,
+  'and the edit window stays shut: endorsed_at is stamped once and never reset'
 );
 
 select * from finish();
