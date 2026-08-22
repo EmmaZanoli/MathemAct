@@ -1894,3 +1894,145 @@ left anywhere.
 `syncCounters(form)` is called after a successful submission, because `form.reset()` clears the
 textareas and does not touch the counters that describe them — and `reset()` also restores the
 source radios without closing the panels they revealed, which is done by hand for the same reason.
+
+# The debates rebuild, in ten decisions
+
+The entries above record each change as it was made. These ten are the load-bearing ones, stated
+once each so the section can be understood without reading the whole log. Each names the longer
+entry it summarises.
+
+## 2026-08-22 — Debate contributions stay in `public.comments`, with rules conditional on the subject
+
+A separate table would have meant touching everything that keys on a comment id: two FK columns
+and a six-column unique constraint on `public.citations`, `public.activity.comment_id` and its
+CHECK, `public.flags`, four branches of `public.moderate()`, `private.activity_label()`,
+`private.enforce_daily_limit()` — which **raises on a table it does not know**, so a new one is
+either a loud failure or silently unlimited — plus about ten sites in `src/lib/moderation.ts`.
+
+Staying cost four objects: a column with no grant, one CHECK, a reissued guard, and
+`comments_insert_own` **dropped and reissued** rather than supplemented, because permissive
+policies are OR'd and a second one would grant round the rule. Every rule carries a
+`parent_type` condition; a CHECK without one would silently change report threads, which are the
+one place on this site where nesting is correct.
+
+## 2026-08-22 — A contribution is grouped by the score stored when it was written, not the live rating
+
+`comments.agreement_score` is copied from the author's rating by a trigger and frozen. A view
+joining the live rating is one join shorter and wrong: somebody changing their mind would drag
+every contribution they had ever written into a different group, retroactively, so the record of
+what the community thought in March would become a record of what those same people think now.
+
+The test asserts the column **after** the author has moved from "no opinion" to 7, because before
+that the two designs are indistinguishable. The trigger overwrites what the client sent rather
+than raising on a mismatch, so the protection does not depend on the column staying ungranted —
+and it is ungranted.
+
+## 2026-08-22 — NULL on a debate contribution means "no opinion", never "unset"
+
+The off-scale answer is a NULL score on a **real** rating row, and the trigger refuses a
+contribution from anybody holding no rating at all — so a contribution exists only where a rating
+exists, and a NULL here can only have been copied from a NULL there. No sentinel, no coercion to
+5, no companion boolean.
+
+Three things share that null and only one of them is the off-scale answer: a report comment
+argues from no position, a debate contribution declines, and a contribution from an export
+written before the column existed has nothing recorded. `positionKnown` and `groupKeyFor()` keep
+them apart. The third was being filed under "no opinion" — publishing a position its author never
+took — and was found by reading built HTML, not by any check.
+
+## 2026-08-22 — Who endorsed something is private, and the UI could not want more
+
+`comment_endorsements_select_own` returns one person's own rows. Endorsing requires holding a
+rating, ratings are readable only by their author, so a list of endorsers would publish the
+private position of everyone on it by inference: "this captures my view" on a contribution
+written from 8 places its endorser near 8, and hardest on the contributions written from 0 or 10.
+
+Counts are public and come from the nightly export, because a browser cannot count rows it cannot
+read. There is deliberately no function taking a comment id and returning people, and no
+`SECURITY DEFINER` aggregate for live counts: `rating_aggregate` has one because a distribution
+must be current the moment a reader answers, and an endorsement count is not that.
+
+## 2026-08-22 — `public.rating_changes` produces one count and nothing else
+
+No grant to any browser role, no policy, RLS on. The export takes `count(distinct user_id)` per
+debate and the statistics line renders it. A readable per-person history is a public voting record
+for a rating that is deliberately private — worse than exposing the rating, because a current
+position is one fact and a trail through somebody's changes of mind is a record of how they think,
+attached to a name, on a site whose contributors include people posting pseudonymously.
+
+If a list of movements is ever wanted, it comes from **superseded contributions** — the positions
+people made public by writing them down. It will be smaller than the count, and that gap is the
+finding rather than a bug: more people change their mind than write about it.
+
+## 2026-08-22 — Replies are removed on debates only
+
+A debate is a map of positions; a reply is a position on a position, and a thread under a
+contribution is how the map turns back into the chronological wall the section exists not to be.
+A report thread is a discussion of one specific account, and a remark with the author's answer
+under it is the shape of a referee's note — so it keeps its nesting, its replies, and its
+window that closes on the first reply.
+
+Written twice on purpose: `comments_debate_contributions_are_flat` and a clause in
+`comments_insert_own`. Historical replies are rendered **flat rather than hidden** — a remark
+somebody wrote is not a schema change's to withdraw. And the `:scope >` discipline stays in the
+new component even though nothing nests there now, because those historical replies are in that
+list.
+
+## 2026-08-22 — The edit window closes on the first endorsement, in the guard
+
+Twenty-four hours, and closed as soon as anybody says a contribution captures their view: they
+agreed to the words in front of them, and unlike a reply there is no visible follow-up in which a
+rewrite could be noticed.
+
+**In the guard, not a policy.** Two permissive UPDATE policies are OR'd, and the soft-delete
+policy has to permit an update at any age — so a window written into the edit policy is granted
+straight back by the delete policy and withholds nothing while reading exactly like one that
+works.
+
+The guard reads `comments.endorsed_at`, stamped by a DEFINER trigger, because it can read neither
+the endorsement table (own-rows-only, and the caller is the author, so an `exists` returns false
+however many exist) nor a `private` helper (`authenticated` has no USAGE on that schema). The
+stamp is never cleared, so a withdrawal does not reopen the window.
+
+## 2026-08-22 — Contributions are not ranked by endorsement count by default
+
+Most recent is the default order, in both views, and "most endorsed" is a choice the reader makes.
+Nothing says where a contribution came in.
+
+A vote count and a shared-reason count render identically as a number and do opposite things: one
+ranks contributions against each other and rewards whoever phrased it most sharply, the other
+measures how many people hold a reason. Defaulting to the count would make the first true whatever
+the label said. So the label is always spelled out in words, and there is no heart, thumb, arrow,
+`+1` or karma anywhere near it — audited in the built HTML.
+
+## 2026-08-22 — Badges are suppressed on debate contributions, and only there
+
+Name and date only: no verification status, no institution, no country. A contribution is read by
+the position it argues from, and an institution beside it invites a reader to weigh the
+affiliation instead of the reason.
+
+A **rendering** rule on one surface. Nothing about what is stored or derived changes, the export
+still carries the institution, and badges are untouched on report pages, entry pages, author pages
+and report comments. Worth recording that this had been a stated rule in `CLAUDE.md` and was **not
+implemented** until the surface was rewritten — `CommentThread.astro` rendered a badge on any
+author with an institution, debate or not.
+
+## 2026-08-22 — Divided and consensus, defined
+
+Both computed at export time, never in the browser, over the **scored positions only** — the
+off-scale answers are in neither, because "outside my expertise" is not a mild version of
+agreeing.
+
+- **divided** — twice the smaller of (share of 0–4) and (share of 6–10). Twice, so a clean 50/50
+  scores 1. The *smaller* side, so 90/10 and 10/90 both score 0.2: the same shape seen from two
+  directions. **The neutral 5s are in the denominator and in neither numerator**, so a debate
+  where everybody sits at 5 is 0 divided — which a mean of 5.0 could not tell from a two-camp
+  split.
+- **consensus** — the largest share held by any one of five families: 0–1, 2–4, 5, 6–8, 9–10.
+  Families rather than single scores, because 7 and 8 are not a disagreement.
+
+Both are **null** below ten scored positions, and null is not zero: two people at opposite ends
+are perfectly divided by the arithmetic and establish nothing. The null reaches the DOM as the
+empty string, which the listing engine already sorts last — so "a fresh card is ineligible"
+needed no new code path. What each measures, and the threshold, are stated beside the sort
+control rather than in a tooltip.

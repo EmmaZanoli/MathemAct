@@ -40,7 +40,7 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | Reports schema: RLS, tags, confirmations, staleness, rate limits |
 | ✅ | The submission form: fifteen sections, draft autosave, one-transaction submit |
 | ✅ | Reading: listing with linkable filters, report pages, author pages |
-| ✅ | Debates, the agreement scale, and the histogram — median first, mean beside it |
+| ✅ | Debates: the agreement scale, the histogram, and a distribution that is withheld until you answer |
 | ✅ | Network: submission, moderation, and a monthly link check |
 | ✅ | Discussion on reports, the citation graph, and the flag queue |
 | ✅ | Contributions on debates: grouped by position or flat, sorted, no replies |

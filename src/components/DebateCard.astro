@@ -107,9 +107,23 @@ const hasStats =
 
         {/* The counts, in scale order, and no interpretation of them. "Mostly agreement" would
             be this card taking a position; the numbers let a reader tell a bimodal debate from a
-            consensus one, which is the only thing that matters here. */}
+            consensus one, which is the only thing that matters here.
+
+            **The off-scale group is named too.** The bars cover the eleven scored positions, and
+            the statistics line beside them counts everybody who answered — so without this the
+            eleven numbers would sum to less than the total and a screen reader user would have no
+            way to find out why. It is stated in words rather than given a twelfth number in the
+            sequence, because it is not a point on the scale. */}
         <span class="visually-hidden">
           Positions by score, 0 to 10: {histogram.join(', ')}.
+          {stats!.noOpinionCount > 0 && (
+            <>
+              {' '}
+              {stats!.noOpinionCount === 1
+                ? '1 more person answered off the scale — no opinion, or outside their expertise.'
+                : `${stats!.noOpinionCount} more people answered off the scale — no opinion, or outside their expertise.`}
+            </>
+          )}
         </span>
       </div>
     )

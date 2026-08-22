@@ -144,6 +144,15 @@ asserts each of them from the banned side, because "a ban means a ban" is writte
 places, there is nothing central holding it, and one of them being wrong would present as a
 member having a bad day.
 
+**Endorsement is a write path in three directions, and only one of them is in the nine.**
+Making an endorsement is refused by `comment_endorsements_insert_own`, which is the ninth
+clause. Changing which of the two it is, and withdrawing it altogether, are refused by the
+UPDATE and DELETE policies on the same table — deliberately, and for the same reason the rest of
+a ban works this way: it closes writing and removes nothing already posted. Their reports stay
+up, their contributions stay up, and their endorsements stay counted. Letting this one write
+through would make a ban a way to retract things quietly. Those two policies are **not** part of
+the count, which is INSERT clauses only.
+
 This paragraph has been wrong twice, in both directions, and that history is the argument for
 the test rather than the list. It said seven for a day, having forgotten `citations_insert_own`,
 which made it eight; `20260821120200_comment_endorsements.sql` then added
