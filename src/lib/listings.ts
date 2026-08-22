@@ -141,14 +141,17 @@ export const REPORT_SORTS: readonly Sort[] = [
  * that axis, and "median above 7" invites reading a rough 0-to-10 self-report as a measurement.
  * An ordering is honest about being rough; a threshold is not.
  *
- * **Tags: there is no vocabulary for debates and this is the seam.** `public.debates` has no tag
- * table — `tags` and `report_tags` are the reports' — so a "Subject area" fieldset here would be
- * an empty rail with a zero beside every option, which reads as a corpus that is empty rather
- * than as a question nobody asked. When debates get tags, one entry here and one line in
- * `DebateCard.astro` is the whole change.
+ * **Tags arrived on 2026-08-22** and the seam this comment used to describe is closed.
+ * `public.debate_tags` reuses `public.tags` — the same 32 arXiv categories reports use, because
+ * the question a tag answers is the same on both surfaces — so the dimension below is the
+ * reports' `tag` dimension with the same attribute and the same chip. A debate the freshness
+ * overlay added carries no tags: `debatesSince()` does not fetch them, so its `data-tags` is
+ * empty and it matches no tag filter until the next build. That is the same staleness the
+ * overlay has everywhere and not a special case.
  */
 export const DEBATE_DIMENSIONS: readonly Dimension[] = [
   { key: 'area', legend: 'Area', chipKind: 'Area' },
+  { key: 'tag', legend: 'Subject area', chipKind: 'Subject', attr: 'tags', multi: true },
 ];
 
 /**

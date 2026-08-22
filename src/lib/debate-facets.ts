@@ -42,6 +42,12 @@ export interface DebateFacetInput {
    * `createdAt` is not that date: it is when the claim was asked.
    */
   readonly lastActivityAt?: string | null;
+  /**
+   * arXiv category codes. Pipe-separated on the card, because the engine's `multi` dimensions
+   * split on `|` — a code contains a dot and never a pipe, which is why that separator was
+   * chosen for the reports' tags and is reused here rather than invented again.
+   */
+  readonly tagCodes?: readonly string[];
 }
 
 /**
@@ -77,6 +83,7 @@ export function debateCardAttrs(input: DebateFacetInput): Record<string, string>
     'data-divided': shareValue(input.shares?.divided),
     'data-consensus': shareValue(input.shares?.consensus),
     'data-active': input.lastActivityAt ?? '',
+    'data-tags': (input.tagCodes ?? []).join('|'),
   };
 }
 

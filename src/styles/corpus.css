@@ -1079,6 +1079,14 @@
     margin-block-start: var(--space-3xs);
   }
 
+  /* A tag on a card. Mono, because it is a value from a controlled vocabulary — the split
+     between the sans and the mono is doing real work everywhere else on this site and should
+     here too. No fill and no colour: it is a fact about the claim, not a status. */
+  .debate-card__tag {
+    font-family: var(--font-mono);
+    font-size: var(--size-0);
+  }
+
   /* ── Debate guidance ────────────────────────────────────────────────────────────── */
 
   .guidance dt {

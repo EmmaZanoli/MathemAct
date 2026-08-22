@@ -20,7 +20,7 @@ Suggested citation:
 |---|---|
 | `manifest.json` | When this export ran, and the row count and byte size of every file |
 | `reports.json` | The corpus: published first-hand accounts, with their tools, tags and derived staleness |
-| `debates.json` | Claims the community rates. Everything not hidden; `proposed` appears only on rows written before 2026-08-19 |
+| `debates.json` | Claims the community rates, with their tags and their source. Everything not hidden; `proposed` appears only on rows written before 2026-08-19 |
 | `debate-ratings.json` | The distribution of answers per debate, plus how many people changed position. Aggregates only |
 | `tags.json` | The tag vocabulary: the arXiv mathematics categories in use |
 | `profiles.json` | Public profile fields for contributors who have something public |
@@ -123,6 +123,28 @@ listing, stale on its own page, and something else again in an analysis.
 `verified` requires both halves: a verification on record *and* a confirmation that it still
 works. `stale` means the last confirmation is old enough that the model has almost certainly
 changed underneath it.
+
+## Reading a debate
+
+A claim, the reasoning behind it, an area, and since 2026-08-22 optional tags and an optional
+source.
+
+| Field | Notes |
+|---|---|
+| `statement` | The claim. 10 to 200 characters, and the cap is what keeps it to one claim |
+| `rationale` | The reasoning behind it, nullable. **Capped at 500 characters since 2026-08-22, down from 2000** — an opening post that runs long turns a claim somebody can answer into an essay, and the distribution then describes whatever each reader took the essay to be arguing. Rows written before that date may be longer |
+| `area` | The same vocabulary reports use |
+| `tags` | `{ code, label }`, from the same 32 arXiv categories reports carry. `[]` rather than null when there are none. Absent entirely on rows exported before 2026-08-22 |
+| `sourceUrl` | An external link that prompted the claim, or null. `https` only |
+| `sourceReportId` | A report in `reports.json` that prompted the claim, or null. **At most one of these two is ever set.** The id only — join it to `reports.json` for the title, which is where the title lives and cannot go stale |
+| `status` | `active` on everything written since 2026-08-19 |
+| `author` | Null when the account has since been erased |
+
+**Every debate has at least one rating**, since 2026-08-22: proposing one requires the proposer
+to place themselves on the scale, and their position is the first entry in the distribution. A
+debate in an export from before that date may have none. `sourceUrl` and `sourceReportId` are not
+citations — they say where an idea came from, and `citations.json` is the file that records one
+page referencing another.
 
 ## Reading the ratings
 

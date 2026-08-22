@@ -1756,3 +1756,141 @@ style every built card and leave every fresh one bare.
 The styles are in `corpus.css`. What is *not* duplicated between the two paths is the attribute
 list: `debateCardAttrs()` writes those on both, which is the half whose drift would silently
 break a sort rather than merely look wrong.
+
+## 2026-08-22 — Proposing a debate requires answering it, so it is one RPC
+
+`public.submit_debate()` writes the claim and the proposer's own rating in one transaction.
+
+The requirement — **somebody unwilling to say where they stand should not be setting the
+question** — cannot be expressed in a policy: it is a statement about two rows in two tables, and
+row level security only ever sees one row at a time. And it cannot be left to two client calls,
+because a debate whose proposer never answered it is precisely what the rule forbids, and that is
+what any failure of the second call produces.
+
+`SECURITY INVOKER`, like `submit_report()`, and worth stating because a function writing to three
+tables looks like it wants elevation. Every insert runs under the caller's own policies —
+`debates_insert_own`, `ratings_insert_own`, `debate_tags_insert_own_unanswered` — so **the
+function authorises nothing.** It is a transaction boundary and a required-field check. A DEFINER
+version would have had to restate all three sets of conditions, and the restatement is where they
+drift. The test asserts that a banned account's refusal comes from the policy and not the
+function.
+
+What it does not close, stated so nobody assumes otherwise: a caller inserting into
+`public.debates` directly still can, and gets a debate with no position on it. The policies must
+allow that — the guard trigger and the wording freeze both need an author who can write their own
+row — so what this function does is make the supported path the one that produces a well-formed
+debate, and make the form unable to produce anything else.
+
+**The position is two parameters**, `p_score integer` and `p_off_scale boolean`, because a single
+nullable score would collapse two different things. On this scale a NULL score is "no opinion, or
+outside my expertise" — a real answer on a real row, and the whole reason the eleven points have a
+twelfth group beside them. Collapsed, the function would either refuse the people the off-scale
+option exists for, or accept an empty submission as a declared non-opinion.
+
+`integer` and not `smallint` for the same reason `submit_report`'s `p_author_confidence` is:
+Postgres will not implicitly narrow an integer literal during overload resolution, so a smallint
+parameter turns `submit_debate(..., 8, ...)` into "function does not exist" — a message that
+sends you looking for a missing migration.
+
+## 2026-08-22 — Your own answer is not an answer, or the whole feature dies on arrival
+
+This is the interaction that would have shipped broken, and it was invisible in any single file.
+
+Requiring the proposer to rate their own claim means **a rating exists from the moment a debate
+does.** Two rules were written as "once anybody has rated it":
+
+- `private.protect_debate_columns()` freezes `statement` and `area`. It would have engaged on
+  creation, so a proposer could never fix a typo in their own claim — with nobody having agreed
+  to anything, the rule protecting a reader who does not exist.
+- `debate_tags`' insert and delete policies. They would have refused **every tag**, including the
+  ones `submit_debate()` inserts three lines after the rating. The feature would have been dead
+  from the first submission.
+
+Both now test for a rating by somebody *other than* the author, which is the rule
+`private.mark_report_answered()` already states in as many words for reports: "An author
+correcting their own report in the thread should not thereby lose the ability to correct the
+report."
+
+`is distinct from` and not `<>` in the guard, because `author_id` is nullable — erasure detaches a
+debate rather than deleting it — and on a detached debate `<>` would evaluate to NULL for every
+rating, the EXISTS would find nothing, and the wording of a claim dozens of people had answered
+would come unfrozen. No browser can reach that path, since the ownership policy also fails, but a
+guard that depends on another rule holding is a guard with a footnote.
+
+`023_submit_debate.test.sql` asserts all three directions: the author can still correct after
+answering themselves, somebody else answering closes it, and the tags go in.
+
+## 2026-08-22 — The reasoning is capped at 500, and the cap is the mechanism
+
+Down from 2000. An opening post that runs to two thousand characters turns a claim somebody can
+answer into an essay somebody has to agree or disagree with in aggregate, and the distribution
+that comes out is a distribution over whatever each reader took the essay to be arguing.
+
+Guidance in the form asks nicely and is ignored by exactly the people whose rationale most needs
+shortening. A CHECK is not. Five hundred is about a paragraph — enough to say why the claim is
+contested and what the strongest case against it is, and not enough to make the case itself. The
+case belongs in a contribution, where it carries the position it was argued from and other people
+can say it captures their view.
+
+The label changed with the cap: "why it is worth asking" invited a case for asking the question,
+which is a different thing from the reasoning behind the claim and is what produced the long ones.
+
+Existing rows over the cap are **refused, not truncated.** Cutting somebody's writing to make a
+migration apply is not a migration's business, and a rationale trimmed mid-sentence is worse than
+one that is too long.
+
+## 2026-08-22 — Debates reuse the reports' tag vocabulary
+
+`public.debate_tags` over `public.tags`, which is `report_tags` with one column renamed. Not a
+second vocabulary: the question a tag answers — *which part of mathematics is this about* — is the
+same on both surfaces, and two lists would drift and force a reader to learn which page uses
+which.
+
+The write policies are **not** `report_tags`' write policies. Those gate on
+`p.status = 'pending'`, from the period when a report waited for approval; a debate has never had
+that state. The rule here is the one that governs the claim itself — frozen once somebody else has
+rated — because a tag is part of what the claim was taken to be about.
+
+This also closes the seam d8 left open. `DEBATE_DIMENSIONS` gains the reports' `tag` dimension
+with the same attribute and the same chip, and the card renders labels rather than codes. A debate
+the freshness overlay added carries no tags, because `debatesSince()` does not fetch them, so it
+matches no tag filter until the next build — the same staleness the overlay has everywhere.
+
+## 2026-08-22 — A source is not a citation, and it is two columns
+
+Optional, at most one: an external `https` URL, or a report from this corpus.
+
+**Not a citation.** `public.citations` records one page referencing another and produces a
+"referenced by" entry at the far end. This is thinner: it says where the proposer got the idea,
+and it is read once, above the scale, by somebody deciding whether the claim is well formed.
+
+**Two columns and not one**, because a link into this corpus and a link out of it behave
+differently. A report id resolves to a title, can be checked for existence, and leads somewhere
+that will still be there; a URL can do none of those. Storing both as text would make every
+consumer parse the string to find out which it held, and the first one to get that wrong would
+render an internal id as a broken link.
+
+The URL is validated to the same rules **and the same sentences** as a report's supporting links:
+somebody who has met "Links have to start with https://" once should not meet a second,
+differently worded refusal for the same mistake on another form. `on delete set null` on the
+report reference: a report being erased must not take a claim with it.
+
+The form makes the exclusivity structural rather than validated — three radios, and only one input
+is ever on the page — so there is no state in which both hold a value and the submission has to
+choose. `debates_one_source` refuses both anyway.
+
+## 2026-08-22 — Grepping `dist/` for the controls, because this form has shipped two of them wrong
+
+The brief was explicit and the history earns it: this page has previously shipped a `Field.astro`
+counter stuck at 0, and controls addressed to a slot that does not exist.
+
+So the checks were run against the built HTML rather than the source: both counters present and
+wired, both textareas rendered as textareas rather than as `Field.astro`'s default text input,
+twelve radios on the scale (eleven points and the off-scale answer), the tag picker's search box
+and options container, all three source radios with their two panels, and no `maxlength="2000"`
+left anywhere.
+
+`wireCounters(form)` was already called on this page and now covers two counters instead of one.
+`syncCounters(form)` is called after a successful submission, because `form.reset()` clears the
+textareas and does not touch the counters that describe them — and `reset()` also restores the
+source radios without closing the panels they revealed, which is done by hand for the same reason.

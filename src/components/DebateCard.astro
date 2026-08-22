@@ -137,13 +137,15 @@ const hasStats =
     )
   }
 
-  {/* Area, and the seam where tags would go. `public.debates` has no tag table — `tags` and
-      `report_tags` are the reports' vocabulary — so there is nothing to render and nothing to
-      filter on. Adding an empty "Subject area" fieldset to the rail would be a dead end with a
-      zero beside it, which is worse than an absent filter. When debates get tags, this is where
-      they render and `DEBATE_DIMENSIONS` is where the filter goes; both are one line. */}
+  {/* Area, tags, date. The tags are the same arXiv categories reports carry — `public.tags`,
+      shared rather than duplicated — and they are the filter's vocabulary too, through the same
+      engine. Labels rather than codes: `math.NT` is a filter value, "Number theory" is what a
+      reader is scanning for. */}
   <p class="card__facts debate-card__facts">
     <span data-area-label>{areaLabel(debate.area)}</span>
+    {debate.tags.map((tag) => (
+      <span class="debate-card__tag">{tag.label}</span>
+    ))}
     <span class="meta" data-date>Posted {longDate(debate.createdAt)}</span>
   </p>
 </div>

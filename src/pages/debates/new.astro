@@ -14,14 +14,29 @@
 import Account from '../../layouts/Account.astro';
 import Field from '../../components/Field.astro';
 import FormStatus from '../../components/FormStatus.astro';
+import RatingScale from '../../components/RatingScale.astro';
+import TagPicker from '../../components/TagPicker.astro';
 import { path } from '../../lib/paths';
 import { AREAS } from '../../lib/report-schema';
+import { listReports } from '../../lib/reports';
+
+/**
+ * The corpus, for the source picker, at build time.
+ *
+ * Title and id only, newest first. Read from `data/` like every other read on this site, so the
+ * control is populated without the page opening a connection — and if the corpus is empty the
+ * select says so rather than offering an empty menu.
+ */
+const reports = (await listReports()).map((report) => ({
+  id: report.id,
+  title: report.title,
+}));
 ---
 
 <Account
   title="Suggest a debate"
   description="Propose a single claim about AI use in mathematics for the community to rate."
-  lead="One claim, in a sentence, that somebody could reasonably disagree with."
+  lead="One claim, in a sentence, that somebody could reasonably disagree with — and where you stand on it."
   gate="required"
 >
   <div class="panel" data-gate-unconfirmed hidden>
@@ -89,10 +104,26 @@ import { AREAS } from '../../lib/report-schema';
         useful ones are those where the histogram comes out with two peaks.
       </p>
 
+      <h2>You answer it too</h2>
+
+      <p>
+        Proposing means <strong>stating a position</strong>, not asking a question. The form
+        will not submit without your own answer on the scale, and it becomes the first entry in
+        the distribution — a claim is worth answering only if the person who wrote it was
+        willing to be counted on it.
+      </p>
+
+      <p>
+        <strong>“No opinion, or outside my expertise” is one of the answers here too.</strong>
+        If you have noticed an argument worth settling in an area you cannot judge, that is a
+        useful claim and an honest position on it. It is recorded off the scale rather than in
+        the middle of it.
+      </p>
+
       <p class="field__hint">
-        Once anybody has answered it, the wording is fixed. People rated the sentence in
-        front of them, and rewording it afterwards would reassign their agreement to a claim
-        they never saw.
+        The wording is fixed once somebody <em>else</em> has answered. Until then you can still
+        correct it — your own answer does not close the window, because nobody has yet agreed to
+        anything you might change.
       </p>
     </div>
 
@@ -170,13 +201,117 @@ import { AREAS } from '../../lib/report-schema';
 
       <Field
         id="rationale"
-        label="Why it is worth asking"
+        label="The reasoning behind it"
         type="textarea"
-        rows={5}
-        maxlength={2000}
+        rows={4}
+        maxlength={500}
         counter
-        hint="Optional, and read before anyone answers. The strongest case for the other side is more use here than the case for your own."
+        hint="Optional, 500 characters, and read before anyone answers. Why the claim is contested, and the strongest case against it — not the case for it. The case belongs in a contribution, where it carries the position you argued from and other people can say it captures their view too."
       />
+
+      {/* ── Your own position ─────────────────────────────────────────────────────────
+          Required, and the reason is not symmetry with the debate page. **Somebody unwilling
+          to say where they stand should not be setting the question**: a claim is only worth
+          answering if its author was willing to be counted on it, and a proposer who abstains
+          is setting a question for other people to be measured against.
+
+          It becomes the first entry in the distribution, which is also the honest ordering.
+
+          `RatingScale` is the same control the debate page uses, so the answer is given in the
+          same shape it will be read in — including "no opinion, or outside my expertise", which
+          is a real answer here too. Nothing is selected on load: a preselected default would be
+          an opinion the form supplied. */}
+      <div class="field">
+        <RatingScale name="score" />
+        <p class="field__error" id="score-error" hidden></p>
+      </div>
+
+      {/* ── Tags ──────────────────────────────────────────────────────────────────────
+          The same vocabulary reports use — the 32 arXiv mathematics categories — because the
+          question a tag answers is the same on both surfaces. Optional. */}
+      <div class="field">
+        <span class="field__label" id="tags-label">
+          Subject areas
+          <span class="field__optional">optional</span>
+        </span>
+        <div aria-labelledby="tags-label">
+          <TagPicker />
+        </div>
+      </div>
+
+      {/* ── Where it came from ────────────────────────────────────────────────────────
+          One or the other, never both, which the database also refuses. Radios rather than two
+          always-open inputs, so the exclusivity is visible before it is enforced — and a
+          bespoke fieldset rather than `Field.astro`, which renders its own control from a
+          `type` prop and would silently ship a text input where these belong. */}
+      <div class="field">
+        <span class="field__label" id="source-label">
+          What prompted it
+          <span class="field__optional">optional</span>
+        </span>
+        <div class="field__hint" id="source-hint">
+          <p>
+            A link, or a report already in this corpus. It says where the claim came from — it
+            is not a citation, and it puts nothing in that page's <strong>referenced by</strong>
+            list.
+          </p>
+        </div>
+
+        <fieldset class="choices" aria-labelledby="source-label" aria-describedby="source-hint">
+          <legend class="visually-hidden">Whether to give a source, and which kind</legend>
+          <label class="choice" for="source-none">
+            <input class="choice__input" type="radio" id="source-none" name="source" value="none" checked />
+            <span>No source</span>
+          </label>
+          <label class="choice" for="source-link">
+            <input class="choice__input" type="radio" id="source-link" name="source" value="url" />
+            <span>A link</span>
+          </label>
+          <label class="choice" for="source-report">
+            <input class="choice__input" type="radio" id="source-report" name="source" value="report" />
+            <span>A report from this corpus</span>
+          </label>
+        </fieldset>
+
+        <div class="field" data-source-url hidden>
+          <label class="field__label" for="source-url">The link</label>
+          <div class="field__hint" id="source-url-hint">
+            <p>
+              Starting <code>https://</code>, and reachable from outside — the same rule as a
+              report's supporting links.
+            </p>
+          </div>
+          <input
+            class="field__control"
+            type="url"
+            id="source-url"
+            maxlength={500}
+            placeholder="https://"
+            aria-describedby="source-url-hint source-url-error"
+          />
+          <p class="field__error" id="source-url-error" hidden></p>
+        </div>
+
+        <div class="field" data-source-report hidden>
+          <label class="field__label" for="source-report-id">The report</label>
+          <div class="field__hint" id="source-report-hint">
+            <p>
+              {reports.length === 0
+                ? 'There are no reports in the corpus yet, so there is nothing to choose. Give a link instead.'
+                : 'Chosen from the corpus, so the link cannot rot and the title stays right.'}
+            </p>
+          </div>
+          {/* A native select, because the corpus is the vocabulary and it is short. It becomes
+              a search problem at a few hundred reports and is not one yet; when it is, this is
+              the control to replace. */}
+          <select class="field__control" id="source-report-id" aria-describedby="source-report-hint">
+            <option value="">Choose a report…</option>
+            {reports.map((report) => (
+              <option value={report.id}>{report.title}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       <div class="actions">
         <button class="button button--primary" type="submit">Suggest it</button>
@@ -184,8 +319,15 @@ import { AREAS } from '../../lib/report-schema';
       </div>
 
       <p class="field__hint">
-        It is part of the record straight away and can be answered immediately. A moderator
-        only steps in if somebody flags it, and then says in writing what they decided.
+        It is part of the record straight away and can be answered immediately, with your own
+        position already the first entry in the distribution. You can correct the wording until
+        somebody else answers — your own answer does not close that — and after
+        that it is fixed, because people rated the sentence in front of them.
+      </p>
+
+      <p class="field__hint">
+        A moderator only steps in if somebody flags it, and then says in writing what they
+        decided.
       </p>
     </form>
   </div>
@@ -204,6 +346,7 @@ import { AREAS } from '../../lib/report-schema';
     setBusy,
     setFieldError,
     showStatus,
+    syncCounters,
     wireCounters,
   } from '../../lib/forms';
   import { validateRequiredText, validateOptionalText } from '../../lib/validation';
@@ -217,10 +360,40 @@ import { AREAS } from '../../lib/report-schema';
   const rationale = query<HTMLTextAreaElement>('#rationale', form);
   const strip = query<HTMLElement>('[data-quote-strip]', form);
   const bearing = query<HTMLInputElement>('#bearing', form);
+  const scoreError = query<HTMLElement>('#score-error', form);
+  const sourceUrlWrap = query<HTMLElement>('[data-source-url]', form);
+  const sourceReportWrap = query<HTMLElement>('[data-source-report]', form);
+  const sourceUrl = query<HTMLInputElement>('#source-url', form);
+  const sourceReport = query<HTMLSelectElement>('#source-report-id', form);
 
   let userId: string | null = null;
 
+  // Both counters — the claim's and the reasoning's — are rendered by `Field.astro`, which
+  // renders a counter but cannot animate it. Without this they sit at 0 while somebody types,
+  // which this form has shipped once already.
   wireCounters(form);
+
+  // ── Which source, if any ────────────────────────────────────────────────────────────
+  // Exclusive by construction: only one of the two inputs is ever on the page, so there is no
+  // state in which both hold a value and the submission has to choose. `debates_one_source`
+  // refuses both anyway; this makes it impossible to reach.
+
+  for (const radio of form.querySelectorAll<HTMLInputElement>('input[name="source"]')) {
+    radio.addEventListener('change', () => {
+      const kind = form.querySelector<HTMLInputElement>('input[name="source"]:checked')?.value;
+
+      sourceUrlWrap.hidden = kind !== 'url';
+      sourceReportWrap.hidden = kind !== 'report';
+
+      // Cleared on the way out, so a value typed and then switched away from is not submitted
+      // by a field nobody can see.
+      if (kind !== 'url') sourceUrl.value = '';
+      if (kind !== 'report') sourceReport.value = '';
+
+      if (kind === 'url') sourceUrl.focus();
+      if (kind === 'report') sourceReport.focus();
+    });
+  }
 
   // ── The carried passage ─────────────────────────────────────────────────────────────
   // Read once, on load, rather than at submission time. Reading it later would attach a
@@ -283,7 +456,7 @@ import { AREAS } from '../../lib/report-schema';
     setFieldError('statement', statementError, form);
     setFieldError(
       'rationale',
-      validateOptionalText(rationale.value, 2000, 'The rationale'),
+      validateOptionalText(rationale.value, 500, 'The reasoning'),
       form,
     );
 
@@ -291,18 +464,58 @@ import { AREAS } from '../../lib/report-schema';
     areaError.textContent = area ? '' : 'Choose which kind of work this claim is about.';
     areaError.hidden = Boolean(area);
 
-    if (statementError || !area) {
+    /**
+     * The proposer's own position, required.
+     *
+     * `'none'` is the off-scale answer and is a valid submission; `undefined` is an untouched
+     * scale and is not. Nothing is selected on load, so those two states are genuinely
+     * different, and collapsing them is the mistake the RPC's two parameters exist to prevent.
+     */
+    const chosen = form.querySelector<HTMLInputElement>('input[name="score"]:checked')?.value;
+    const offScale = chosen === 'none';
+    const score = chosen === undefined || offScale ? null : Number(chosen);
+
+    scoreError.textContent =
+      chosen === undefined
+        ? 'Say where you stand on your own claim. "No opinion, or outside my expertise" counts.'
+        : '';
+    scoreError.hidden = chosen !== undefined;
+
+    // Validated here so the message names the field; the trigger raises the same sentences and
+    // is still the truth. A caller that skipped this form would meet it instead.
+    const kind = form.querySelector<HTMLInputElement>('input[name="source"]:checked')?.value;
+    const url = kind === 'url' ? sourceUrl.value.trim() : '';
+    const reportId = kind === 'report' ? sourceReport.value : '';
+
+    const urlError =
+      kind !== 'url' || url === ''
+        ? null
+        : url.length > 500
+          ? 'That link is longer than 500 characters. Check it is the link you meant.'
+          : !/^https:\/\/\S+$/.test(url)
+            ? 'Links have to start with https://. A link nobody can open from outside is not a source.'
+            : null;
+
+    setFieldError('source-url', urlError, form);
+
+    if (statementError || !area || chosen === undefined || urlError) {
       showStatus(status, 'error', 'The claim still needs work. See the notes below.');
       return;
     }
 
     setBusy(submit, true, 'Suggesting…');
-    const result = await proposeDebate(
-      userId,
-      statement.value,
-      rationale.value,
-      area as Area,
-    );
+    const result = await proposeDebate({
+      statement: statement.value,
+      rationale: rationale.value,
+      area: area as Area,
+      score,
+      offScale,
+      tagCodes: [
+        ...form.querySelectorAll<HTMLInputElement>('.tag__input:checked'),
+      ].map((input) => input.value),
+      sourceUrl: url || null,
+      sourceReportId: reportId || null,
+    });
     setBusy(submit, false);
 
     if (!result.ok) {
@@ -347,5 +560,15 @@ import { AREAS } from '../../lib/report-schema';
           ],
     );
     form.reset();
+
+    // `reset()` puts the radios back but not the panels they revealed, and it does not re-run a
+    // change event. Without this the link field stays open after a successful submission,
+    // holding nothing, above a form that has been cleared.
+    sourceUrlWrap.hidden = true;
+    sourceReportWrap.hidden = true;
+    scoreError.hidden = true;
+
+    // The counters are rendered from the DOM and do not follow a reset by themselves.
+    syncCounters(form);
   });
 </script>

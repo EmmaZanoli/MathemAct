@@ -63,15 +63,28 @@ export interface DebateAuthor {
   readonly isPseudonym: boolean;
 }
 
+export interface DebateTag {
+  readonly code: string;
+  readonly label: string;
+}
+
 export interface Debate {
   readonly id: string;
   readonly statement: string;
+  /** The reasoning behind the claim. Capped at 500 characters since 2026-08-22, because the cap
+   *  is the only thing that reliably stops an opening post becoming an essay. */
   readonly rationale: string | null;
   readonly status: 'proposed' | 'active';
   readonly area: Area;
   readonly createdAt: string;
   readonly activatedAt: string | null;
   readonly author: DebateAuthor | null;
+  /** arXiv subject classes, from the same vocabulary reports use. Empty rather than null. */
+  readonly tags: readonly DebateTag[];
+  /** What prompted the claim: an external link, **or** a report from this corpus, or neither.
+   *  Never both — `debates_one_source` refuses it. */
+  readonly sourceUrl: string | null;
+  readonly sourceReportId: string | null;
 }
 
 /**
@@ -198,7 +211,17 @@ async function readDebates(): Promise<Debate[]> {
     return cached;
   }
 
-  cached = exported;
+  // Normalised rather than trusted, as `readComments()` does and for the same reason: an export
+  // written before 2026-08-22 has no `tags`, no `sourceUrl` and no `sourceReportId`, and the type
+  // above says all three are present. `data/` is a historical document and older files are still
+  // valid, so the defaulting lives here rather than at every consumer.
+  cached = exported.map((debate) => ({
+    ...debate,
+    tags: debate.tags ?? [],
+    sourceUrl: debate.sourceUrl ?? null,
+    sourceReportId: debate.sourceReportId ?? null,
+  }));
+
   return cached;
 }
 
@@ -405,29 +428,44 @@ export async function loadAggregate(debateId: string): Promise<Result<Aggregate>
   }
 }
 
-export async function proposeDebate(
-  userId: string,
-  statement: string,
-  rationale: string,
-  area: Area,
-): Promise<Result<string>> {
+/**
+ * Proposing a claim, and stating a position on it, in one call.
+ *
+ * `public.submit_debate()` rather than an insert, because the two writes have to be one
+ * transaction: a debate whose proposer never answered it is the thing the requirement forbids,
+ * and two client calls produce exactly that whenever the second one fails. See the migration.
+ *
+ * `score` of `null` **with** `offScale` true is the off-scale answer and is stored as a null
+ * score on a real row. `score` of null with `offScale` false is an unanswered form, and the
+ * function refuses it. Those are different things and this signature keeps them apart.
+ */
+export async function proposeDebate(input: {
+  readonly statement: string;
+  readonly rationale: string;
+  readonly area: Area;
+  readonly score: number | null;
+  readonly offScale: boolean;
+  readonly tagCodes: readonly string[];
+  readonly sourceUrl: string | null;
+  readonly sourceReportId: string | null;
+}): Promise<Result<string>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const { data, error } = await supabase
-      .from('debates')
-      .insert({
-        author_id: userId,
-        statement: statement.trim(),
-        rationale: rationale.trim() || null,
-        area,
-      })
-      .select('id')
-      .single<{ id: string }>();
+    const { data, error } = await supabase.rpc('submit_debate', {
+      p_statement: input.statement.trim(),
+      p_area: input.area,
+      p_score: input.offScale ? null : input.score,
+      p_off_scale: input.offScale,
+      p_rationale: input.rationale.trim() || null,
+      p_tag_codes: [...input.tagCodes],
+      p_source_url: input.sourceUrl?.trim() || null,
+      p_source_report: input.sourceReportId || null,
+    });
 
     if (error) return { ok: false, message: describe(error) };
-    return { ok: true, value: data.id };
+    return { ok: true, value: data as string };
   } catch (error) {
     return { ok: false, message: describe(error) };
   }

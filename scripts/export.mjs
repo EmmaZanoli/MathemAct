@@ -230,11 +230,30 @@ const DEBATES = `
     q.area::text,
     q.created_at,
     q.activated_at,
+
+    -- What prompted the claim: one or the other, never both. debates_one_source enforces it.
+    q.source_url,
+    q.source_report_id,
+
     a.id           as author_id,
     a.display_name as author_display_name,
-    a.is_pseudonym as author_is_pseudonym
+    a.is_pseudonym as author_is_pseudonym,
+
+    tags.rows      as tags
   from public.debates q
   left join public.profiles a on a.id = q.author_id
+
+  -- Same shape as the reports query's tag join, and the same vocabulary: public.tags, ordered
+  -- by the sort order the migration seeded rather than by whichever row Postgres returned first.
+  left join lateral (
+    select json_agg(
+             json_build_object('code', g.code, 'label', g.label) order by g.sort_order, g.code
+           ) as rows
+      from public.debate_tags dt
+      join public.tags g on g.id = dt.tag_id
+     where dt.debate_id = q.id
+  ) tags on true
+
   where q.status <> 'hidden'
   order by q.created_at desc
 `;
@@ -632,6 +651,14 @@ function toDebate(row) {
     area: row.area,
     createdAt: iso(row.created_at),
     activatedAt: iso(row.activated_at),
+    // `[]` and not null when there are none, so a consumer can iterate without testing first.
+    // The reports mapping does the same for the same reason.
+    tags: row.tags ?? [],
+    sourceUrl: row.source_url ?? null,
+    // The id only. Resolving it to a title here would duplicate a string that reports.json
+    // already carries and would go stale the moment a report was retitled — and a consumer
+    // holding both files can join them, which is what a corpus is for.
+    sourceReportId: row.source_report_id ?? null,
     author: row.author_id
       ? {
           id: row.author_id,

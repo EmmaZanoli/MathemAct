@@ -52,19 +52,43 @@ const threshold = [...stats.values()][0]?.sortableMinimum ?? 10;
  *  with a zero beside it, and on a corpus this size most of them would be. */
 const usedAreas = new Set(debates.map((debate) => debate.area));
 
+/**
+ * Only the tags something is actually filed under, and only their labels.
+ *
+ * The same rule as the areas above and as the reports listing: a vocabulary of thirty-two
+ * categories over a corpus of four is thirty-one dead ends and one result. `groupsFor` drops any
+ * dimension whose option list comes back empty, so a corpus with no tagged debates renders no
+ * "Subject area" fieldset at all rather than an empty one.
+ */
+const usedTags = new Map<string, string>();
+for (const debate of debates) {
+  for (const tag of debate.tags) usedTags.set(tag.code, tag.label);
+}
+
 const groups = groupsFor(DEBATE_DIMENSIONS, {
   area: AREAS.filter((choice) => usedAreas.has(choice.value)).map((choice) => ({
     value: choice.value,
     label: choice.label,
   })),
+  tag: [...usedTags]
+    .sort(([, a], [, b]) => a.localeCompare(b))
+    .map(([value, label]) => ({ value, label })),
 });
+
+/** Code to label, for the engine's chips and for any value only a fresh card carries. */
+const tagLabels = Object.fromEntries(usedTags);
 ---
 
 <Base
   title="Debates"
   description="Claims about how AI tools should be used in mathematics, and where the community stands on each."
 >
-  <div class="shell corpus" data-corpus data-exported-at={exportedAt() ?? ''}>
+  <div
+    class="shell corpus"
+    data-corpus
+    data-exported-at={exportedAt() ?? ''}
+    data-tag-labels={JSON.stringify(tagLabels)}
+  >
     <header class="corpus__header">
       <h1>Debates</h1>
       <p class="corpus__lead">
@@ -143,6 +167,7 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
                  `debateCardAttrs` reads what it needs. */
               shares: stats.get(debate.id) ?? null,
               lastActivityAt: stats.get(debate.id)?.lastActivityAt ?? null,
+              tagCodes: debate.tags.map((tag) => tag.code),
             })}
           >
             <DebateCard debate={debate} stats={stats.get(debate.id)} />
@@ -183,7 +208,7 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
         What is *not* duplicated is the attribute list — `debateCardAttrs()` writes those on both
         paths, which is the half that would silently break a sort if it drifted. */}
     <template data-fresh-debate>
-      <li class="debate-item" data-fresh data-debate data-area="" data-created="" data-interactions="0" data-divided="" data-consensus="" data-active="">
+      <li class="debate-item" data-fresh data-debate data-area="" data-created="" data-interactions="0" data-divided="" data-consensus="" data-active="" data-tags="">
         <div class="debate-card">
           <a class="debate-card__claim" data-statement></a>
           <p class="card__facts debate-card__facts">
@@ -218,12 +243,28 @@ const groups = groupsFor(DEBATE_DIMENSIONS, {
   import { applyCardAttrs, debateCardAttrs } from '../../lib/debate-facets';
   import { areaLabel } from '../../lib/report-schema';
 
+  /** Emitted by the frontmatter, because a client script cannot read a build-time constant.
+   *  Parsed defensively: a malformed attribute should cost a chip its label, not the page. */
+  let tagLabels: Record<string, string> = {};
+  try {
+    tagLabels = JSON.parse(
+      document.querySelector<HTMLElement>('[data-corpus]')?.dataset.tagLabels || '{}',
+    );
+  } catch {
+    tagLabels = {};
+  }
+
   const listing = createListing({
     cards: [...document.querySelectorAll<HTMLElement>('[data-results] > [data-debate]')],
     dimensions: DEBATE_DIMENSIONS,
     sorts: DEBATE_SORTS,
     noun: DEBATE_NOUN,
-    injectLabel: (key, value) => (key === 'area' ? areaLabel(value) : value),
+    /* A value a fresh card carries that the build had no row to justify. Areas resolve
+       through the vocabulary; tags resolve through the labels the build emitted, and fall back
+       to the bare code — which is the right failure, because a code is still recognisable to
+       somebody who filters by one. */
+    injectLabel: (key, value) =>
+      key === 'area' ? areaLabel(value) : key === 'tag' ? (tagLabels[value] ?? value) : value,
   });
 
   // ── Freshness overlay ─────────────────────────────────────────────────────────────────

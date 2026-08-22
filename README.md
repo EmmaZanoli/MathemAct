@@ -46,6 +46,7 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | Contributions on debates: grouped by position or flat, sorted, no replies |
 | ✅ | Endorsement — two actions, counted in words, withdrawable, and never a vote |
 | ✅ | The debates listing: a shape per card, five orderings, and what they mean stated |
+| ✅ | Proposing a debate: a position required, tags, a source, and a 500-character cap |
 | ✅ | Moderation: flag-led, audited, explained to both sides, and erasure that erases |
 | ✅ | Account bans: reachable, reversible, and explained to the account holder |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |
@@ -209,7 +210,7 @@ production rather than a report after it.
 
 ### Database tests
 
-609 pgTAP assertions across twenty-two files in `supabase/tests/`, covering domain matching, the
+634 pgTAP assertions across twenty-three files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the
