@@ -12,7 +12,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(29);
+select plan(30);
 
 insert into auth.users (id, instance_id, aud, role, email, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
 values
@@ -307,10 +307,23 @@ select is_empty(
 
 reset role;
 
--- ── No mean, anywhere ───────────────────────────────────────────────────────────────
--- Asserted against the catalogue rather than against a list of objects, so it covers
--- whatever is added next. The mean of an 11-point bipolar scale is misleading exactly when
--- the distribution is bimodal, and bimodal is what to expect on the contested ones.
+-- ── The mean: one place computes it, and it is not a headline ───────────────────────
+-- Until 2026-08-21 this section asserted that nothing anywhere computed an average. The
+-- analysis behind that has not changed — the mean of an 11-point bipolar scale reports mild
+-- agreement for a community that has split cleanly in two, which is the exact shape this
+-- corpus exists to make visible — but the conclusion has: a mean shown beside the median and
+-- never without the histogram is a statistic a reader can weigh, where a withheld one is a
+-- statistic they compute themselves, less carefully, with no caveat beside it.
+--
+-- So the assertion is narrowed rather than deleted, and it is still written against the
+-- catalogue rather than against a list of objects, so it still covers whatever is added next.
+-- `public.rating_aggregate` is exempt **by name**. Anything else in the exposed schema that
+-- grows an `avg(` still fails here, which is the property worth keeping: the danger was never
+-- one mean, it was a second one computed somewhere else to a different definition.
+--
+-- What this cannot assert is the display rule — that the mean never appears as a card
+-- headline, on a sort control, or without the histogram. That lives in CLAUDE.md, in the
+-- comment on the function, and in review.
 
 select is_empty(
   $$ select p.proname
@@ -318,10 +331,14 @@ select is_empty(
        join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = 'public'
         and p.prokind = 'f'
+        and p.proname <> 'rating_aggregate'
         and pg_get_functiondef(p.oid) ~* '\mavg\s*\(' $$,
-  'no function in the exposed schema computes an average'
+  'no function in the exposed schema computes an average except public.rating_aggregate'
 );
 
+-- The view is unexempted and still passes: it calls the function rather than restating the
+-- arithmetic, so its definition holds no `avg(` of its own. That is the point of the function
+-- being under the view, and this assertion is what would notice somebody inlining it.
 select is_empty(
   $$ select c.relname
        from pg_class c
@@ -329,8 +346,22 @@ select is_empty(
       where n.nspname = 'public'
         and c.relkind = 'v'
         and pg_get_viewdef(c.oid) ~* '\mavg\s*\(' $$,
-  'and no view does either'
+  'and no view computes one at all: debate_ratings calls the function instead of restating it'
 );
+
+-- Three opinions on the active debate — 2, 7 and 8 — and one person who declined. The mean is
+-- 17/3, and the assertion is really about the denominator: the person who chose "no opinion"
+-- is not in it. Were they counted as anything at all, this would read 4.25.
+set local role anon;
+
+select is(
+  (select mean from public.debate_ratings
+    where debate_id = 'cccc0000-0000-0000-0000-000000000001'),
+  5.67::numeric,
+  'the mean is reported beside the median, over the opinions only'
+);
+
+reset role;
 
 select * from finish();
 

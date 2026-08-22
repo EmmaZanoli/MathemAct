@@ -14,11 +14,24 @@
 import { NO_OPINION_LABEL, SCALE_ANCHORS, SCALE_POINTS } from './debates';
 import type { Aggregate } from './debates';
 
+/**
+ * The two figures that do not come from the aggregate.
+ *
+ * `NaN` means "the export has never seen this debate", which is the state of every debate on
+ * /debates/view/ and of one posted since the last build. Both are then omitted from the line
+ * rather than printed as zero — nobody counted them, and a zero would say somebody had.
+ */
+export interface StaticCounts {
+  readonly contributions: number;
+  readonly positionChanges: number;
+}
+
 export function renderHistogram(
   root: HTMLElement,
   aggregate: Aggregate,
   myScore: number | null,
   iRated: boolean,
+  counts?: StaticCounts,
 ): void {
   const tallest = Math.max(1, ...aggregate.histogram);
 
@@ -63,16 +76,68 @@ export function renderHistogram(
     );
   }
 
-  set(root, 'median', aggregate.median === null ? 'none yet' : String(aggregate.median));
+  // ── The statistics line ─────────────────────────────────────────────────────────────
+
+  set(root, 'positions', String(aggregate.totalRaters));
   set(root, 'opinions', String(aggregate.opinionCount));
-  set(root, 'no-opinion', String(aggregate.noOpinionCount));
-  set(
-    root,
-    'coverage',
-    aggregate.coverage === null ? '—' : `${Math.round(aggregate.coverage * 100)}%`,
-  );
+  set(root, 'median', aggregate.median === null ? 'none yet' : String(aggregate.median));
+
+  // An em dash and not a 0. Nobody has expressed an opinion, and 0 is a position on this
+  // scale meaning strong disagreement — the same reason the column above is not filled either.
+  set(root, 'mean', aggregate.mean === null ? '—' : aggregate.mean.toFixed(2));
+
+  // The two export-time figures. Their wrappers stay hidden when the number is unavailable, so
+  // the line ends after the mean rather than trailing two zeros.
+  figure(root, 'contributions', counts?.contributions);
+  figure(root, 'changed', counts?.positionChanges);
+
+  // ── Where the off-scale answers are, in words ───────────────────────────────────────
+  // They are not in the chart, because "outside my expertise" is not a position on a scale of
+  // agreement, and they are not at 5, because a declared non-opinion is not a neutral opinion.
+  // So they are stated. The reader's own decline is named first: they looked for their marker
+  // on the chart and it is not there, and this is the sentence that answers that.
+  const offscale = root.querySelector<HTMLElement>('[data-offscale]');
+  if (offscale) {
+    const others = aggregate.noOpinionCount - (iRated && myScore === null ? 1 : 0);
+    const lines: string[] = [];
+
+    if (iRated && myScore === null) {
+      lines.push(
+        'You answered “no opinion, or outside my expertise”, which is off the scale rather ' +
+          'than in the middle of it, so you are not on the chart.',
+      );
+    }
+
+    if (others > 0) {
+      lines.push(
+        others === 1
+          ? '1 other person answered off the scale, for the same reason.'
+          : `${others} other people answered off the scale.`,
+      );
+    } else if (!lines.length && aggregate.noOpinionCount > 0) {
+      lines.push(
+        aggregate.noOpinionCount === 1
+          ? '1 person answered “no opinion, or outside my expertise”, which is off the scale.'
+          : `${aggregate.noOpinionCount} people answered “no opinion, or outside my ` +
+              'expertise”, which is off the scale.',
+      );
+    }
+
+    offscale.textContent = lines.join(' ');
+    offscale.hidden = lines.length === 0;
+  }
 
   root.hidden = false;
+}
+
+/** A figure that is present or absent rather than present or zero. */
+function figure(root: HTMLElement, stat: string, value: number | undefined): void {
+  const wrapper = root.querySelector<HTMLElement>(`[data-figure="${stat}"]`);
+  if (!wrapper) return;
+
+  const known = typeof value === 'number' && Number.isFinite(value);
+  if (known) set(root, stat, String(value));
+  wrapper.hidden = !known;
 }
 
 function row(score: string, people: string, notes: string): HTMLTableRowElement {
