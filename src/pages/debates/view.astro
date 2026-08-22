@@ -318,13 +318,13 @@ import { path } from '../../lib/paths';
       if (input) input.checked = true;
     }
 
-    async function reveal(): Promise<void> {
+    async function reveal(): Promise<boolean> {
       const aggregate = await loadAggregate(debateId);
       if (!aggregate.ok) {
         ask.hidden = false;
         form.hidden = false;
         showStatus(status, 'error', aggregate.message);
-        return;
+        return false;
       }
 
       ask.hidden = true;
@@ -353,6 +353,8 @@ import { path } from '../../lib/paths';
           },
         }),
       );
+
+      return true;
     }
 
     again.addEventListener('click', () => {
@@ -399,17 +401,28 @@ import { path } from '../../lib/paths';
       submit.textContent = 'Update my answer';
 
       justChanged = editing;
-      await reveal();
+      const revealed = await reveal();
       justChanged = false;
 
-      // On the results panel, because reveal() has just hidden the block #rate-status is in.
-      showStatus(
-        outcome,
-        'success',
-        editing
-          ? 'Your position has been updated.'
-          : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
-      );
+      // Whichever of the two status elements is actually on screen — see the note on the same
+      // branch in /debates/<id>/. Writing the confirmation into the hidden one left a reader
+      // seeing only reveal()'s error, which says "nothing was saved" about a saved answer.
+      if (revealed) {
+        showStatus(
+          outcome,
+          'success',
+          editing
+            ? 'Your position has been updated.'
+            : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+        );
+      } else {
+        showStatus(status, 'notice', [
+          editing
+            ? 'Your position has been updated.'
+            : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+          'The distribution could not be loaded, so it is not shown below. Your answer is saved; reload the page to try again.',
+        ]);
+      }
     });
   }
 

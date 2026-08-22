@@ -210,6 +210,21 @@ function describe(error: unknown): string {
       return 'That did not go through. Answer the debate first — and if you already have, the account may not be confirmed yet.';
     case '23505':
       return 'You had already said something about this one. Reload the page to see which.';
+    /**
+     * The site is newer than the database it is talking to.
+     *
+     * `42703` is an unknown column and `42P01` an unknown table or view. Either means the
+     * deployed pages are asking for something a migration has not created yet — which is a real
+     * state on this project rather than a theoretical one: `migrate.yml` runs only on `main`, and
+     * on `main` it runs on the *same push* as the deploy rather than before it. So a branch
+     * preview, and a short window after every merge, both look like this.
+     *
+     * Named rather than left to the generic fallback, because the fallback says "nothing was
+     * saved" — and for a read that is beside the point, while for a write it is often false.
+     */
+    case '42703':
+    case '42P01':
+      return 'This part of the site is newer than the database it reads from, so that is not available yet. Nothing you did is lost; try again shortly.';
     case 'PGRST301':
       return 'Your session has ended. Sign in again.';
   }

@@ -475,6 +475,13 @@ function describe(error: unknown): string {
         ? message
         : 'You have reached what one account can post in a day. Try again tomorrow.';
 
+    // The site is newer than the database it reads from: 42703 is an unknown column, 42P01 an
+    // unknown table. Real on this project rather than theoretical — `migrate.yml` runs only on
+    // `main`, and there on the same push as the deploy rather than before it, so a branch
+    // preview and a short window after every merge both look like this.
+    case '42703':
+    case '42P01':
+      return 'This part of the site is newer than the database it reads from, so that is not available yet. Nothing you wrote is lost; try again shortly.';
     case 'PGRST301':
       return 'Your session has ended. Sign in again — your text is still in the box.';
   }

@@ -356,7 +356,7 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
     if (input) input.checked = true;
   }
 
-  async function reveal(): Promise<void> {
+  async function reveal(): Promise<boolean> {
     const aggregate = await loadAggregate(debateId);
     if (!aggregate.ok) {
       // The chart needs the database and this is the one thing on the page that does. Say so
@@ -364,7 +364,7 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
       ask.hidden = false;
       form.hidden = false;
       showStatus(status, 'error', aggregate.message);
-      return;
+      return false;
     }
 
     // Answered, so the question is spent: the whole asking block goes, and the button under
@@ -399,6 +399,8 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
         },
       }),
     );
+
+    return true;
   }
 
   again.addEventListener('click', () => {
@@ -448,18 +450,38 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
     submit.textContent = 'Update my answer';
 
     justChanged = editing;
-    await reveal();
+    const revealed = await reveal();
     justChanged = false;
 
-    // Shown on the results panel now, because `reveal()` has just hidden the block the status
-    // element sits in. `#rate-status` is inside the form on purpose — it is the form's own
-    // error channel — so a success message has to move.
-    showStatus(
-      outcome,
-      'success',
-      editing
-        ? 'Your position has been updated.'
-        : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
-    );
+    /**
+     * Where the confirmation goes depends on whether the chart came up, and getting that wrong
+     * is what made a saved answer look like a failed one.
+     *
+     * `#rate-status` lives inside the asking block and `#rate-outcome` inside the results panel,
+     * so at any moment exactly one of them is on screen. On success `reveal()` has hidden the
+     * first and shown the second. **On failure it has done the opposite** — and the old code
+     * wrote the confirmation into the hidden panel regardless, so all a reader saw was
+     * `reveal()`'s error, which is about the distribution and said "nothing was saved" about an
+     * answer that had just been saved.
+     *
+     * The answer is recorded either way: `saveRating()` returned ok to get here. Only the chart
+     * is missing, and the message now says which of the two happened.
+     */
+    if (revealed) {
+      showStatus(
+        outcome,
+        'success',
+        editing
+          ? 'Your position has been updated.'
+          : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+      );
+    } else {
+      showStatus(status, 'notice', [
+        editing
+          ? 'Your position has been updated.'
+          : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+        'The distribution could not be loaded, so it is not shown below. Your answer is saved; reload the page to try again.',
+      ]);
+    }
   });
 </script>
