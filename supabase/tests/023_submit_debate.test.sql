@@ -144,7 +144,12 @@ update public.debates
 
 reset role;
 
-select like(
+-- `alike()` and not `like()`. pgTAP has no `like()` — the name would collide with the SQL
+-- LIKE operator — so it offers `alike`/`ialike` for patterns and `matches`/`imatches` for
+-- regexes. Calling the wrong one aborts the transaction, which takes every assertion after it
+-- with it: this file reported "Bad plan: you planned 25 tests but ran 8", and the seventeen it
+-- skipped were fine.
+select alike(
   (select statement from public.debates),
   '%for any computer-assisted%',
   'the author can still correct the wording after answering it themselves: their own answer is not an answer'
@@ -169,7 +174,7 @@ update public.debates set statement = 'Rewritten after somebody agreed to the ot
 
 reset role;
 
-select like(
+select alike(
   (select statement from public.debates),
   '%for any computer-assisted%',
   'and once somebody else has answered, the wording is frozen — silently reverted, not refused'
