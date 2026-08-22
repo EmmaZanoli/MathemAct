@@ -2036,3 +2036,31 @@ are perfectly divided by the arithmetic and establish nothing. The null reaches 
 empty string, which the listing engine already sorts last — so "a fresh card is ineligible"
 needed no new code path. What each measures, and the threshold, are stated beside the sort
 control rather than in a tooltip.
+
+## 2026-08-22 — The wording freeze needed a column, because nothing that asks can see
+
+`023_submit_debate.test.sql` failed two assertions on the first run that got far enough to make
+them: an author rewrote their claim after somebody else had answered it, and added a tag after
+the same. Both succeeded. The rule was written correctly in two places and enforceable in
+neither.
+
+**A rating is readable only by its author.** `private.protect_debate_columns()` is SECURITY
+INVOKER — it must be, because its `current_user` test is what tells a browser from the table's
+owner — so its `exists (select 1 from public.ratings ...)` runs under the caller's own policies.
+The caller is the claim's author, who can see exactly one rating: their own. The `debate_tags`
+policies read the same table from the same position and fail identically, because a policy
+subquery is evaluated as the caller too.
+
+The version before this was broken differently and less visibly: it looked for *any* rating,
+found the author's own when they had one and nothing at all when they had not — so the freeze
+engaged on the author's own answer and never on anybody else's. It has never done what it says.
+
+`debates.answered_at`, stamped by a DEFINER trigger on the first rating by somebody other than
+the author, ungranted, frozen in the guard, and backfilled. **This is the second time this schema
+met this shape in two days** — `comments.endorsed_at` exists for the identical reason on
+`comment_endorsements` — and it was documented at the time, which did not stop it recurring one
+migration later on a different own-rows-only table. It is now a trap entry rather than an
+anecdote.
+
+Worth noting what did catch it: not review, and not `astro check`. A pgTAP assertion written from
+the browser's side, under `set local role authenticated`, on a rule whose failure mode is silence.

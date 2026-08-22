@@ -26,7 +26,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(25);
+select plan(26);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 -- auth.users has a partial unique index on email, so no two fixtures may share one.
@@ -309,6 +309,13 @@ select throws_ok(
 reset role;
 
 -- ── Exposure ────────────────────────────────────────────────────────────────────────
+
+-- The column the freeze now reads. An author who could write it could unfreeze their own claim
+-- after people had answered it, which is the whole thing it exists to prevent.
+select ok(
+  not has_column_privilege('authenticated', 'public.debates', 'answered_at', 'UPDATE'),
+  'answered_at is not client-writable, so nobody can unfreeze their own claim'
+);
 
 select ok(
   not has_table_privilege('anon', 'public.debate_tags', 'INSERT'),
