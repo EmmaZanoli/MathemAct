@@ -292,6 +292,38 @@ export function statsFor(debateId: string): DebateStats | undefined {
   return listDebateStats().get(debateId);
 }
 
+/** `?fixtures` in the address bar, which only means anything under `astro dev`. The same switch
+ *  src/lib/moderation.ts uses, so one URL parameter puts the whole site into fixture mode. */
+function usingFixtures(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('fixtures')
+  );
+}
+
+/** Compiles to `false` in a production build, which removes every branch behind it. */
+export function fixturesActive(): boolean {
+  return import.meta.env.DEV && usingFixtures();
+}
+
+/**
+ * The answer to pretend the reader gave, in fixture mode.
+ *
+ * **Defaults to the median**, because that is the case worth looking at: the "you" marker and
+ * the "median" marker land on the same column, which is where they used to collide. `?as=7`
+ * picks a position, `?as=none` picks the off-scale answer, and neither writes anything anywhere.
+ */
+export function fixtureAnswer(debateId: string): { rated: boolean; score: number | null } {
+  const asked = new URLSearchParams(window.location.search).get('as');
+
+  if (asked === 'none') return { rated: true, score: null };
+  if (asked !== null && asked !== '' && Number.isFinite(Number(asked))) {
+    return { rated: true, score: Number(asked) };
+  }
+
+  return { rated: true, score: statsFor(debateId)?.median ?? null };
+}
+
 /**
  * Interaction count per debate id: positions plus contributions.
  *
@@ -391,6 +423,28 @@ export async function saveRating(
  * source for somebody who has not answered yet — see the header of this file.
  */
 export async function loadAggregate(debateId: string): Promise<Result<Aggregate>> {
+  /**
+   * The one dev affordance on this path, and it exists because of a specific contradiction.
+   *
+   * The distribution is a live query and the contributions are static, so a `data/` filled by
+   * `scripts/dev-seed.mjs` puts ten contributions across eight positions underneath a chart
+   * showing whatever two rows the database happens to hold — a page arguing with itself, which
+   * is worse for looking at the layout than an empty chart would be.
+   *
+   * With `?fixtures` on, in dev, the chart is drawn from `data/debate-ratings.json` instead, so
+   * the bars and the groups below them describe the same debate. Same gate and same reasoning as
+   * `fixturesActive()` in src/lib/moderation.ts: `import.meta.env.DEV` is replaced by `false` at
+   * build time and this whole block is removed by dead-code elimination. Grep the bundle for
+   * `fixture distribution` if you want to check, and it is worth checking rather than believing.
+   *
+   * It is not a way around the withholding rule. Nothing here changes what a deployed page
+   * fetches or when; it changes what a developer running `astro dev` is looking at.
+   */
+  if (import.meta.env.DEV && usingFixtures()) {
+    const stats = statsFor(debateId);
+    if (stats) return { ok: true, value: stats };
+  }
+
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 

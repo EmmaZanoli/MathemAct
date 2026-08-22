@@ -221,6 +221,18 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
         {/* One control, directly beneath the chart, and the only route back to the scale.
             It reopens the asking block rather than carrying its own copy of it — two scales on
             one page would be two sources of truth for the same answer. */}
+        {/* Revealed only by the fixture branch in the script below, which a production build
+            does not contain. It has to be visible, and it has to say the numbers are invented —
+            a chart drawn from `data/` that looked like a chart drawn from the database would be
+            a way to mislead myself, which is the only thing a fixture mode is really dangerous
+            for. */}
+        <p class="panel" data-fixtures hidden>
+          <strong>Fixture distribution.</strong> These bars, and the answer marked as yours, come
+          from <code>data/debate-ratings.json</code> rather than from the database — see
+          <code>scripts/dev-seed.mjs</code>. Drop <code>?fixtures</code> from the address to go
+          back to the real thing.
+        </p>
+
         <p class="rate__again">
           <button class="button" type="button" data-rate-again>Update my answer</button>
         </p>
@@ -247,7 +259,13 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
 <script>
   import { renderHistogram } from '../../lib/histogram';
   import { readCount } from '../../lib/debate-facets';
-  import { loadAggregate, loadMyRating, saveRating } from '../../lib/debates';
+  import {
+    fixtureAnswer,
+    fixturesActive,
+    loadAggregate,
+    loadMyRating,
+    saveRating,
+  } from '../../lib/debates';
   import { loadProfile, mayPost } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
@@ -291,27 +309,49 @@ const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
    *  answered — so it is turned off again as soon as the reveal has read it. */
   let justChanged = false;
 
-  subscribeToSession((state) => {
-    if (state.status === 'loading') return;
+  if (fixturesActive()) {
+    /**
+     * Development only, and the same shape as the gate on /moderate/. `fixturesActive()`
+     * compiles to `return false` in a production build, so this branch and everything it
+     * reaches are removed before deploy — check the bundle rather than believing it.
+     *
+     * The session is skipped rather than faked. Nothing here can write: there is no token, so
+     * every action the page offers still ends at row level security. What it buys is the
+     * *reading* half — a chart whose bars agree with the contributions underneath them, and the
+     * reader's own position group open, which is the sequence this page is built around and the
+     * one thing an empty database cannot show.
+     */
+    const mine = fixtureAnswer(debateId);
+    iRated = mine.rated;
+    myScore = mine.score;
+    reflect();
+    submit.textContent = 'Update my answer';
+    void reveal().then(() => {
+      query<HTMLElement>('[data-fixtures]', root).hidden = false;
+    });
+  } else {
+    subscribeToSession((state) => {
+      if (state.status === 'loading') return;
 
-    if (state.status !== 'signed-in') {
-      userId = null;
-      // The scale is shown to an anonymous reader, disabled, with the sign-in prompt above
-      // it. Hiding it entirely would leave the page with no sign of what it wanted from
-      // them, and the distribution withheld for no visible reason.
-      ask.hidden = false;
-      signedOut.hidden = false;
-      form.hidden = true;
-      withheld.hidden = false;
-      return;
-    }
+      if (state.status !== 'signed-in') {
+        userId = null;
+        // The scale is shown to an anonymous reader, disabled, with the sign-in prompt above
+        // it. Hiding it entirely would leave the page with no sign of what it wanted from
+        // them, and the distribution withheld for no visible reason.
+        ask.hidden = false;
+        signedOut.hidden = false;
+        form.hidden = true;
+        withheld.hidden = false;
+        return;
+      }
 
-    if (userId === state.userId) return;
-    userId = state.userId;
-    void open(state.userId);
-  });
+      if (userId === state.userId) return;
+      userId = state.userId;
+      void open(state.userId);
+    });
 
-  void startSession();
+    void startSession();
+  }
 
   async function open(id: string): Promise<void> {
     const profile = await loadProfile(id);
