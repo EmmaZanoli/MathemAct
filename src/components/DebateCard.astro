@@ -137,7 +137,11 @@ const hasStats =
           {stats!.totalRaters} {stats!.totalRaters === 1 ? 'position' : 'positions'}
         </span>
 
-        {stats!.contributionCount !== null && (
+        {/* Omitted at zero, like the position changes below it. `null` and `0` still mean
+            different things — never counted, against counted and none — but neither is worth a
+            span on a card: "4 positions · 0 contributions" spends half the line saying nothing
+            happened, and the debate's own empty state says it properly. */}
+        {stats!.contributionCount !== null && stats!.contributionCount > 0 && (
           <span>
             {stats!.contributionCount}{' '}
             {stats!.contributionCount === 1 ? 'contribution' : 'contributions'}
