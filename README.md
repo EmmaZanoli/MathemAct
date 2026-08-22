@@ -274,6 +274,8 @@ supabase/migrations/    numbered SQL, applied in order, append-only
 supabase/tests/         pgTAP: RLS, grants, triggers, matching
 scripts/load-ror.mjs    streams the ROR dump into the private schema
 scripts/export.mjs      writes data/ from the database; the whole read path
+scripts/dev-seed.mjs    fills data/ with fixtures for looking at a populated site
+                        locally. Never committed: data/ is the published dataset
 .github/workflows/      deploy, migrate, test-db, ror-verify, auth-config, export,
                         link-check, embed
 docs/                   decisions log, ROR notes, auth runbook, moderation runbook,

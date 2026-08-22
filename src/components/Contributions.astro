@@ -263,11 +263,6 @@ const unrecordedCount = countIn(UNRECORDED_KEY);
                 </span>
               </summary>
 
-              <p class="position__aside">
-                Off the scale, not in the middle of it. These are people who were asked and
-                declined to put a number on it.
-              </p>
-
               <ol class="contribution-list" data-group-list={OFF_SCALE_KEY} role="list">
                 {(groups.get(OFF_SCALE_KEY) ?? []).map((contribution) => (
                   <Contribution
