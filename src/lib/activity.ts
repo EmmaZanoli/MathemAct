@@ -348,6 +348,18 @@ export interface ActivityLine {
   readonly href: string | null;
 }
 
+/**
+ * What a remark on this thing is called.
+ *
+ * A remark on a report is a **comment**; a remark on a debate is a **contribution**. That is the
+ * debates vocabulary and it reaches the feed, because the feed is where somebody is told about
+ * one — a notice saying "somebody commented on your debate" teaches the word the section spent
+ * a redesign avoiding.
+ */
+function remark(target: ActivityTarget): string {
+  return target === 'debate' ? 'contribution' : 'comment';
+}
+
 /** "a report" / "a debate" / "an entry", for sentences that need the noun. */
 function noun(target: ActivityTarget): string {
   switch (target) {
@@ -450,11 +462,14 @@ function sentence(item: ActivityItem): string {
     case 'posted_entry':
       return 'You submitted an entry to the network.';
     case 'commented':
-      return `You commented on a ${noun(item.targetType)}.`;
+      return item.targetType === 'debate'
+        ? 'You wrote a contribution on a debate.'
+        : `You commented on a ${noun(item.targetType)}.`;
     case 'rated_debate':
-      // Covers an explicit "no opinion" as well as a score, which is why it does not say
-      // "you rated": a null score is a real answer and it is not a rating.
-      return 'You recorded your view on a debate.';
+      // "Answered" rather than "rated", which is the section's vocabulary — and it is also the
+      // only word that covers an explicit "no opinion": that is a real answer, and calling it a
+      // rating would file a declared non-opinion as a score.
+      return 'You answered a debate.';
     case 'confirmed_report':
       return 'You said whether a report still works.';
     case 'flagged':
@@ -475,21 +490,21 @@ function sentence(item: ActivityItem): string {
     case 'entry_changes_requested':
       return 'A moderator asked for changes to your network entry.';
     case 'debate_promoted':
-      return 'A moderator opened your debate for rating.';
+      return 'A moderator opened your debate for answers.';
 
     case 'content_hidden':
       return item.commentId
-        ? 'A moderator hid your comment. The reason is with your moderation decisions.'
+        ? `A moderator hid your ${remark(item.targetType)}. The reason is with your moderation decisions.`
         : `A moderator hid your ${noun(item.targetType)}. The reason is with your moderation decisions.`;
     case 'content_unhidden':
       return item.commentId
-        ? 'A moderator restored your comment.'
+        ? `A moderator restored your ${remark(item.targetType)}.`
         : `A moderator restored your ${noun(item.targetType)}.`;
     case 'content_kept':
       // The one row that tells an author a flag existed. It says what was decided and never
       // who raised it; see the migration for why that trade was made deliberately.
       return item.commentId
-        ? 'Somebody flagged your comment. A moderator looked and left it where it was.'
+        ? `Somebody flagged your ${remark(item.targetType)}. A moderator looked and left it where it was.`
         : `Somebody flagged your ${noun(item.targetType)}. A moderator looked and left it where it was.`;
     case 'account_banned':
       return 'Your account has been suspended. You can still read the site, but not post. The reason is with your moderation decisions.';
@@ -502,14 +517,18 @@ function sentence(item: ActivityItem): string {
 
     // ── Other people ─────────────────────────────────────────────────────────────────
     case 'content_commented':
-      return `${who(item)} commented on your ${noun(item.targetType)}.`;
+      return item.targetType === 'debate'
+        ? `${who(item)} wrote a contribution on your debate.`
+        : `${who(item)} commented on your ${noun(item.targetType)}.`;
     case 'comment_reply':
-      return `${who(item)} replied to your comment.`;
+      // Replies exist on reports only since 2026-08-22, so in practice this is always a comment
+      // — but rows predating that may name a debate, and the word follows the subject either way.
+      return `${who(item)} replied to your ${remark(item.targetType)}.`;
     case 'debate_rated':
       // Never a name: see the header. The count is what this line is for.
       return item.count === 1
-        ? 'Somebody rated your debate.'
-        : `${item.count} people rated your debate.`;
+        ? 'Somebody answered your debate.'
+        : `${item.count} people answered your debate.`;
     case 'report_confirmed':
       return `${who(item)} said whether your report still works.`;
     case 'content_cited':

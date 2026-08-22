@@ -15,9 +15,15 @@
  * prevents is the ordinary reader seeing a distribution before they have thought about the
  * question, which is where the effect actually comes from.
  *
- * **Nothing here computes a mean.** Not from the histogram, not from the counts, not
- * anywhere. The mean of an 11-point bipolar scale is misleading exactly when the
- * distribution is bimodal, and bimodal is what to expect on the contested debates.
+ * **Nothing here computes a mean, and that has not changed.** What changed on 2026-08-21 is
+ * that `public.rating_aggregate` now returns one, so this module carries it. It does not derive
+ * it: not from the histogram, not from the counts, not anywhere, because a second mean computed
+ * to a second definition is the failure the single-source rule exists to prevent.
+ *
+ * The original reason for having no mean at all survives as a display rule. The mean of an
+ * 11-point bipolar scale is misleading exactly when the distribution is bimodal, and bimodal is
+ * what to expect on the contested debates — so it is shown beside the median, never as a
+ * headline, never on a card, never on a sort control, and never without the histogram beside it.
  */
 import { getSupabase } from './supabase';
 import type { Area } from './report-schema';
@@ -57,34 +63,101 @@ export interface DebateAuthor {
   readonly isPseudonym: boolean;
 }
 
+export interface DebateTag {
+  readonly code: string;
+  readonly label: string;
+}
+
 export interface Debate {
   readonly id: string;
   readonly statement: string;
+  /** The reasoning behind the claim. Capped at 500 characters since 2026-08-22, because the cap
+   *  is the only thing that reliably stops an opening post becoming an essay. */
   readonly rationale: string | null;
   readonly status: 'proposed' | 'active';
   readonly area: Area;
   readonly createdAt: string;
   readonly activatedAt: string | null;
   readonly author: DebateAuthor | null;
+  /** arXiv subject classes, from the same vocabulary reports use. Empty rather than null. */
+  readonly tags: readonly DebateTag[];
+  /** What prompted the claim: an external link, **or** a report from this corpus, or neither.
+   *  Never both — `debates_one_source` refuses it. */
+  readonly sourceUrl: string | null;
+  readonly sourceReportId: string | null;
 }
 
 /**
  * The aggregate, exactly as public.debate_ratings reports it.
  *
- * There is no `mean` field and there must never be one. If a future consumer wants central
- * tendency, it has the median; if it wants spread, it has the whole histogram.
+ * `mean` was added on 2026-08-21 and had been prohibited before it. The analysis behind the
+ * prohibition stands — on a bimodal distribution the mean reports mild agreement for a
+ * community that has split cleanly in two — so it survives as a **display** rule rather than as
+ * an absent field: the mean is shown beside the median, never as a headline, never on a card,
+ * never on a sort control, and never without the histogram beside it. See docs/decisions.md.
  */
 export interface Aggregate {
   /** Eleven counts. Index i holds the number of people who chose score i. */
   readonly histogram: readonly number[];
   /** Null when nobody has expressed an opinion — everyone declined, or nobody answered. */
   readonly median: number | null;
+  /**
+   * Secondary, and null on the same condition as the median. **Not zero** when nobody has an
+   * opinion: zero is a position on this scale and means strong disagreement.
+   */
+  readonly mean: number | null;
   /** Everyone who answered, including those who declined. */
   readonly totalRaters: number;
   readonly opinionCount: number;
   readonly noOpinionCount: number;
   /** opinionCount / totalRaters, or null when nobody has answered at all. */
   readonly coverage: number | null;
+}
+
+/**
+ * The rest of what the export computes per debate, which the live aggregate does not carry.
+ *
+ * Split from `Aggregate` on purpose, and the split is the boundary between two sources rather
+ * than a tidying-up. `Aggregate` is exactly `public.debate_ratings`, so it is the shape both
+ * the export and a live browser query return. Everything here is an **export-time product**:
+ * `divided` and `consensus` are computed in scripts/export.mjs, and `positionChanges` counts
+ * `public.rating_changes`, which no browser role may read at all.
+ *
+ * A consumer holding only an `Aggregate` therefore cannot accidentally render a figure that
+ * would be missing the moment it came from a live call instead.
+ */
+export interface DebateStats extends Aggregate {
+  /**
+   * Contributions on this debate, soft-deleted ones included: their positions still count.
+   *
+   * **Null when the export predates the field**, which is not the same as zero and must not be
+   * rendered as one — an export written before 2026-08-21 has debates with contributions and
+   * no count of them, and printing "0 contributions" under a chart with contributions beneath
+   * it would be the page contradicting itself.
+   */
+  readonly contributionCount: number | null;
+  /** How many people the arguments moved. Distinct people, not edits. Null on the same
+   *  condition as above, and for the same reason. */
+  readonly positionChanges: number | null;
+  /**
+   * Twice the smaller of the two sides' shares, over the scored positions only.
+   *
+   * Null below `sortableMinimum`, and null is not zero: zero means "nobody disagrees", which a
+   * debate with four answers has not established.
+   */
+  readonly divided: number | null;
+  /** The largest share held by any one of the five families. Null on the same condition. */
+  readonly consensus: number | null;
+  /** The threshold the two above need. Carried so the page can say it rather than hard-code it. */
+  readonly sortableMinimum: number;
+  /**
+   * When anything last happened on this debate — the later of its newest contribution and its
+   * newest rating activity, falling back to its own date.
+   *
+   * A timestamp and nothing else. It says *when*, never who moved or to what, so it is not a
+   * back door into the per-person history `public.rating_changes` deliberately withholds.
+   */
+  readonly lastActivityAt: string | null;
 }
 
 export type Result<T> =
@@ -100,13 +173,18 @@ const EXPORTED = import.meta.glob<{ default: Debate[] }>('/data/debates.json', {
   eager: true,
 });
 
+/**
+ * The per-debate statistics from the nightly export.
+ *
+ * Typed as the full `DebateStats` now rather than the two fields the listing needed, because
+ * the debate page reads the distribution from here. Every field is optional in practice: a
+ * `data/` written before 2026-08-21 has no `mean`, no `divided` and no `positionChanges`, and a
+ * `data/` written before the corpus existed has no rows at all. `statsFor()` is where that is
+ * handled once.
+ */
 const AGGREGATES = import.meta.glob<{
-  default: readonly { debateId: string; totalRaters: number }[];
+  default: readonly Partial<DebateStats>[] & readonly { debateId: string }[];
 }>('/data/debate-ratings.json', { eager: true });
-
-const COMMENTS = import.meta.glob<{
-  default: readonly { parentType: string; parentId: string }[];
-}>('/data/comments.json', { eager: true });
 
 let cached: Debate[] | null = null;
 
@@ -133,7 +211,17 @@ async function readDebates(): Promise<Debate[]> {
     return cached;
   }
 
-  cached = exported;
+  // Normalised rather than trusted, as `readComments()` does and for the same reason: an export
+  // written before 2026-08-22 has no `tags`, no `sourceUrl` and no `sourceReportId`, and the type
+  // above says all three are present. `data/` is a historical document and older files are still
+  // valid, so the defaulting lives here rather than at every consumer.
+  cached = exported.map((debate) => ({
+    ...debate,
+    tags: debate.tags ?? [],
+    sourceUrl: debate.sourceUrl ?? null,
+    sourceReportId: debate.sourceReportId ?? null,
+  }));
+
   return cached;
 }
 
@@ -152,17 +240,106 @@ export async function debatesByAuthor(authorId: string): Promise<Debate[]> {
   );
 }
 
-/** Interaction count per debate id: totalRaters (from aggregate) + comment count.
- *  Call this at build time to populate data-interactions on each debate list item. */
-export function listDebateInteractionCounts(): Map<string, number> {
-  const counts = new Map<string, number>();
-  const bump = (id: string, by = 1) => counts.set(id, (counts.get(id) ?? 0) + by);
+/**
+ * Every debate's statistics, by id, from the export. Build time only.
+ *
+ * A debate missing from the map has no aggregates, and there are two ways to be in that state
+ * — posted since the last export, or in an export written before these fields existed. Both are
+ * the same fact for every consumer: **render no distribution, and be ineligible for the two
+ * aggregate sorts.** Nothing here substitutes a zero for an absence.
+ */
+let statsCache: Map<string, DebateStats> | null = null;
+
+export function listDebateStats(): Map<string, DebateStats> {
+  if (statsCache) return statsCache;
+
+  const stats = new Map<string, DebateStats>();
 
   for (const row of Object.values(AGGREGATES)[0]?.default ?? []) {
-    bump(row.debateId, row.totalRaters);
+    const histogram = row.histogram;
+
+    // A row with no histogram is not a debate nobody answered — the export writes eleven zeros
+    // for those. It is a row from an older file, and it has nothing to render.
+    if (!Array.isArray(histogram) || histogram.length !== SCALE_POINTS.length) continue;
+
+    stats.set(row.debateId, {
+      histogram,
+      median: row.median ?? null,
+      mean: row.mean ?? null,
+      totalRaters: row.totalRaters ?? 0,
+      opinionCount: row.opinionCount ?? 0,
+      noOpinionCount: row.noOpinionCount ?? 0,
+      coverage: row.coverage ?? null,
+      // `?? null`, not `?? 0`. See the note on the type: an older export has debates with
+      // contributions and no count of them, and a zero would be the page asserting otherwise.
+      contributionCount: row.contributionCount ?? null,
+      positionChanges: row.positionChanges ?? null,
+      // `?? null` and not `?? 0`. An older export has no shares at all, and the whole point of
+      // the null is that it is not a reading.
+      divided: row.divided ?? null,
+      consensus: row.consensus ?? null,
+      sortableMinimum: row.sortableMinimum ?? 10,
+      lastActivityAt: row.lastActivityAt ?? null,
+    });
   }
-  for (const comment of Object.values(COMMENTS)[0]?.default ?? []) {
-    if (comment.parentType === 'debate') bump(comment.parentId);
+
+  statsCache = stats;
+  return stats;
+}
+
+/** One debate's statistics, or undefined when the export has none for it. */
+export function statsFor(debateId: string): DebateStats | undefined {
+  return listDebateStats().get(debateId);
+}
+
+/** `?fixtures` in the address bar, which only means anything under `astro dev`. The same switch
+ *  src/lib/moderation.ts uses, so one URL parameter puts the whole site into fixture mode. */
+function usingFixtures(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).has('fixtures')
+  );
+}
+
+/** Compiles to `false` in a production build, which removes every branch behind it. */
+export function fixturesActive(): boolean {
+  return import.meta.env.DEV && usingFixtures();
+}
+
+/**
+ * The answer to pretend the reader gave, in fixture mode.
+ *
+ * **Defaults to the median**, because that is the case worth looking at: the "you" marker and
+ * the "median" marker land on the same column, which is where they used to collide. `?as=7`
+ * picks a position, `?as=none` picks the off-scale answer, and neither writes anything anywhere.
+ */
+export function fixtureAnswer(debateId: string): { rated: boolean; score: number | null } {
+  const asked = new URLSearchParams(window.location.search).get('as');
+
+  if (asked === 'none') return { rated: true, score: null };
+  if (asked !== null && asked !== '' && Number.isFinite(Number(asked))) {
+    return { rated: true, score: Number(asked) };
+  }
+
+  return { rated: true, score: statsFor(debateId)?.median ?? null };
+}
+
+/**
+ * Interaction count per debate id: positions plus contributions.
+ *
+ * The ordering key behind the "Most answered" sort, and the number itself is never shown. It
+ * now comes entirely from the aggregate file — `contributionCount` is computed there — rather
+ * than from a second pass over comments.json. Two files counting the same thing is how a sort
+ * key and a page come to disagree.
+ */
+export function listDebateInteractionCounts(): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  for (const [id, stats] of listDebateStats()) {
+    // `?? 0` is right here and wrong in the type. As a sort key an unknown contribution count
+    // has to be some number, and treating it as none orders the debate by its rater count
+    // alone — which is a worse ordering, not a wrong figure. Nothing renders this.
+    counts.set(id, stats.totalRaters + (stats.contributionCount ?? 0));
   }
 
   return counts;
@@ -246,13 +423,37 @@ export async function saveRating(
  * source for somebody who has not answered yet — see the header of this file.
  */
 export async function loadAggregate(debateId: string): Promise<Result<Aggregate>> {
+  /**
+   * The one dev affordance on this path, and it exists because of a specific contradiction.
+   *
+   * The distribution is a live query and the contributions are static, so a `data/` filled by
+   * `scripts/dev-seed.mjs` puts ten contributions across eight positions underneath a chart
+   * showing whatever two rows the database happens to hold — a page arguing with itself, which
+   * is worse for looking at the layout than an empty chart would be.
+   *
+   * With `?fixtures` on, in dev, the chart is drawn from `data/debate-ratings.json` instead, so
+   * the bars and the groups below them describe the same debate. Same gate and same reasoning as
+   * `fixturesActive()` in src/lib/moderation.ts: `import.meta.env.DEV` is replaced by `false` at
+   * build time and this whole block is removed by dead-code elimination. Grep the bundle for
+   * `fixture distribution` if you want to check, and it is worth checking rather than believing.
+   *
+   * It is not a way around the withholding rule. Nothing here changes what a deployed page
+   * fetches or when; it changes what a developer running `astro dev` is looking at.
+   */
+  if (import.meta.env.DEV && usingFixtures()) {
+    const stats = statsFor(debateId);
+    if (stats) return { ok: true, value: stats };
+  }
+
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
     const { data, error } = await supabase
       .from('debate_ratings')
-      .select('histogram, median, total_raters, opinion_count, no_opinion_count, coverage')
+      .select(
+        'histogram, median, mean, total_raters, opinion_count, no_opinion_count, coverage',
+      )
       .eq('debate_id', debateId)
       .maybeSingle();
 
@@ -266,6 +467,10 @@ export async function loadAggregate(debateId: string): Promise<Result<Aggregate>
       value: {
         histogram: (data.histogram as number[]) ?? SCALE_POINTS.map(() => 0),
         median: data.median as number | null,
+        // `data.mean` arrives as a string: node-postgres and PostgREST both render `numeric`
+        // as text rather than risk a float, so Number() is not decoration. Null stays null —
+        // nobody has an opinion is not a mean of zero.
+        mean: data.mean === null || data.mean === undefined ? null : Number(data.mean),
         totalRaters: (data.total_raters as number) ?? 0,
         opinionCount: (data.opinion_count as number) ?? 0,
         noOpinionCount: (data.no_opinion_count as number) ?? 0,
@@ -277,29 +482,44 @@ export async function loadAggregate(debateId: string): Promise<Result<Aggregate>
   }
 }
 
-export async function proposeDebate(
-  userId: string,
-  statement: string,
-  rationale: string,
-  area: Area,
-): Promise<Result<string>> {
+/**
+ * Proposing a claim, and stating a position on it, in one call.
+ *
+ * `public.submit_debate()` rather than an insert, because the two writes have to be one
+ * transaction: a debate whose proposer never answered it is the thing the requirement forbids,
+ * and two client calls produce exactly that whenever the second one fails. See the migration.
+ *
+ * `score` of `null` **with** `offScale` true is the off-scale answer and is stored as a null
+ * score on a real row. `score` of null with `offScale` false is an unanswered form, and the
+ * function refuses it. Those are different things and this signature keeps them apart.
+ */
+export async function proposeDebate(input: {
+  readonly statement: string;
+  readonly rationale: string;
+  readonly area: Area;
+  readonly score: number | null;
+  readonly offScale: boolean;
+  readonly tagCodes: readonly string[];
+  readonly sourceUrl: string | null;
+  readonly sourceReportId: string | null;
+}): Promise<Result<string>> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, message: UNAVAILABLE };
 
   try {
-    const { data, error } = await supabase
-      .from('debates')
-      .insert({
-        author_id: userId,
-        statement: statement.trim(),
-        rationale: rationale.trim() || null,
-        area,
-      })
-      .select('id')
-      .single<{ id: string }>();
+    const { data, error } = await supabase.rpc('submit_debate', {
+      p_statement: input.statement.trim(),
+      p_area: input.area,
+      p_score: input.offScale ? null : input.score,
+      p_off_scale: input.offScale,
+      p_rationale: input.rationale.trim() || null,
+      p_tag_codes: [...input.tagCodes],
+      p_source_url: input.sourceUrl?.trim() || null,
+      p_source_report: input.sourceReportId || null,
+    });
 
     if (error) return { ok: false, message: describe(error) };
-    return { ok: true, value: data.id };
+    return { ok: true, value: data as string };
   } catch (error) {
     return { ok: false, message: describe(error) };
   }
@@ -326,6 +546,21 @@ function describe(error: unknown): string {
       return 'You have already answered this one. Changing your answer updates it rather than adding a second.';
     case '42501':
       return 'This account cannot do that. It usually means the email address has not been confirmed yet — check the confirmation email.';
+    /**
+     * The site is newer than the database it is talking to.
+     *
+     * `42703` is an unknown column and `42P01` an unknown table or view. Either means the
+     * deployed pages are asking for something a migration has not created yet — which is a real
+     * state on this project rather than a theoretical one: `migrate.yml` runs only on `main`, and
+     * on `main` it runs on the *same push* as the deploy rather than before it. So a branch
+     * preview, and a short window after every merge, both look like this.
+     *
+     * Named rather than left to the generic fallback, because the fallback says "nothing was
+     * saved" — and for a read that is beside the point, while for a write it is often false.
+     */
+    case '42703':
+    case '42P01':
+      return 'This part of the site is newer than the database it reads from, so that is not available yet. Nothing you did is lost; try again shortly.';
     case 'PGRST301':
       return 'Your session has ended. Sign in again.';
   }

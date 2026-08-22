@@ -40,9 +40,13 @@ localStorage, using the same pattern as the sign-in indicator.
 | ✅ | Reports schema: RLS, tags, confirmations, staleness, rate limits |
 | ✅ | The submission form: fifteen sections, draft autosave, one-transaction submit |
 | ✅ | Reading: listing with linkable filters, report pages, author pages |
-| ✅ | Debates, the agreement scale, and the histogram — median, never a mean |
+| ✅ | Debates: the agreement scale, the histogram, and a distribution that is withheld until you answer |
 | ✅ | Network: submission, moderation, and a monthly link check |
-| ✅ | Discussion, the citation graph, and the flag queue |
+| ✅ | Discussion on reports, the citation graph, and the flag queue |
+| ✅ | Contributions on debates: grouped by position or flat, sorted, no replies |
+| ✅ | Endorsement — two actions, counted in words, withdrawable, and never a vote |
+| ✅ | The debates listing: a shape per card, five orderings, and what they mean stated |
+| ✅ | Proposing a debate: a position required, tags, a source, and a 500-character cap |
 | ✅ | Moderation: flag-led, audited, explained to both sides, and erasure that erases |
 | ✅ | Account bans: reachable, reversible, and explained to the account holder |
 | ✅ | The nightly export, the CSV dataset, and the freshness overlay |
@@ -104,9 +108,9 @@ there are no moderator `UPDATE` policies on any content table, so a direct write
 log silently changes nothing.
 
 **Suspending an account** is the second kind of decision — about a person rather than a post,
-for spam or sustained hostility. It sets `profiles.is_banned`, which closes eight insert
+for spam or sustained hostility. It sets `profiles.is_banned`, which closes nine insert
 policies (reports, debates, network entries, comments, ratings, confirmations, flags,
-citations) and nothing else:
+citations, endorsements) and nothing else:
 
 - **Not a lockout.** Sign-in, reading, profile edits, password changes and erasure requests all
   still work. `auth.users` is untouched. An account somebody could not leave would be a
@@ -206,14 +210,18 @@ production rather than a report after it.
 
 ### Database tests
 
-565 pgTAP assertions across twenty-one files in `supabase/tests/`, covering domain matching, the
+634 pgTAP assertions across twenty-three files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the
 tombstone rule, the rate limits, the submission RPC, the agreement scale, every comment
 policy including the nesting limit and what soft deletion destroys, the citation and
-flag queues, the activity feed and its backfill, account bans — the eight write paths a
-ban closes, asserted one by one, and the notice it sends — and schema version 2 of a report:
+flag queues, the activity feed and its backfill, account bans — the nine write paths a
+ban closes, asserted one by one, and the notice it sends — debate contributions: the position
+each was written from and that it survives its author changing their mind, flatness on debates
+against threading on reports, endorsement and who may not, the edit window closing on the first
+endorsement, supersession, and a rating history no browser role can read — and schema version 2
+of a report:
 the two widened vocabularies, the secondary task types and how they are normalised, the
 supporting links and every URL they refuse, the five scales and the two bounds on each, the
 ordered `time_saved` vocabulary that replaced a sixth scale, the guard's freeze list, reached
@@ -266,6 +274,8 @@ supabase/migrations/    numbered SQL, applied in order, append-only
 supabase/tests/         pgTAP: RLS, grants, triggers, matching
 scripts/load-ror.mjs    streams the ROR dump into the private schema
 scripts/export.mjs      writes data/ from the database; the whole read path
+scripts/dev-seed.mjs    fills data/ with fixtures for looking at a populated site
+                        locally. Never committed: data/ is the published dataset
 .github/workflows/      deploy, migrate, test-db, ror-verify, auth-config, export,
                         link-check, embed
 docs/                   decisions log, ROR notes, auth runbook, moderation runbook,

@@ -17,7 +17,7 @@
  * static pages too, so the page initialises exactly the same way once it has the ID.
  */
 import Base from '../../layouts/Base.astro';
-import CommentThread from '../../components/CommentThread.astro';
+import Contributions from '../../components/Contributions.astro';
 import FormStatus from '../../components/FormStatus.astro';
 import Histogram from '../../components/Histogram.astro';
 import RatingScale from '../../components/RatingScale.astro';
@@ -54,10 +54,12 @@ import { path } from '../../lib/paths';
           <h1 data-statement></h1>
         </blockquote>
 
+        {/* No date line, matching /debates/<id>/. "Active since <date>" described a lifecycle
+            the site stopped having on 2026-08-18, and dating a standing question framed it as
+            news. */}
         <ul class="card__facts" role="list">
           <li data-pagefind-filter="area" data-area></li>
           <li data-author></li>
-          <li><span class="meta" data-date></span></li>
         </ul>
       </header>
 
@@ -66,8 +68,13 @@ import { path } from '../../lib/paths';
         <p class="field-block__body" data-rationale-text></p>
       </section>
 
+      {/* No `data-contributions` or `data-position-changes`: this page exists for a debate the
+          export has never seen, so those two figures do not exist for it and the statistics
+          line ends after the mean. That is the point of them being absent rather than zero. */}
       <section class="rate" data-rate data-debate-id="" data-pagefind-ignore>
-        <h2>Where do you stand?</h2>
+        {/* Removed outright once they have answered, exactly as on /debates/<id>/. */}
+        <div data-rate-ask hidden>
+          <h2>Where do you stand?</h2>
 
         <div class="panel" data-rate-signedout hidden>
           <p>
@@ -79,7 +86,7 @@ import { path } from '../../lib/paths';
 
         <div class="panel" data-rate-unconfirmed hidden>
           <p>
-            Rating needs a confirmed email address.
+            Answering needs a confirmed email address.
             <a href={path('/account/confirm/')}>Get another confirmation link</a>.
           </p>
         </div>
@@ -93,6 +100,7 @@ import { path } from '../../lib/paths';
 
           <FormStatus id="rate-status" />
         </form>
+        </div>
 
         <p class="rate__withheld" data-rate-withheld hidden>
           The distribution is hidden until you have answered, so that what other people think
@@ -100,21 +108,25 @@ import { path } from '../../lib/paths';
         </p>
 
         <div data-aggregate-wrap hidden>
-          <h3>How people answered</h3>
+          <h2>How people answered</h2>
           <Histogram />
+
+          <p class="rate__again">
+            <button class="button" type="button" data-rate-again>Update my answer</button>
+          </p>
+
+          <FormStatus id="rate-outcome" />
         </div>
       </section>
 
       <References incoming={[]} outgoing={[]} />
 
+      {/* Empty, and it stays empty. This page exists for a debate the export has never seen,
+          so it has no contributions to group — a brand-new claim cannot have any, because
+          writing one requires having answered it. The section renders its own "nobody has
+          written a contribution yet" state, which is the truth here rather than a fallback. */}
       <div data-pagefind-ignore>
-        <CommentThread
-          parentType="debate"
-          parentId=""
-          nodes={[]}
-          title=""
-          href=""
-        />
+        <Contributions parentId="" contributions={[]} title="" href="" />
       </div>
     </div>
   </div>
@@ -127,7 +139,6 @@ import { path } from '../../lib/paths';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
   import { areaLabel } from '../../lib/report-schema';
-  import { longDate } from '../../lib/format';
   import { path } from '../../lib/paths';
 
   const params = new URLSearchParams(window.location.search);
@@ -183,11 +194,6 @@ import { path } from '../../lib/paths';
       authorEl.appendChild(erased);
     }
 
-    const dateEl = document.querySelector<HTMLElement>('[data-date]')!;
-    dateEl.textContent = debate.activatedAt
-      ? `Active since ${longDate(debate.activatedAt)}`
-      : `Proposed ${longDate(debate.createdAt)}`;
-
     if (debate.rationale) {
       const rationaleSection = document.querySelector<HTMLElement>('[data-rationale]')!;
       const rationaleText = document.querySelector<HTMLElement>('[data-rationale-text]')!;
@@ -199,11 +205,25 @@ import { path } from '../../lib/paths';
     const rateSection = query<HTMLElement>('[data-rate]');
     rateSection.dataset.debateId = debateId;
 
-    const thread = document.querySelector<HTMLElement>('[data-thread]')!;
-    thread.dataset.parentId = debateId;
-    thread.dataset.nodeTitle = debate.statement;
-    thread.dataset.nodeHref = path(`/debates/${debateId}/`);
-    thread.dispatchEvent(new CustomEvent('thread-ready'));
+    /**
+     * The contributions section, which needs the id it was rendered without.
+     *
+     * This read `[data-thread]` with a `!` on it until 2026-08-22, and `[data-thread]` is
+     * `CommentThread.astro` — which this page stopped using when debates moved to
+     * `Contributions.astro`. The assertion silenced the null the type system had correctly
+     * inferred, so the line survived `astro check` and would have thrown a TypeError on the
+     * next `.dataset` access, taking the rest of this function with it. That is the trap
+     * CLAUDE.md records about accumulating `!`s, arriving by a different route.
+     *
+     * Written rather than captured: the composer reads `parentId` at call time for exactly
+     * this reason — on this page the id does not exist until the fetch above has landed.
+     */
+    const section = document.querySelector<HTMLElement>('[data-contributions]');
+    if (section) {
+      section.dataset.parentId = debateId;
+      section.dataset.nodeTitle = debate.statement;
+      section.dataset.nodeHref = path(`/debates/${debateId}/`);
+    }
 
     // Reveal the content.
     loadingEl.hidden = true;
@@ -217,24 +237,33 @@ import { path } from '../../lib/paths';
 
   function initRating(debateId: string): void {
     const root = query<HTMLElement>('[data-rate]');
+    const ask = query<HTMLElement>('[data-rate-ask]', root);
     const signedOut = query<HTMLElement>('[data-rate-signedout]', root);
     const unconfirmed = query<HTMLElement>('[data-rate-unconfirmed]', root);
     const form = query<HTMLFormElement>('[data-rate-form]', root);
     const withheld = query<HTMLElement>('[data-rate-withheld]', root);
     const wrap = query<HTMLElement>('[data-aggregate-wrap]', root);
     const histogram = query<HTMLElement>('[data-histogram]', root);
+    const again = query<HTMLButtonElement>('[data-rate-again]', root);
     const status = query<HTMLElement>('#rate-status', root);
+    const outcome = query<HTMLElement>('#rate-outcome', root);
     const submit = query<HTMLButtonElement>('button[type="submit"]', form);
 
     let userId: string | null = null;
     let iRated = false;
     let myScore: number | null = null;
 
+    /** Set for one reveal only: the one immediately after a rating that *changed*. A first
+     *  answer is not a position change, and neither is arriving on the page already having
+     *  answered — so it is turned off again as soon as the reveal has read it. */
+    let justChanged = false;
+
     subscribeToSession((state) => {
       if (state.status === 'loading') return;
 
       if (state.status !== 'signed-in') {
         userId = null;
+        ask.hidden = false;
         signedOut.hidden = false;
         form.hidden = true;
         withheld.hidden = false;
@@ -252,15 +281,17 @@ import { path } from '../../lib/paths';
       const profile = await loadProfile(id);
 
       if (profile.ok && !mayPost(profile.value)) {
+        ask.hidden = false;
         unconfirmed.hidden = false;
         withheld.hidden = false;
         return;
       }
 
-      form.hidden = false;
-
       const mine = await loadMyRating(debateId, id);
       if (!mine.ok) {
+        ask.hidden = false;
+        form.hidden = false;
+        withheld.hidden = false;
         showStatus(status, 'error', mine.message);
         return;
       }
@@ -269,30 +300,71 @@ import { path } from '../../lib/paths';
       myScore = mine.value.score;
 
       if (iRated) {
-        const value = myScore === null ? 'none' : String(myScore);
-        const input = form.querySelector<HTMLInputElement>(
-          `input[name="score"][value="${value}"]`,
-        );
-        if (input) input.checked = true;
-
+        reflect();
         submit.textContent = 'Update my answer';
         await reveal();
       } else {
+        ask.hidden = false;
+        form.hidden = false;
         withheld.hidden = false;
       }
     }
 
-    async function reveal(): Promise<void> {
+    function reflect(): void {
+      const value = myScore === null ? 'none' : String(myScore);
+      const input = form.querySelector<HTMLInputElement>(
+        `input[name="score"][value="${value}"]`,
+      );
+      if (input) input.checked = true;
+    }
+
+    async function reveal(): Promise<boolean> {
       const aggregate = await loadAggregate(debateId);
       if (!aggregate.ok) {
+        ask.hidden = false;
+        form.hidden = false;
         showStatus(status, 'error', aggregate.message);
-        return;
+        return false;
       }
 
+      ask.hidden = true;
       withheld.hidden = true;
       wrap.hidden = false;
+
+      // No static counts on this page: a debate the export has never seen has no contribution
+      // count and no position-change count, and the line ends after the mean rather than
+      // claiming both are zero.
       renderHistogram(histogram, aggregate.value, myScore, iRated);
+
+      // The same event /debates/<id>/ sends, and it matters more here than there: this page is
+      // what a debate posted since the last build looks like, so the person answering it is
+      // frequently about to write its first contribution. Without this the contributions section
+      // never learns they have answered, and the composer never appears.
+      document.dispatchEvent(
+        new CustomEvent('mathemact:rated', {
+          detail: {
+            rated: iRated,
+            score: myScore,
+            // True only when this reveal follows a *change*, not a first answer or a
+            // page load. A position change is an event; answering the first time is not.
+            changed: justChanged,
+            histogram: aggregate.value.histogram,
+            noOpinionCount: aggregate.value.noOpinionCount,
+          },
+        }),
+      );
+
+      return true;
     }
+
+    again.addEventListener('click', () => {
+      hideStatus(status);
+      hideStatus(outcome);
+      ask.hidden = false;
+      form.hidden = false;
+      reflect();
+      form.querySelector<HTMLInputElement>('input[name="score"]:checked')?.focus();
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -328,15 +400,29 @@ import { path } from '../../lib/paths';
       myScore = score;
       submit.textContent = 'Update my answer';
 
-      await reveal();
+      justChanged = editing;
+      const revealed = await reveal();
+      justChanged = false;
 
-      showStatus(
-        status,
-        'success',
-        editing
-          ? 'Rating updated.'
-          : 'Answer recorded. Yours is never shown next to your name — only the distribution is public.',
-      );
+      // Whichever of the two status elements is actually on screen — see the note on the same
+      // branch in /debates/<id>/. Writing the confirmation into the hidden one left a reader
+      // seeing only reveal()'s error, which says "nothing was saved" about a saved answer.
+      if (revealed) {
+        showStatus(
+          outcome,
+          'success',
+          editing
+            ? 'Your position has been updated.'
+            : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+        );
+      } else {
+        showStatus(status, 'notice', [
+          editing
+            ? 'Your position has been updated.'
+            : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+          'The distribution could not be loaded, so it is not shown below. Your answer is saved; reload the page to try again.',
+        ]);
+      }
     });
   }
 
