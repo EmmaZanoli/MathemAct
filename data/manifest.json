@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-08-22T03:55:42.904Z",
+  "exportedAt": "2026-08-23T04:00:04.599Z",
   "generator": "scripts/export.mjs",
   "licence": "CC BY 4.0",
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
@@ -10,11 +10,11 @@
     },
     "debates.json": {
       "rows": 1,
-      "bytes": 609
+      "bytes": 676
     },
     "debate-ratings.json": {
       "rows": 1,
-      "bytes": 297
+      "bytes": 489
     },
     "tags.json": {
       "rows": 32,
@@ -26,7 +26,7 @@
     },
     "comments.json": {
       "rows": 1,
-      "bytes": 612
+      "bytes": 812
     },
     "citations.json": {
       "rows": 0,
