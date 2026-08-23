@@ -177,8 +177,7 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
   {/* An invitation, not a mood piece. It says what a good first comment does, because on a
       page with no discussion the hard part is knowing what would be worth adding. */}
   <p class="thread__empty" data-thread-empty hidden={total > 0}>
-    Nothing here yet. The most useful first comment is usually a question about the
-    verification — how something was checked is where an account either holds up or does not.
+    Nothing here yet.
   </p>
 
   <div class="composer" data-composer>
