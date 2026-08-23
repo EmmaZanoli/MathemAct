@@ -82,6 +82,14 @@ values
    'Every AI-generated proof step must be checked by a human before publication.',
    'active', now(), 'research');
 
+-- A position for account 1, because 20260821120000 refuses a contribution to a debate its
+-- author has not answered. The debate comment below is one of the citation endpoints, so
+-- without this every citation assertion in this file fails for a reason that has nothing to
+-- do with citations.
+insert into public.ratings (debate_id, user_id, score)
+values ('33333333-0000-0000-0000-000000000001',
+        '11111111-0000-0000-0000-000000000001', 7);
+
 insert into public.comments (id, parent_type, parent_id, author_id, body)
 values
   ('44444444-0000-0000-0000-000000000001', 'report', '22222222-0000-0000-0000-000000000001',

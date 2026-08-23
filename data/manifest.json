@@ -1,60 +1,60 @@
 {
-  "exportedAt": "2026-08-20T19:09:09.062Z",
+  "exportedAt": "2026-08-23T04:00:04.599Z",
   "generator": "scripts/export.mjs",
   "licence": "CC BY 4.0",
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
   "files": {
     "reports.json": {
-      "rows": 0,
-      "bytes": 3
+      "rows": 1,
+      "bytes": 2281
     },
     "debates.json": {
       "rows": 1,
-      "bytes": 609
+      "bytes": 676
     },
     "debate-ratings.json": {
       "rows": 1,
-      "bytes": 297
+      "bytes": 489
     },
     "tags.json": {
       "rows": 32,
       "bytes": 5122
     },
     "profiles.json": {
-      "rows": 1,
-      "bytes": 411
+      "rows": 2,
+      "bytes": 746
     },
     "comments.json": {
       "rows": 1,
-      "bytes": 612
+      "bytes": 812
     },
     "citations.json": {
       "rows": 0,
       "bytes": 3
     },
     "network.json": {
-      "rows": 0,
-      "bytes": 3
+      "rows": 1,
+      "bytes": 786
     },
     "csv/reports.csv": {
-      "rows": 0,
-      "bytes": 572
+      "rows": 1,
+      "bytes": 1411
     },
     "csv/report-tools.csv": {
-      "rows": 0,
-      "bytes": 47
+      "rows": 1,
+      "bytes": 116
     },
     "csv/report-tags.csv": {
-      "rows": 0,
-      "bytes": 30
+      "rows": 1,
+      "bytes": 96
     },
     "csv/report-references.csv": {
-      "rows": 0,
-      "bytes": 26
+      "rows": 1,
+      "bytes": 119
     },
     "csv/network.csv": {
-      "rows": 0,
-      "bytes": 215
+      "rows": 1,
+      "bytes": 688
     }
   }
 }

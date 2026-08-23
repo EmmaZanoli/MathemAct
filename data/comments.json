@@ -8,6 +8,14 @@
     "createdAt": "2026-08-18T10:07:43.698Z",
     "updatedAt": "2026-08-18T10:07:43.698Z",
     "deletedAt": null,
+    "agreementScore": null,
+    "supersededBy": null,
+    "supersedesEarlier": false,
+    "endorsedAt": null,
+    "endorsements": {
+      "capturesMyView": 0,
+      "agreePositionNotReason": 0
+    },
     "author": {
       "id": "acef3dbd-202c-47fa-806a-3c32522f315e",
       "displayName": "Anna Zanoli",

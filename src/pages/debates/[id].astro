@@ -14,7 +14,7 @@
  * usual one: this community's minority position is frequently the correct one.
  */
 import Base from '../../layouts/Base.astro';
-import CommentThread from '../../components/CommentThread.astro';
+import Contributions from '../../components/Contributions.astro';
 import FormStatus from '../../components/FormStatus.astro';
 import Histogram from '../../components/Histogram.astro';
 import RatingScale from '../../components/RatingScale.astro';
@@ -23,10 +23,9 @@ import '../../styles/corpus.css';
 import '../../styles/forms.css';
 import { referencesFrom, referencesTo } from '../../lib/citations';
 import { threadFor } from '../../lib/comments';
-import { longDate } from '../../lib/format';
 import { path } from '../../lib/paths';
 import { areaLabel } from '../../lib/report-schema';
-import { getDebate, listDebates } from '../../lib/debates';
+import { getDebate, listDebates, statsFor } from '../../lib/debates';
 
 export async function getStaticPaths() {
   const debates = await listDebates();
@@ -43,6 +42,16 @@ const [thread, incoming, outgoing] = await Promise.all([
   referencesTo('debate', debate.id),
   referencesFrom('debate', debate.id),
 ]);
+
+/**
+ * Flattened, because contributions on a debate are flat.
+ *
+ * `threadFor()` returns roots each carrying their replies, which is the shape a report thread
+ * needs. Any reply still in the corpus on a debate is historical — the database refuses a new
+ * one — and it is flattened into the list rather than dropped: a remark somebody wrote is not a
+ * schema change's to withdraw. It loses its indent and keeps its place.
+ */
+const contributions = thread.flatMap((node) => [node.comment, ...node.replies]);
 ---
 
 <Base title={debate.statement} description={debate.rationale ?? debate.statement}>
@@ -75,6 +84,13 @@ const [thread, incoming, outgoing] = await Promise.all([
         <h1>{debate.statement}</h1>
       </blockquote>
 
+      {/* Who proposed it, and nothing else. The second line here used to read "Active since
+          <date>", which said something about a lifecycle the site no longer has: a debate has
+          been part of the record from the moment it was written since post-moderation arrived
+          on 2026-08-18, and `activated_at` is now a date on which nothing happened. Dating the
+          claim also framed it as news rather than as a standing question, which is the
+          opposite of what a debate is for. The date is still in the export and on the card in
+          the listing, where "posted" is what it honestly means. */}
       <ul class="debate__meta" role="list">
         <li>
           {
@@ -90,12 +106,6 @@ const [thread, incoming, outgoing] = await Promise.all([
               <span class="card__erased">Proposer since erased</span>
             )
           }
-        </li>
-
-        <li>
-          {debate.activatedAt
-            ? `Active since ${longDate(debate.activatedAt)}`
-            : `Proposed ${longDate(debate.createdAt)}`}
         </li>
       </ul>
     </header>
@@ -113,13 +123,33 @@ const [thread, incoming, outgoing] = await Promise.all([
       )
     }
 
-    <section class="rate" data-rate data-debate-id={debate.id} data-pagefind-ignore>
-      <section class="debate-panel debate-panel--vote">
+    {/* `data-contributions` and `data-position-changes` are export-time figures and are read
+        off this element rather than fetched: neither is part of the distribution, so neither
+        has to wait for the reader to answer, and neither needs the database. `statsFor` returns
+        undefined for a debate the export has never seen — the empty string then keeps those two
+        out of the statistics line entirely rather than printing a zero nobody counted. */}
+    <section
+      class="rate"
+      data-rate
+      data-debate-id={debate.id}
+      data-contributions={statsFor(debate.id)?.contributionCount ?? ''}
+      data-position-changes={statsFor(debate.id)?.positionChanges ?? ''}
+      data-pagefind-ignore
+    >
+      {/* The asking block, and it is the whole of what somebody who has not answered sees of
+          this section. Once they have answered it is removed outright — heading, scale and
+          explanation — rather than collapsed or replaced by a summary of their own answer: the
+          question has been asked and answered, and leaving a spent control on the page is how
+          a reading page turns into a form. Their answer reappears as a marker on the chart,
+          and one button under the chart reopens this block.
+
+          The section numbers are gone with it. They were "1. Where do you stand?" and "2. How
+          people answered", which only made sense while both were always present; a "2." with
+          no "1." above it is a numbering that describes the page's history rather than the
+          page. */}
+      <section class="debate-panel debate-panel--vote" data-rate-ask hidden>
         <div class="debate-section-head">
-          <h2>
-            <span class="debate-section-number">1.</span>
-            Where do you stand?
-          </h2>
+          <h2>Where do you stand?</h2>
 
           <details class="debate-explainer">
             <summary>Why are results hidden until you answer?</summary>
@@ -142,7 +172,7 @@ const [thread, incoming, outgoing] = await Promise.all([
 
         <div class="panel" data-rate-unconfirmed hidden>
           <p>
-            Rating needs a confirmed email address.
+            Answering needs a confirmed email address.
             <a href={path('/account/confirm/')}>
               Get another confirmation link
             </a>.
@@ -167,10 +197,7 @@ const [thread, incoming, outgoing] = await Promise.all([
         data-rate-withheld
         hidden
       >
-        <h2>
-          <span class="debate-section-number">2.</span>
-          How people answered
-        </h2>
+        <h2>How people answered</h2>
 
         <div class="results-placeholder">
           <strong>Results will appear here after you answer.</strong>
@@ -187,22 +214,41 @@ const [thread, incoming, outgoing] = await Promise.all([
         data-aggregate-wrap
         hidden
       >
-        <h2>
-          <span class="debate-section-number">2.</span>
-          How people answered
-        </h2>
+        <h2>How people answered</h2>
 
         <Histogram />
+
+        {/* One control, directly beneath the chart, and the only route back to the scale.
+            It reopens the asking block rather than carrying its own copy of it — two scales on
+            one page would be two sources of truth for the same answer. */}
+        {/* Revealed only by the fixture branch in the script below, which a production build
+            does not contain. It has to be visible, and it has to say the numbers are invented —
+            a chart drawn from `data/` that looked like a chart drawn from the database would be
+            a way to mislead myself, which is the only thing a fixture mode is really dangerous
+            for. */}
+        <p class="panel" data-fixtures hidden>
+          <strong>Fixture distribution.</strong> These bars, and the answer marked as yours, come
+          from <code>data/debate-ratings.json</code> rather than from the database — see
+          <code>scripts/dev-seed.mjs</code>. Drop <code>?fixtures</code> from the address to go
+          back to the real thing.
+        </p>
+
+        <p class="rate__again">
+          <button class="button" type="button" data-rate-again>Update my answer</button>
+        </p>
+
+        {/* The form's own status element lives inside the asking block, which is hidden by the
+            time a save has succeeded, so the confirmation needs somewhere still on screen. */}
+        <FormStatus id="rate-outcome" />
       </section>
     </section>
 
     <References incoming={incoming} outgoing={outgoing} />
 
     <div data-pagefind-ignore>
-      <CommentThread
-        parentType="debate"
+      <Contributions
         parentId={debate.id}
-        nodes={thread}
+        contributions={contributions}
         title={debate.statement}
         href={path(`/debates/${debate.id}/`)}
       />
@@ -212,7 +258,14 @@ const [thread, incoming, outgoing] = await Promise.all([
 
 <script>
   import { renderHistogram } from '../../lib/histogram';
-  import { loadAggregate, loadMyRating, saveRating } from '../../lib/debates';
+  import { readCount } from '../../lib/debate-facets';
+  import {
+    fixtureAnswer,
+    fixturesActive,
+    loadAggregate,
+    loadMyRating,
+    saveRating,
+  } from '../../lib/debates';
   import { loadProfile, mayPost } from '../../lib/profile';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, query, setBusy, showStatus } from '../../lib/forms';
@@ -220,50 +273,103 @@ const [thread, incoming, outgoing] = await Promise.all([
   const root = query<HTMLElement>('[data-rate]');
   const debateId = root.dataset.debateId!;
 
+  /**
+   * The two export-time figures, read off the page rather than fetched.
+   *
+   * Neither is part of the distribution — a count of contributions is a count of things
+   * already visible further down, and "how many people changed position" says nothing about
+   * where anybody stands — so neither has to wait for an answer and neither needs the
+   * database. `NaN` when the attribute is empty, which is how a debate the export has never
+   * counted keeps both out of the statistics line rather than printing a zero. `readCount` and
+   * not `Number`, because `Number('')` is 0 — see the note on it.
+   */
+  const counts = {
+    contributions: readCount(root.dataset.contributions),
+    positionChanges: readCount(root.dataset.positionChanges),
+  };
+
+  const ask = query<HTMLElement>('[data-rate-ask]', root);
   const signedOut = query<HTMLElement>('[data-rate-signedout]', root);
   const unconfirmed = query<HTMLElement>('[data-rate-unconfirmed]', root);
   const form = query<HTMLFormElement>('[data-rate-form]', root);
   const withheld = query<HTMLElement>('[data-rate-withheld]', root);
   const wrap = query<HTMLElement>('[data-aggregate-wrap]', root);
   const histogram = query<HTMLElement>('[data-histogram]', root);
+  const again = query<HTMLButtonElement>('[data-rate-again]', root);
   const status = query<HTMLElement>('#rate-status', root);
+  const outcome = query<HTMLElement>('#rate-outcome', root);
   const submit = query<HTMLButtonElement>('button[type="submit"]', form);
 
   let userId: string | null = null;
   let iRated = false;
   let myScore: number | null = null;
 
-  subscribeToSession((state) => {
-    if (state.status === 'loading') return;
+  /** Set for one reveal only: the one immediately after a rating that *changed*. A first
+   *  answer is not a position change, and neither is arriving on the page already having
+   *  answered — so it is turned off again as soon as the reveal has read it. */
+  let justChanged = false;
 
-    if (state.status !== 'signed-in') {
-      userId = null;
-      signedOut.hidden = false;
-      form.hidden = true;
-      withheld.hidden = false;
-      return;
-    }
+  if (fixturesActive()) {
+    /**
+     * Development only, and the same shape as the gate on /moderate/. `fixturesActive()`
+     * compiles to `return false` in a production build, so this branch and everything it
+     * reaches are removed before deploy — check the bundle rather than believing it.
+     *
+     * The session is skipped rather than faked. Nothing here can write: there is no token, so
+     * every action the page offers still ends at row level security. What it buys is the
+     * *reading* half — a chart whose bars agree with the contributions underneath them, and the
+     * reader's own position group open, which is the sequence this page is built around and the
+     * one thing an empty database cannot show.
+     */
+    const mine = fixtureAnswer(debateId);
+    iRated = mine.rated;
+    myScore = mine.score;
+    reflect();
+    submit.textContent = 'Update my answer';
+    void reveal().then(() => {
+      query<HTMLElement>('[data-fixtures]', root).hidden = false;
+    });
+  } else {
+    subscribeToSession((state) => {
+      if (state.status === 'loading') return;
 
-    if (userId === state.userId) return;
-    userId = state.userId;
-    void open(state.userId);
-  });
+      if (state.status !== 'signed-in') {
+        userId = null;
+        // The scale is shown to an anonymous reader, disabled, with the sign-in prompt above
+        // it. Hiding it entirely would leave the page with no sign of what it wanted from
+        // them, and the distribution withheld for no visible reason.
+        ask.hidden = false;
+        signedOut.hidden = false;
+        form.hidden = true;
+        withheld.hidden = false;
+        return;
+      }
 
-  void startSession();
+      if (userId === state.userId) return;
+      userId = state.userId;
+      void open(state.userId);
+    });
+
+    void startSession();
+  }
 
   async function open(id: string): Promise<void> {
     const profile = await loadProfile(id);
 
     if (profile.ok && !mayPost(profile.value)) {
+      ask.hidden = false;
       unconfirmed.hidden = false;
       withheld.hidden = false;
       return;
     }
 
-    form.hidden = false;
-
     const mine = await loadMyRating(debateId, id);
     if (!mine.ok) {
+      // The asking block goes up even so. A reader who cannot be told whether they have
+      // answered is a reader who should be able to answer.
+      ask.hidden = false;
+      form.hidden = false;
+      withheld.hidden = false;
       showStatus(status, 'error', mine.message);
       return;
     }
@@ -272,30 +378,82 @@ const [thread, incoming, outgoing] = await Promise.all([
     myScore = mine.value.score;
 
     if (iRated) {
-      // Reflect the existing answer, so that editing starts from what they said rather than
-      // from nothing — which would read as never having answered.
-      const value = myScore === null ? 'none' : String(myScore);
-      const input = form.querySelector<HTMLInputElement>(`input[name="score"][value="${value}"]`);
-      if (input) input.checked = true;
-
+      reflect();
       submit.textContent = 'Update my answer';
       await reveal();
     } else {
+      ask.hidden = false;
+      form.hidden = false;
       withheld.hidden = false;
     }
   }
 
-  async function reveal(): Promise<void> {
+  /** Tick the answer they already gave, so reopening the scale starts from what they said
+   *  rather than from nothing — which would read as never having answered. */
+  function reflect(): void {
+    const value = myScore === null ? 'none' : String(myScore);
+    const input = form.querySelector<HTMLInputElement>(`input[name="score"][value="${value}"]`);
+    if (input) input.checked = true;
+  }
+
+  async function reveal(): Promise<boolean> {
     const aggregate = await loadAggregate(debateId);
     if (!aggregate.ok) {
+      // The chart needs the database and this is the one thing on the page that does. Say so
+      // and leave the asking block up, rather than showing an empty chart or a row of zeros.
+      ask.hidden = false;
+      form.hidden = false;
       showStatus(status, 'error', aggregate.message);
-      return;
+      return false;
     }
 
+    // Answered, so the question is spent: the whole asking block goes, and the button under
+    // the chart is the way back to it.
+    ask.hidden = true;
     withheld.hidden = true;
     wrap.hidden = false;
-    renderHistogram(histogram, aggregate.value, myScore, iRated);
+    renderHistogram(histogram, aggregate.value, myScore, iRated, counts);
+
+    /**
+     * Told, rather than fetched twice.
+     *
+     * The contributions section needs two things that only the distribution knows: which
+     * position is the reader's own, so it can land there, and how many people answered at a
+     * position nobody wrote from — which is the interesting empty state and is a fact about the
+     * histogram. Neither may be in the page source before the reader has answered, and this is
+     * the moment both become allowed.
+     *
+     * An event rather than a shared module holding DOM state: two components on one page, each
+     * with its own script, and the only thing crossing between them is this payload.
+     */
+    document.dispatchEvent(
+      new CustomEvent('mathemact:rated', {
+        detail: {
+          rated: iRated,
+          score: myScore,
+          // True only when this reveal follows a *change*, not a first answer or a
+          // page load. A position change is an event; answering the first time is not.
+          changed: justChanged,
+          histogram: aggregate.value.histogram,
+          noOpinionCount: aggregate.value.noOpinionCount,
+        },
+      }),
+    );
+
+    return true;
   }
+
+  again.addEventListener('click', () => {
+    hideStatus(status);
+    hideStatus(outcome);
+    ask.hidden = false;
+    form.hidden = false;
+    reflect();
+
+    // Focus rather than scroll: it moves the keyboard to the control they asked for and the
+    // browser brings it into view as a consequence, which is one behaviour instead of two.
+    form.querySelector<HTMLInputElement>('input[name="score"]:checked')?.focus();
+  });
 
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -331,14 +489,39 @@ const [thread, incoming, outgoing] = await Promise.all([
     myScore = score;
     submit.textContent = 'Update my answer';
 
-    await reveal();
+    justChanged = editing;
+    const revealed = await reveal();
+    justChanged = false;
 
-    showStatus(
-      status,
-      'success',
-      editing
-        ? 'Rating updated.'
-        : 'Answer recorded. Yours is never shown next to your name — only the distribution is public.',
-    );
+    /**
+     * Where the confirmation goes depends on whether the chart came up, and getting that wrong
+     * is what made a saved answer look like a failed one.
+     *
+     * `#rate-status` lives inside the asking block and `#rate-outcome` inside the results panel,
+     * so at any moment exactly one of them is on screen. On success `reveal()` has hidden the
+     * first and shown the second. **On failure it has done the opposite** — and the old code
+     * wrote the confirmation into the hidden panel regardless, so all a reader saw was
+     * `reveal()`'s error, which is about the distribution and said "nothing was saved" about an
+     * answer that had just been saved.
+     *
+     * The answer is recorded either way: `saveRating()` returned ok to get here. Only the chart
+     * is missing, and the message now says which of the two happened.
+     */
+    if (revealed) {
+      showStatus(
+        outcome,
+        'success',
+        editing
+          ? 'Your position has been updated.'
+          : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+      );
+    } else {
+      showStatus(status, 'notice', [
+        editing
+          ? 'Your position has been updated.'
+          : 'Recorded. Your answer is never shown beside your name — only the distribution is.',
+        'The distribution could not be loaded, so it is not shown below. Your answer is saved; reload the page to try again.',
+      ]);
+    }
   });
 </script>

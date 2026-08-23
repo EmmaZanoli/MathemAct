@@ -109,6 +109,18 @@ const { groups, sorts, noun, total } = Astro.props;
       }
     </div>
 
+    {/* Beside the control, for a listing whose orderings need saying out loud. /debates/ fills
+        it: "most divided" is a ranking of disagreement, and an opaque one is the least
+        trustworthy thing this site could show this audience, so what it measures and what it
+        takes to qualify are on the page rather than in a tooltip somebody has to find.
+
+        A named slot, and it has to exist here to receive anything — Astro *drops* content
+        addressed to a slot that is not declared, without a warning, which is the same trap
+        `Field.astro` documents. Note also that whatever a page slots in carries the **page's**
+        scope attribute rather than this component's, so its styles belong in the page or in
+        corpus.css and not in this file. */}
+    <slot name="sort-note" />
+
     {/* A cited link may name a tag that has since been retired or a tool nothing uses any
         more. Dropping those silently would show the reader more than the sender saw,
         without either of them finding out. */}

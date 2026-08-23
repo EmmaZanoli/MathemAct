@@ -1131,3 +1131,950 @@ titled — the constraint was never carried by the box.
 Both renderings changed together: `[id].astro` and `src/pages/reports/view.astro`, the runtime
 fallback for a report with no static page yet. Those two are the same report seen a day apart,
 and letting the order drift between them is the `report-facets.ts` problem in another surface.
+
+## 2026-08-21 — A contribution stores the position it was written from, rather than joining it
+
+`public.comments.agreement_score`, copied from the author's rating row at insert and frozen.
+
+The alternative — a view joining a contribution to its author's *live* rating — is one join
+shorter and wrong. Somebody who changes their mind would drag every contribution they have ever
+written into a different group, retroactively, so the record of what the community thought in
+March would silently become a record of what those same people think now. A contribution is
+written *from* a position. That is a fact about a moment, and it is stored like one.
+
+`022_debate_contributions.test.sql` asserts the column **after** the author has moved from "no
+opinion" to 7, because before that the two designs are indistinguishable.
+
+## 2026-08-21 — The score trigger overwrites what the client sent; it does not raise on a mismatch
+
+Both defences work today and only one keeps working if the grant is ever widened. Raising turns
+a lie into an error but depends on the client having been able to name the column in order to be
+wrong about it. Overwriting does not care: grant the column by accident, add a service-role
+path, widen a column list in a migration about something else, and the stored value is still the
+one read out of the rating row, because the last write before the row lands is the trigger's.
+
+The grant is still withheld — INSERT and UPDATE on `public.comments` are per column, so a column
+nobody names is a column no browser can write. The two failure modes are both wanted and differ:
+naming the column is refused outright with 42501, and a value arriving by any other route is
+silently replaced. The test widens the grant on purpose, because a test that only proves the door
+is locked says nothing about the floor under it.
+
+## 2026-08-21 — A NULL `agreement_score` on a debate comment means "no opinion", not "unset"
+
+The agreement scale's off-scale option is stored as a NULL `score` on a **real** `public.ratings`
+row, not as an absent row, and the trigger refuses a contribution from anyone holding no rating
+row at all. Between those two facts the column is unambiguous by construction: a contribution
+exists only where a rating exists, so a NULL here can only have been copied from a NULL there.
+
+So no sentinel, no coercion to 5, and no companion boolean. A sentinel puts a non-answer on the
+scale; coercing to 5 files a declared non-opinion as a neutral opinion, which is the exact
+corruption the off-scale option exists to prevent; a boolean is a second source of truth for
+something the column already says.
+
+## 2026-08-21 — Endorsements are readable only by their author, and the reason is two tables away
+
+A rating row is readable only by its author — that is why `public.rating_aggregate` is
+`SECURITY DEFINER` — and endorsing a contribution requires holding a rating on that debate.
+
+So a public endorser list would leak, by inference, the private position of everybody on it.
+"This captures my view" on a contribution written from 8 places its endorser near 8, and the leak
+is worst on the contributions that matter most: one written from 0 or from 10 pins its endorsers
+hard. **Counts are public; names are not.** Counts arrive through the nightly export; the browser
+reads its own rows only, to decide which button is pressed.
+
+Two things follow and both are deliberate absences. **No `SECURITY DEFINER` aggregate for live
+counts** — `rating_aggregate` has one because a distribution must be current the moment a reader
+answers, which is what they get in exchange for answering; an endorsement count is not that, and
+a second DEFINER function on a private table to save a reader from a number being a day old is a
+seventh Security Advisor warning for nothing. **No activity trigger** — "somebody endorsed your
+contribution" cannot name the endorser without undoing the above, an unnamed one is a
+notification that a number went up, and not touching `private.log_activity()` is worth something
+on its own after 20260819090000.
+
+## 2026-08-21 — "Has anybody endorsed this?" is a column, because the guard cannot ask the table
+
+`private.protect_comment_columns()` is and must stay `SECURITY INVOKER`: it is the
+`current_user` test in it that tells a browser from the table's owner, and a DEFINER guard sees
+its own owner on every request. But the window closes on the first endorsement, and the guard
+has no honest way to read `public.comment_endorsements`.
+
+**An inlined `exists` fails silently, in the dangerous direction.** The subquery runs under the
+caller's own policies; that table is own-rows-only; the caller is the contribution's *author*,
+who cannot endorse their own contribution and so owns none of its rows. It would return false
+however many endorsements exist — the window closed in the source and open in production, which
+is the failure that reviews as correct.
+
+**A `SECURITY DEFINER` helper in `private` fails too, and louder.** `authenticated` holds no
+USAGE on the private schema — 20260813200000 revoked it and `002_exposure.test.sql` asserts it —
+so the call is refused with 42501 and every legitimate edit becomes a permission error. This was
+written and then reverted before it ever ran; recorded here because it looks obviously right.
+
+So `public.comments.endorsed_at`, stamped by a DEFINER trigger on the endorsement insert, and
+the guard reads a column on the row it is already updating. Same move as
+`public.reports.answered_at` in 20260819100000 — there a subquery recursed, here it lies — and
+cheaper either way. The stamp is never cleared: the text was frozen when somebody said it was
+theirs too, and an erasure removing that row should not reopen an edit window on text other
+people have since read.
+
+## 2026-08-21 — Rating history exists, is append-only, and no browser role may read it
+
+`public.rating_changes`, written by an AFTER UPDATE trigger on `public.ratings` when the score is
+`is distinct from` the old one. **This reverses 20260815160100's "no history is kept."** The half
+of that decision which stands is its reason: the aggregate is computed from current ratings only,
+and `public.ratings` still holds exactly one row per person, so "the current distribution" stays
+unambiguous. What changed is that the transition is no longer discarded — a position change is
+the most valuable event this section produces.
+
+Both score columns are nullable, because moving between "no opinion" and a number is a real
+change and the most interesting one on the site. A `NOT NULL` on either would record every
+position change except that one. The trigger's WHEN clause uses `is distinct from` and not `<>`
+for the same reason: `<>` evaluates to NULL on exactly that transition and the trigger would
+silently not fire.
+
+**No SELECT grant to `anon` or `authenticated`, and no policy.** A readable per-person history is
+a public voting record for a rating that is deliberately private, and it is worse than exposing
+the rating: a current position is one fact, a trail through somebody's changes of mind is a record
+of how they think, attached to a name, on a site whose audience includes people contributing
+pseudonymously because admitting AI reliance carries professional stigma. The table exists to
+produce one number per debate in the export, which runs as service role and is not subject to RLS.
+History is never shown as a voting record.
+
+## 2026-08-21 — Every rule in the debates rebuild carries a subject-type condition
+
+`public.comments` serves reports and debates. Reports keep one level of nesting, keep replies,
+and keep an edit window that closes on the first reply — a report thread is a discussion of one
+specific account of one specific piece of work, and a remark with the author's answer under it is
+the shape of a referee's note.
+
+So flatness is `check (parent_type <> 'debate' or in_reply_to is null)`, the score column is
+`check (parent_type = 'debate' or agreement_score is null)`, the supersession trigger carries
+`when (new.parent_type = 'debate')`, and the guard branches on `old.parent_type` before choosing
+which early-close rule applies. A CHECK without a `parent_type` term in it would break report
+threads silently.
+
+The flat rule is written **twice** — once in the constraint, once in `comments_insert_own` — and
+the policy was **dropped and reissued** rather than supplemented. Permissive policies on one
+command are OR'd, so a second INSERT policy carrying the rule would not add a restriction; it
+would add a route that grants exactly what the rule withholds. The same reasoning keeps the edit
+window in the guard.
+
+## 2026-08-22 — The mean is computed once, in the function, and the test was narrowed to allow it
+
+The 2026-08-15 entry above records the reversal in principle. This is what it took in practice,
+because the prohibition had been written into three places and one of them was load-bearing.
+
+`public.rating_aggregate` gains a `mean` column, and it had to be **dropped and recreated**:
+adding a column to a `returns table (...)` changes the return type, which `create or replace
+function` refuses outright. `public.debate_ratings` came with it, since the view depends on the
+function — and dropping a view loses its `security_invoker` reloption and its comment, both of
+which are restated. A view over a user-content table without `security_invoker` hands hidden
+rows to anonymous callers while looking correct in review.
+
+**The mean is in the function rather than only in the export**, and that is not tidiness. The
+debate page shows the distribution twice at two different moments: the export writes it into
+`data/debate-ratings.json`, and the browser fetches the live aggregate once the reader has
+answered. A mean in only one of those places is a page whose summary changes when you answer it.
+
+`013_ratings.test.sql` asserted against the catalogue that **no function or view in `public`
+contained `avg(`** — written broadly on purpose, "so it covers whatever is added next". It now
+exempts `rating_aggregate` by name and nothing else. The view assertion was left unexempted and
+still passes, because the view calls the function rather than restating the arithmetic; that
+assertion is what would notice somebody inlining it. Note that `sum(score)/count(score)` slips
+past the regex — the honest move was to narrow the test, not to evade it.
+
+## 2026-08-22 — Divided and consensus are export-time, and absent is not zero
+
+Both are computed in `scripts/export.mjs` and stored, never derived in the browser.
+
+- **divided** — twice the smaller of (share of 0–4) and (share of 6–10). Twice, so a clean
+  50/50 split scores 1 and the number reads as a proportion of the most divided a debate could
+  be. The *smaller* side, so 90/10 and 10/90 both score 0.2: they are the same shape seen from
+  two directions. **The neutral 5s are in the denominator and in neither numerator**, so a
+  debate where everybody sits at 5 comes out as 0 divided — which a mean of 5.0 could not tell
+  apart from a clean two-camp split.
+- **consensus** — the largest share held by any one of the five families. Families rather than
+  single scores because 8 and 7 are not a disagreement, and a metric that treated them as one
+  would report a united community as fractured over rounding. Labelled *Most agreed on*:
+  "consensus" is a claim about the community, not about the numbers.
+
+Off-scale positions are in neither, like everything else computed from the eleven.
+
+**Below ten scored positions both are null, and null is not zero.** Two people at opposite ends
+is perfectly divided by the arithmetic and tells a reader nothing, and it would outrank a
+genuinely contested claim answered by ninety. A zero is a real reading — "nobody disagrees" —
+which a debate with four answers has not established. The null travels all the way to the DOM as
+the **empty string**, because `numeric()` in the listing engine reads `''` as "cannot be sorted
+by this" and `'0'` as a value. That is the whole of the "a fresh card is ineligible" behaviour:
+no new code path, just the absence of a number.
+
+## 2026-08-22 — A sort may read an aggregate; a card may not show one
+
+`src/lib/listings.ts` said that nothing on the debates listing touches ratings, full stop. That
+has been **narrowed rather than abandoned**, and the line is worth stating because the two
+sound identical and are not.
+
+An *ordering* says "these claims divide the community" about the corpus. A *figure on a card*
+says "this claim divides it 60/40" about one debate, to a reader who has not opened it — which
+is exactly what the debate page withholds, and a listing that leaked it instead would make the
+withholding pointless. So the sorts exist and the cards stay silent: no count, no median, no
+mean, no share anywhere on `/debates/`.
+
+The filters are unchanged and still area-only, for the older reason: a "has answers" or "median
+above 7" checkbox hands over the same thing one bit at a time.
+
+## 2026-08-22 — `src/lib/debate-facets.ts`, and why `Number('')` is a bug
+
+The same argument as `report-facets.ts`: cards are built by the build and by the freshness
+overlay, and a card whose attributes were assembled by two different pieces of code is a card
+that fails a sort it should be in, with nothing to notice it. Both callers now hand a shape to
+`debateCardAttrs()` and neither writes an attribute name.
+
+It also owns `readCount()`, which exists because of a trap worth writing down: **Astro renders
+an attribute whose value is the empty string as a bare attribute**, `dataset` hands that back as
+`''`, and `Number('')` is `0`. Parsing a `data-` count directly therefore turns "the export has
+never counted this" into "somebody counted this and the answer was none" — and the debate page's
+statistics line depends on exactly that distinction, since a contribution count of 0 printed
+under a chart with contributions listed beneath it is the page contradicting itself.
+
+## 2026-08-22 — The shrink guard watches every JSON file, not just reports.json
+
+It compared `reports.json` against the previous manifest and nothing else, so the discussion,
+the debates, the aggregates and the citations could each go to zero without a word.
+
+That was survivable while those queries were plain selects. It stopped being survivable when
+`AGGREGATES` and `COMMENTS` grew lateral joins for the endorsement counts and the position
+changes: **a join that matches nothing does not error, it returns fewer rows**, and the failure
+would have arrived as a quietly empty `comments.json` committed over a full one.
+
+Every JSON file is now checked against its own previous count. The CSVs are skipped as
+projections of files already checked — `csv/reports.csv` cannot shrink without `reports.json`
+shrinking first, and reporting both would make one fault read as two. A file that was empty last
+night is not checked, which is why an empty `data/` cannot trip it.
+
+## 2026-08-22 — The debate page has no section numbers and no date
+
+Three changes to the top of `/debates/<id>/`, and the reasons are unrelated.
+
+**No "Active since <date>".** It described a lifecycle the site stopped having on 2026-08-18,
+when post-moderation made a debate part of the record the moment it was written; `activated_at`
+is now a date on which nothing happened. Dating a standing question also framed it as news. The
+date stays in the export and on the listing card, where "posted" is what it honestly means.
+
+**The asking block is removed once answered**, not collapsed and not replaced by a summary of
+their own answer. The question has been asked; a spent control left on the page turns a reading
+page into a form. Their answer comes back as the marker on the histogram, and one button under
+the chart reopens the same scale — one scale on the page, because two would be two sources of
+truth for one answer.
+
+**No "1." and "2."** The numbering only worked while both panels were always present. Once the
+first is removed at the moment it is answered, a "2." with no "1." above it numbers the page's
+history rather than the page.
+
+One consequence to know about: the form's `#rate-status` lives inside the asking block, so a
+success message had nowhere to be displayed by the time the save had succeeded. There is now a
+second status element on the results panel, and that is what a confirmation uses.
+
+## 2026-08-22 — Four stat cards became one line, because the mean was about to be a headline
+
+The distribution used to be summarised by four equal bordered boxes with their numbers set at
+`--size-5`. That layout makes every number in it a headline, and one of them is now the mean —
+which is the one reading the display rule exists to prevent, because it is what survives a skim:
+on a bimodal debate "6.2" reports mild agreement for a community that has split cleanly in two.
+
+One line instead, in the order d4 specifies, with the median in ink and heavier and the mean
+muted and no larger than the surrounding prose. The mean sits *below* the chart that contradicts
+it. Coverage is spelled "X expressed an opinion" rather than as a percentage: a ratio invites
+reading it as a quality score for the debate, where the count invites the comparison that
+matters — how many of the people who answered were willing to put a number on it.
+
+The two export-time figures hide their own wrappers when the number is unavailable, so the line
+ends after the mean on `/debates/view/` rather than trailing two zeros.
+
+**The off-scale answers are said in words** under the chart, naming the reader's own decline
+first — they looked for their marker, it is not there, and that sentence is the answer. They get
+no column, because "outside my expertise" is not a position on a scale of agreement, and they
+are not parked at 5, because filing a declared non-opinion as a neutral opinion is the exact
+corruption the off-scale option exists to prevent.
+
+## 2026-08-22 — The thread component is split, reversing its own header
+
+`CommentThread.astro` argued that a thread is a thread and that separating the report thread
+from the debate thread would guarantee they drift. That was right while both were the same
+surface: a list of remarks under a page, threaded one level, newest at the bottom.
+
+They stopped being the same surface. A debate now has twelve groups, two views, a sort control,
+no replies, no nesting and no badge line — none of which has an analogue on a report, where the
+thread is a discussion of one specific account and threading is correct. Branching on
+`parentType` inside one file would have meant two mutually exclusive markup trees and two client
+scripts in one component, with every shared selector a way to change how a report thread renders
+by accident. That risk is not hypothetical here: report interaction cannot be exercised locally,
+because it needs a database and a signed-in account.
+
+So: reports keep `CommentThread.astro`, **byte-identical** — `git diff` shows no change to it —
+and debates get `Contributions.astro` plus `Contribution.astro`.
+
+**The boundary is rendering only.** Reading the corpus, editing, deleting and flagging all still
+go through `src/lib/comments.ts`, so the behaviour the old header was protecting cannot drift;
+what diverged is markup, which is what was supposed to diverge. The `:scope >` discipline is
+carried into the new component even though a debate contribution can no longer nest, because
+historical replies are rendered flat in that list and the rule is the discipline rather than the
+current shape of the data.
+
+`Contribution.astro` is its own component rather than a snippet repeated in the position groups
+and the off-scale group, and **its styles live in it** — Astro does not put a parent's
+scoped-style attribute on a child component's root element, so `.contribution` styled in the
+parent would compile to a selector matching nothing.
+
+## 2026-08-22 — The zero-JavaScript case is "open a position, read those contributions"
+
+The selector is native `<details>`: one per family, each holding one per position, all closed.
+So the by-position view starts empty because the disclosures are closed, not because script
+emptied it — and the prompt line disappears through
+`.view:has(details[data-position-group][open])`, which needs no state kept in step with
+anything.
+
+What is the enhancement, deliberately: exclusive selection, the URL, opening a whole family at
+once, landing on the reader's own position, the sort control, and **the flat view**. A reader
+with no JavaScript gets one view in one order and no dead controls — the view switch and the
+sort `<select>` are `hidden` in the markup and revealed by script, because a control that does
+nothing is worse than an absent one.
+
+The flat view **moves** the same `<li>` nodes rather than rendering a second copy. Two copies
+would mean two elements carrying one `id`, and `#comment-<id>` is a real address: the activity
+feed builds it to point somebody at the contribution they were told about. `data-position` on
+each node is what lets the move be reversed.
+
+## 2026-08-22 — Three things a single null would have collapsed
+
+`agreementScore` is null in three situations and only one of them means what the off-scale group
+claims.
+
+- On a **report comment** it argues from no position, which is correct rather than missing.
+- On a **debate contribution** it is the off-scale answer: the author was asked and declined.
+- On a **debate contribution from an export written before the column existed** it is nothing
+  at all.
+
+The third was filing that contribution under "No opinion, or outside my expertise" — **publishing
+a position its author never took**, which is the precise failure the off-scale group exists to
+prevent, inverted. It was found by reading the built HTML rather than by any check: the row
+rendered, the page looked right, and the label was a claim about somebody's view that nothing
+supported.
+
+So `Comment.positionKnown` distinguishes an absent key from an explicit null (`'agreementScore'
+in comment`, not `??`), and `groupKeyFor(score, known)` returns a thirteenth key for it. That
+group renders **only when it has something in it**, so a current export shows the twelve groups
+the design describes and nothing else, and the rows in it say "position not recorded" until the
+next nightly export gives them their real one.
+
+## 2026-08-22 — What only the distribution knows arrives by event
+
+"People answered at this position and none of them wrote anything" is the interesting empty
+state and the one the design asks for. It is also a fact about the histogram, which is fetched
+after the reader has answered precisely so that it is not in the page source — so the section
+cannot render it, and weakening that rule to get a nicer empty state would trade the thing for
+the description of the thing.
+
+The debate page therefore tells the contributions section, once, on the same code path that
+reveals the chart: a `mathemact:rated` CustomEvent carrying the histogram, the off-scale count,
+and the reader's own score. That is also how the section knows which position to land on.
+
+An event rather than a shared module holding DOM state, because these are two components with
+two client scripts on one page and the only thing that should cross between them is the payload.
+Until it arrives, an empty position says only that it has no contributions — which is all the
+page can honestly claim.
+
+## 2026-08-22 — Editing, deleting and flagging came across; writing did not
+
+The specification for this surface covers the two views and what a contribution shows. It says
+nothing about the per-contribution controls, and carrying them over is a slight widening of it —
+but the alternative was shipping a debate page where an author could no longer correct their own
+contribution and **no reader could flag one**, which is a moderation path, and losing it silently
+would have been the worst of the three outcomes.
+
+Writing a contribution deliberately did **not** come across. It belongs inside the reader's own
+position group, below what is already there, collapsed behind an explicit control, and that
+sequence is specified separately. What is here is the seam: a `data-compose-seam` element per
+position group, empty and hidden, so there is no always-visible box to have to remove later.
+
+One consequence to know about: `installQuoteAffordance()` lived in `CommentThread.astro`'s
+script, so the selection popover — quote a passage into a comment, cite one into a debate — is
+not on debate pages at present. It is not an oversight and it is not restorable on its own: the
+affordance exists to put a passage into a composer, and there is no composer on this surface
+yet. It belongs with the writing box.
+
+## 2026-08-22 — An endorsement is withdrawable, so a count may go down
+
+`20260821120200` shipped `public.comment_endorsements` with no DELETE policy and no grant, and
+said in as many words that withdrawal was a decision about whether a count may go down rather
+than a gap. `20260822100000` decides it: yes.
+
+The alternative is worse in a specific way. "This also captures my view" is an assertion about
+what somebody currently thinks, and this whole section rests on people being able to change
+their minds and on that being visible. An endorsement given and never retractable would be the
+one claim on the page its author was stuck with.
+
+**A hard delete, and the second on the site** after `public.citations`, for the same reason:
+nothing is threaded under it, there is no attribution to preserve and no prose. A soft delete
+would leave a row saying "this person once said this captured their view", which is a record
+nobody asked for and which the select policy would then have to hide from its own author.
+
+**A banned account cannot withdraw**, matching the update policy, which already re-tests the
+ban. A ban closes write paths and removes nothing already posted — their reports stay up, their
+contributions stay up, their endorsements stay counted — and permitting this one write would
+make a ban a way to retract things quietly. Note this clause sits on a DELETE policy and is
+therefore **not** one of the nine `not p.is_banned` INSERT clauses the count in
+docs/moderation.md refers to.
+
+`public.comments.endorsed_at` is **not** cleared, so the edit window stays shut. The text was
+frozen when somebody said it was theirs too, and other people have read it since on that basis;
+reopening it because the one endorser changed their mind would let the words move under
+everybody who read them. `022_debate_contributions.test.sql` asserts that directly.
+
+## 2026-08-22 — The optimistic count is relative to what the page was showing
+
+The export's count already includes the reader's own endorsement if they made it before the last
+nightly run, and excludes it otherwise — and **nothing in the file says which.** So adjusting the
+number at page load would be a guess in one direction or the other.
+
+What is not a guess is the change the reader just made. The displayed count is
+`base + (now === kind) - (atLoad === kind)`: zero adjustment until they act, and exactly one
+either way when they do. It can be off by one against the true total, which is the same accuracy
+every other number on this site has between exports, and the prompt for this work says so.
+
+Failure rolls back **in prose**, not by silently restoring the number. A count that reverts with
+no explanation reads as the page glitching; a sentence saying what happened is what lets somebody
+decide whether to try again.
+
+## 2026-08-22 — "Nothing renders on your own contribution" is a rule about the controls
+
+Both actions and the "answer the debate" pointer are **removed from the document** on the
+reader's own contribution — not disabled, not greyed, not left in the accessibility tree. A
+control that explains why you cannot use it is still a control telling you it exists.
+
+The **counts stay**, and that is a reading of the rule rather than an exception to it. They are
+export data rendered for every reader including anonymous ones, they name nobody, and hiding them
+from the one person the number is about would withhold the feature's entire output from its
+subject. The clarifying phrase in the rule is "not a disabled button", which is what the actions
+would have been.
+
+## 2026-08-22 — Not having answered is pointed at the scale, not at a sign-in wall
+
+The same message for an anonymous reader as for a signed-in one who has not answered, because
+the thing standing between either of them and this control is not having a position — and the
+scale, which is on the same page and visible for exactly these readers, says what signing in is
+for by itself. A sign-in wall would answer a question neither of them asked.
+
+## 2026-08-22 — The composer moves, and it has a second home
+
+One composer on the page, moved into the reader's own position group once that group is known.
+Twelve would be twelve places for a draft to be stranded, and one textarea means one counter and
+one set of ids — the same argument `CommentThread.astro` makes for relocating its own.
+
+The sequence is the deliverable rather than the button: their position opens, they read what
+people who answered the same way have already written, each of those offers "this also captures
+my view", and *then* one control below all of them opens the box. **Collapsed, not gated** — a
+plain button, not disabled, not behind a warning, not conditional on having endorsed anything.
+Somebody with a genuinely new point loses one click; somebody about to retype an argument three
+rows above sees it first.
+
+The second home matters more than it looks. A position nobody has written from renders as an
+inert paragraph rather than a disclosure, and a debate with no contributions renders no groups at
+all — so in both cases there is no seam to move into, and both are precisely the moment somebody
+is about to write the **first** contribution at their position. `[data-compose-fallback]` at the
+end of the section is where it goes instead. Without it the one case that most needs a box would
+not have had one.
+
+## 2026-08-22 — A `!` that outlived the element it asserted about
+
+`/debates/view/` set the contributions section's id through
+`document.querySelector('[data-thread]')!` — and `[data-thread]` is `CommentThread.astro`, which
+that page stopped using when debates moved to `Contributions.astro` on 2026-08-22.
+
+The non-null assertion silenced the null the type system had correctly inferred. `astro check`
+passed, the build passed, and the line would have thrown a TypeError on the next `.dataset`
+access, taking the rest of the function — including the reveal of the page content — with it.
+This is the trap CLAUDE.md records about accumulating `!`s, arriving from the other direction:
+not a narrowing lost inside a hoisted function, but an assertion that stayed true-looking after
+the thing it asserted about was deleted. It was found by re-reading the file to add a line to
+it, which is not a strategy.
+
+## 2026-08-22 — The movement badge reads "6 to 9", because U+2192 is not in the font
+
+The design called for "6 → 9". It renders as "6 to 9", and the reason is typographic rather
+than editorial.
+
+The self-hosted IBM Plex subsets are `latin` and `latin-ext`. U+2192 is in neither, so an arrow
+would be drawn by whatever the browser fell back to — a different weight and a different shape
+sitting directly beside IBM Plex Mono digits, in front of an audience this project describes as
+unusually sensitive to typographic sloppiness. It is the same problem as U+25A0, which the
+tombstone draws in CSS for exactly this reason. A word costs two characters and is set in the
+right typeface.
+
+`movementLabel()` in `src/lib/positions.ts` is the one place it is worded, which also makes the
+off-scale case fall out for free: moving to or from "no opinion" is a position change like any
+other and gets the same badge with words where the number would be — "no opinion to 9".
+
+Noted while checking this: **the `←` in the breadcrumbs has the same problem** and predates all
+of it. Not fixed here, because changing every breadcrumb on the site is not this branch's, but
+it is the same fallback in the same place and is worth a decision of its own.
+
+## 2026-08-22 — The edit window is shown, and read from the stamp rather than the counts
+
+The database enforces the window and raises; the interface agrees with it. So the author sees
+the time remaining, and where it is shut, **which rule shut it** — "somebody has said this
+captures their view" rather than a disabled button with no account of itself.
+
+It reads `comments.endorsed_at`, which meant carrying that column into the export. The
+tempting shortcut was to infer "endorsed" from the endorsement counts, which are already
+exported — and it is wrong in a way that only shows up after a withdrawal. The stamp is set by
+the first endorsement and **never cleared**, so a contribution every endorser has since
+withdrawn from has both counts at zero and a window that is still shut. Inferring from the
+counts would offer an Edit button the guard refuses, which is precisely the interface
+substituting for the database rather than agreeing with it.
+
+The remaining time is computed in the browser. Rendered at build time it would be hours stale
+before anybody read it, and it is deliberately coarse — "about 3 more hours" — because nobody
+needs the seconds and a countdown nobody asked for is worse than a rounding.
+
+Deleting is unaffected at any age. A contribution is withdrawable whenever, and its position
+stays in the distribution either way.
+
+## 2026-08-22 — A position change invites a contribution; it does not require one
+
+The movement is already recorded by the time the invitation appears: the rating update wrote a
+`rating_changes` row by trigger, and the earlier contribution keeps its text, its group and its
+score with a link forward. So the invitation is an offer above a control that stays exactly as
+collapsed as it was — not an auto-opened box, not a step in a flow. Somebody who moved and has
+nothing to add has already done the part that counts.
+
+`justChanged` is set for exactly one reveal and cleared immediately after. A first answer is not
+a position change, and neither is arriving on a page you had already answered — both would
+otherwise show an invitation to rewrite something in response to nothing.
+
+## 2026-08-22 — The count of changes is all `rating_changes` may produce
+
+The statistics line carries "K changed position" and there is no list behind it, by design.
+Ratings are private on this site, so a per-person history of who moved and when is a public
+voting record for something deliberately hidden — which is why the table has no grant to any
+browser role and the export takes a `count(distinct user_id)` out of it and nothing else.
+
+If a list is ever wanted, it is built from **superseded contributions** instead: the people
+whose positions are public because they chose to write them down. That is what the badges
+already are, read collectively. It will be smaller than K, and the difference is the finding
+rather than a bug — more people change their mind than write about it. Anything rendering both
+has to label them so that gap is legible.
+
+## 2026-08-22 — A debate card shows a shape, which reverses "a card may not show an aggregate"
+
+From the day the shared listing engine landed until now, `/debates/` rendered no aggregate at
+all — no count, no median, no share — and `src/lib/listings.ts` argued the case: a figure on a
+card tells a reader where the community landed before they have opened the question, which is
+exactly what the debate page withholds.
+
+**Reversed.** A card now carries a distribution sparkline and one statistics line,
+`N positions · C contributions · K changed position`.
+
+What changed is not the analysis but the judgement about which failure costs more. A list of bare
+sentences gives a reader no way to choose what to read, so they open whatever is at the top; a
+claim four people answered and a claim that has split ninety look identical. The section's second
+most important flow — a reader understanding where the community stands in about thirty seconds —
+never starts, because nothing on the page tells them which claim is worth thirty seconds. The
+shape is what makes a claim worth opening.
+
+What survives of the old rule is the whole of the constraint:
+
+- **Positions lead**, never a contribution count, and **never the mean.** A card is where a
+  single number gets mistaken for the finding, and on a bimodal debate the mean is the number
+  most likely to be mistaken for it. It stays on the debate page, beside the median and the
+  chart.
+- **No axes, no numbers, no ranking figure.** Nothing says where a card came in under the
+  current sort, and neither `divided` nor `consensus` is printed anywhere.
+- **One colour, the accent.** A ramp from disagreement to agreement would assert that one end is
+  the bad end, on a page whose entire point is that the site takes no position — and it would
+  collide with the outcome semantics, the only place on this site where red and green mean
+  anything.
+- **A card the overlay added shows neither the sparkline nor the statistics line.** Aggregates
+  are an export-time product, and a zero histogram reads as unanimous disagreement.
+
+### The consequence, stated rather than buried
+
+**This pulls against *Do not reveal the aggregate until the user has rated*.** The sparkline
+shows the shape of a debate to somebody who has not answered it, which is the effect that rule
+exists to prevent — and on 2026-08-21 the choice was made deliberately to keep that rule real,
+by leaving the debate page's distribution as a live fetch rather than baking it into the page.
+
+The two are not fully reconcilable and the split is now: the **listing gives away the shape**,
+and the **debate page still withholds the precise distribution, the median, the mean, and the
+reader's own place in it**. That is a real trade, not a technicality — bandwagoning is driven
+more by shape than by precision.
+
+If the effect is judged to matter more than orientation does, **the sparkline is the thing to
+remove.** The statistics line does not carry the shape, and neither do the sorts. Removing it is
+one conditional in `DebateCard.astro`.
+
+## 2026-08-22 — "Recently active" needed a definition, and it went where the others are
+
+The brief said to surface five orderings and not to define them here, because prompt 3 had put
+them in `src/lib/listings.ts`. Four were there; *Recently active* was not.
+
+The prohibition is against defining a sort **on the page** — that is what puts a listing on two
+definitions and lets the build and the freshness overlay disagree. So the definition went into
+`DEBATE_SORTS` beside the others, and the export gained the value it reads.
+
+`lastActivityAt` is the later of the newest contribution and the newest rating activity, falling
+back to the debate's own date so a claim nobody has touched sorts by when it was asked rather
+than sorting last for want of a value. The ratings side uses `max(updated_at)` and not
+`created_at`, because somebody changing their answer is activity and it is the kind this section
+most wants to notice.
+
+**It is a timestamp and nothing else.** It says *when*, never who moved or to what, so it is not
+a way back into the per-person history `public.rating_changes` deliberately withholds.
+
+It is deliberately last in the menu. It is the only ordering here that is about attention rather
+than about the claim, and a listing of claims that opened ordered by whatever was touched most
+recently would be a feed.
+
+## 2026-08-22 — What "most divided" measures is on the page, not in a tooltip
+
+Two of these orderings rank disagreement, and an opaque ranking of disagreement is the least
+trustworthy thing this site could put in front of this audience. So both are defined in words
+beside the control: what each measures, that both run over the scored positions only, that the
+neutral 5s count in neither side, and that a debate needs at least ten scored positions to appear
+in either at all.
+
+The threshold is read from the export's own `sortableMinimum` rather than typed into the
+sentence, so the copy cannot come to disagree with `SORTABLE_MINIMUM` in `scripts/export.mjs`.
+
+`Listing.astro` gained a named `sort-note` slot for it. Two traps met in one change: Astro
+**drops** content addressed to a slot that is not declared, without a warning — so the slot had
+to be added there rather than assumed — and slotted content carries the **page's** scope
+attribute rather than the component's, so the styles live in `corpus.css`.
+
+## 2026-08-22 — Debates have no tag vocabulary, and this is the seam
+
+`public.debates` has no tag table: `tags` and `report_tags` are the reports' vocabulary, and
+nothing else has one. So tag filtering is not half-built here.
+
+An empty "Subject area" fieldset would be a rail of dead ends with a zero beside every option,
+which reads as a corpus that is empty rather than as a question nobody asked — the same argument
+that keeps unused areas out of the area filter. When debates get tags, it is one entry in
+`DEBATE_DIMENSIONS` and one line in `DebateCard.astro`, and both places say so.
+
+## 2026-08-22 — The card's styles are global, because a `<template>` cannot be a component
+
+The freshness overlay builds its card by cloning a `<template>` in the page, since a template
+cannot instantiate an Astro component. That markup therefore carries the **page's** scope
+attribute and not `DebateCard.astro`'s — so a scoped `.debate-card__claim` in the component would
+style every built card and leave every fresh one bare.
+
+The styles are in `corpus.css`. What is *not* duplicated between the two paths is the attribute
+list: `debateCardAttrs()` writes those on both, which is the half whose drift would silently
+break a sort rather than merely look wrong.
+
+## 2026-08-22 — Proposing a debate requires answering it, so it is one RPC
+
+`public.submit_debate()` writes the claim and the proposer's own rating in one transaction.
+
+The requirement — **somebody unwilling to say where they stand should not be setting the
+question** — cannot be expressed in a policy: it is a statement about two rows in two tables, and
+row level security only ever sees one row at a time. And it cannot be left to two client calls,
+because a debate whose proposer never answered it is precisely what the rule forbids, and that is
+what any failure of the second call produces.
+
+`SECURITY INVOKER`, like `submit_report()`, and worth stating because a function writing to three
+tables looks like it wants elevation. Every insert runs under the caller's own policies —
+`debates_insert_own`, `ratings_insert_own`, `debate_tags_insert_own_unanswered` — so **the
+function authorises nothing.** It is a transaction boundary and a required-field check. A DEFINER
+version would have had to restate all three sets of conditions, and the restatement is where they
+drift. The test asserts that a banned account's refusal comes from the policy and not the
+function.
+
+What it does not close, stated so nobody assumes otherwise: a caller inserting into
+`public.debates` directly still can, and gets a debate with no position on it. The policies must
+allow that — the guard trigger and the wording freeze both need an author who can write their own
+row — so what this function does is make the supported path the one that produces a well-formed
+debate, and make the form unable to produce anything else.
+
+**The position is two parameters**, `p_score integer` and `p_off_scale boolean`, because a single
+nullable score would collapse two different things. On this scale a NULL score is "no opinion, or
+outside my expertise" — a real answer on a real row, and the whole reason the eleven points have a
+twelfth group beside them. Collapsed, the function would either refuse the people the off-scale
+option exists for, or accept an empty submission as a declared non-opinion.
+
+`integer` and not `smallint` for the same reason `submit_report`'s `p_author_confidence` is:
+Postgres will not implicitly narrow an integer literal during overload resolution, so a smallint
+parameter turns `submit_debate(..., 8, ...)` into "function does not exist" — a message that
+sends you looking for a missing migration.
+
+## 2026-08-22 — Your own answer is not an answer, or the whole feature dies on arrival
+
+This is the interaction that would have shipped broken, and it was invisible in any single file.
+
+Requiring the proposer to rate their own claim means **a rating exists from the moment a debate
+does.** Two rules were written as "once anybody has rated it":
+
+- `private.protect_debate_columns()` freezes `statement` and `area`. It would have engaged on
+  creation, so a proposer could never fix a typo in their own claim — with nobody having agreed
+  to anything, the rule protecting a reader who does not exist.
+- `debate_tags`' insert and delete policies. They would have refused **every tag**, including the
+  ones `submit_debate()` inserts three lines after the rating. The feature would have been dead
+  from the first submission.
+
+Both now test for a rating by somebody *other than* the author, which is the rule
+`private.mark_report_answered()` already states in as many words for reports: "An author
+correcting their own report in the thread should not thereby lose the ability to correct the
+report."
+
+`is distinct from` and not `<>` in the guard, because `author_id` is nullable — erasure detaches a
+debate rather than deleting it — and on a detached debate `<>` would evaluate to NULL for every
+rating, the EXISTS would find nothing, and the wording of a claim dozens of people had answered
+would come unfrozen. No browser can reach that path, since the ownership policy also fails, but a
+guard that depends on another rule holding is a guard with a footnote.
+
+`023_submit_debate.test.sql` asserts all three directions: the author can still correct after
+answering themselves, somebody else answering closes it, and the tags go in.
+
+## 2026-08-22 — The reasoning is capped at 500, and the cap is the mechanism
+
+Down from 2000. An opening post that runs to two thousand characters turns a claim somebody can
+answer into an essay somebody has to agree or disagree with in aggregate, and the distribution
+that comes out is a distribution over whatever each reader took the essay to be arguing.
+
+Guidance in the form asks nicely and is ignored by exactly the people whose rationale most needs
+shortening. A CHECK is not. Five hundred is about a paragraph — enough to say why the claim is
+contested and what the strongest case against it is, and not enough to make the case itself. The
+case belongs in a contribution, where it carries the position it was argued from and other people
+can say it captures their view.
+
+The label changed with the cap: "why it is worth asking" invited a case for asking the question,
+which is a different thing from the reasoning behind the claim and is what produced the long ones.
+
+Existing rows over the cap are **refused, not truncated.** Cutting somebody's writing to make a
+migration apply is not a migration's business, and a rationale trimmed mid-sentence is worse than
+one that is too long.
+
+## 2026-08-22 — Debates reuse the reports' tag vocabulary
+
+`public.debate_tags` over `public.tags`, which is `report_tags` with one column renamed. Not a
+second vocabulary: the question a tag answers — *which part of mathematics is this about* — is the
+same on both surfaces, and two lists would drift and force a reader to learn which page uses
+which.
+
+The write policies are **not** `report_tags`' write policies. Those gate on
+`p.status = 'pending'`, from the period when a report waited for approval; a debate has never had
+that state. The rule here is the one that governs the claim itself — frozen once somebody else has
+rated — because a tag is part of what the claim was taken to be about.
+
+This also closes the seam d8 left open. `DEBATE_DIMENSIONS` gains the reports' `tag` dimension
+with the same attribute and the same chip, and the card renders labels rather than codes. A debate
+the freshness overlay added carries no tags, because `debatesSince()` does not fetch them, so it
+matches no tag filter until the next build — the same staleness the overlay has everywhere.
+
+## 2026-08-22 — A source is not a citation, and it is two columns
+
+Optional, at most one: an external `https` URL, or a report from this corpus.
+
+**Not a citation.** `public.citations` records one page referencing another and produces a
+"referenced by" entry at the far end. This is thinner: it says where the proposer got the idea,
+and it is read once, above the scale, by somebody deciding whether the claim is well formed.
+
+**Two columns and not one**, because a link into this corpus and a link out of it behave
+differently. A report id resolves to a title, can be checked for existence, and leads somewhere
+that will still be there; a URL can do none of those. Storing both as text would make every
+consumer parse the string to find out which it held, and the first one to get that wrong would
+render an internal id as a broken link.
+
+The URL is validated to the same rules **and the same sentences** as a report's supporting links:
+somebody who has met "Links have to start with https://" once should not meet a second,
+differently worded refusal for the same mistake on another form. `on delete set null` on the
+report reference: a report being erased must not take a claim with it.
+
+The form makes the exclusivity structural rather than validated — three radios, and only one input
+is ever on the page — so there is no state in which both hold a value and the submission has to
+choose. `debates_one_source` refuses both anyway.
+
+## 2026-08-22 — Grepping `dist/` for the controls, because this form has shipped two of them wrong
+
+The brief was explicit and the history earns it: this page has previously shipped a `Field.astro`
+counter stuck at 0, and controls addressed to a slot that does not exist.
+
+So the checks were run against the built HTML rather than the source: both counters present and
+wired, both textareas rendered as textareas rather than as `Field.astro`'s default text input,
+twelve radios on the scale (eleven points and the off-scale answer), the tag picker's search box
+and options container, all three source radios with their two panels, and no `maxlength="2000"`
+left anywhere.
+
+`wireCounters(form)` was already called on this page and now covers two counters instead of one.
+`syncCounters(form)` is called after a successful submission, because `form.reset()` clears the
+textareas and does not touch the counters that describe them — and `reset()` also restores the
+source radios without closing the panels they revealed, which is done by hand for the same reason.
+
+# The debates rebuild, in ten decisions
+
+The entries above record each change as it was made. These ten are the load-bearing ones, stated
+once each so the section can be understood without reading the whole log. Each names the longer
+entry it summarises.
+
+## 2026-08-22 — Debate contributions stay in `public.comments`, with rules conditional on the subject
+
+A separate table would have meant touching everything that keys on a comment id: two FK columns
+and a six-column unique constraint on `public.citations`, `public.activity.comment_id` and its
+CHECK, `public.flags`, four branches of `public.moderate()`, `private.activity_label()`,
+`private.enforce_daily_limit()` — which **raises on a table it does not know**, so a new one is
+either a loud failure or silently unlimited — plus about ten sites in `src/lib/moderation.ts`.
+
+Staying cost four objects: a column with no grant, one CHECK, a reissued guard, and
+`comments_insert_own` **dropped and reissued** rather than supplemented, because permissive
+policies are OR'd and a second one would grant round the rule. Every rule carries a
+`parent_type` condition; a CHECK without one would silently change report threads, which are the
+one place on this site where nesting is correct.
+
+## 2026-08-22 — A contribution is grouped by the score stored when it was written, not the live rating
+
+`comments.agreement_score` is copied from the author's rating by a trigger and frozen. A view
+joining the live rating is one join shorter and wrong: somebody changing their mind would drag
+every contribution they had ever written into a different group, retroactively, so the record of
+what the community thought in March would become a record of what those same people think now.
+
+The test asserts the column **after** the author has moved from "no opinion" to 7, because before
+that the two designs are indistinguishable. The trigger overwrites what the client sent rather
+than raising on a mismatch, so the protection does not depend on the column staying ungranted —
+and it is ungranted.
+
+## 2026-08-22 — NULL on a debate contribution means "no opinion", never "unset"
+
+The off-scale answer is a NULL score on a **real** rating row, and the trigger refuses a
+contribution from anybody holding no rating at all — so a contribution exists only where a rating
+exists, and a NULL here can only have been copied from a NULL there. No sentinel, no coercion to
+5, no companion boolean.
+
+Three things share that null and only one of them is the off-scale answer: a report comment
+argues from no position, a debate contribution declines, and a contribution from an export
+written before the column existed has nothing recorded. `positionKnown` and `groupKeyFor()` keep
+them apart. The third was being filed under "no opinion" — publishing a position its author never
+took — and was found by reading built HTML, not by any check.
+
+## 2026-08-22 — Who endorsed something is private, and the UI could not want more
+
+`comment_endorsements_select_own` returns one person's own rows. Endorsing requires holding a
+rating, ratings are readable only by their author, so a list of endorsers would publish the
+private position of everyone on it by inference: "this captures my view" on a contribution
+written from 8 places its endorser near 8, and hardest on the contributions written from 0 or 10.
+
+Counts are public and come from the nightly export, because a browser cannot count rows it cannot
+read. There is deliberately no function taking a comment id and returning people, and no
+`SECURITY DEFINER` aggregate for live counts: `rating_aggregate` has one because a distribution
+must be current the moment a reader answers, and an endorsement count is not that.
+
+## 2026-08-22 — `public.rating_changes` produces one count and nothing else
+
+No grant to any browser role, no policy, RLS on. The export takes `count(distinct user_id)` per
+debate and the statistics line renders it. A readable per-person history is a public voting record
+for a rating that is deliberately private — worse than exposing the rating, because a current
+position is one fact and a trail through somebody's changes of mind is a record of how they think,
+attached to a name, on a site whose contributors include people posting pseudonymously.
+
+If a list of movements is ever wanted, it comes from **superseded contributions** — the positions
+people made public by writing them down. It will be smaller than the count, and that gap is the
+finding rather than a bug: more people change their mind than write about it.
+
+## 2026-08-22 — Replies are removed on debates only
+
+A debate is a map of positions; a reply is a position on a position, and a thread under a
+contribution is how the map turns back into the chronological wall the section exists not to be.
+A report thread is a discussion of one specific account, and a remark with the author's answer
+under it is the shape of a referee's note — so it keeps its nesting, its replies, and its
+window that closes on the first reply.
+
+Written twice on purpose: `comments_debate_contributions_are_flat` and a clause in
+`comments_insert_own`. Historical replies are rendered **flat rather than hidden** — a remark
+somebody wrote is not a schema change's to withdraw. And the `:scope >` discipline stays in the
+new component even though nothing nests there now, because those historical replies are in that
+list.
+
+## 2026-08-22 — The edit window closes on the first endorsement, in the guard
+
+Twenty-four hours, and closed as soon as anybody says a contribution captures their view: they
+agreed to the words in front of them, and unlike a reply there is no visible follow-up in which a
+rewrite could be noticed.
+
+**In the guard, not a policy.** Two permissive UPDATE policies are OR'd, and the soft-delete
+policy has to permit an update at any age — so a window written into the edit policy is granted
+straight back by the delete policy and withholds nothing while reading exactly like one that
+works.
+
+The guard reads `comments.endorsed_at`, stamped by a DEFINER trigger, because it can read neither
+the endorsement table (own-rows-only, and the caller is the author, so an `exists` returns false
+however many exist) nor a `private` helper (`authenticated` has no USAGE on that schema). The
+stamp is never cleared, so a withdrawal does not reopen the window.
+
+## 2026-08-22 — Contributions are not ranked by endorsement count by default
+
+Most recent is the default order, in both views, and "most endorsed" is a choice the reader makes.
+Nothing says where a contribution came in.
+
+A vote count and a shared-reason count render identically as a number and do opposite things: one
+ranks contributions against each other and rewards whoever phrased it most sharply, the other
+measures how many people hold a reason. Defaulting to the count would make the first true whatever
+the label said. So the label is always spelled out in words, and there is no heart, thumb, arrow,
+`+1` or karma anywhere near it — audited in the built HTML.
+
+## 2026-08-22 — Badges are suppressed on debate contributions, and only there
+
+Name and date only: no verification status, no institution, no country. A contribution is read by
+the position it argues from, and an institution beside it invites a reader to weigh the
+affiliation instead of the reason.
+
+A **rendering** rule on one surface. Nothing about what is stored or derived changes, the export
+still carries the institution, and badges are untouched on report pages, entry pages, author pages
+and report comments. Worth recording that this had been a stated rule in `CLAUDE.md` and was **not
+implemented** until the surface was rewritten — `CommentThread.astro` rendered a badge on any
+author with an institution, debate or not.
+
+## 2026-08-22 — Divided and consensus, defined
+
+Both computed at export time, never in the browser, over the **scored positions only** — the
+off-scale answers are in neither, because "outside my expertise" is not a mild version of
+agreeing.
+
+- **divided** — twice the smaller of (share of 0–4) and (share of 6–10). Twice, so a clean 50/50
+  scores 1. The *smaller* side, so 90/10 and 10/90 both score 0.2: the same shape seen from two
+  directions. **The neutral 5s are in the denominator and in neither numerator**, so a debate
+  where everybody sits at 5 is 0 divided — which a mean of 5.0 could not tell from a two-camp
+  split.
+- **consensus** — the largest share held by any one of five families: 0–1, 2–4, 5, 6–8, 9–10.
+  Families rather than single scores, because 7 and 8 are not a disagreement.
+
+Both are **null** below ten scored positions, and null is not zero: two people at opposite ends
+are perfectly divided by the arithmetic and establish nothing. The null reaches the DOM as the
+empty string, which the listing engine already sorts last — so "a fresh card is ineligible"
+needed no new code path. What each measures, and the threshold, are stated beside the sort
+control rather than in a tooltip.
+
+## 2026-08-22 — The wording freeze needed a column, because nothing that asks can see
+
+`023_submit_debate.test.sql` failed two assertions on the first run that got far enough to make
+them: an author rewrote their claim after somebody else had answered it, and added a tag after
+the same. Both succeeded. The rule was written correctly in two places and enforceable in
+neither.
+
+**A rating is readable only by its author.** `private.protect_debate_columns()` is SECURITY
+INVOKER — it must be, because its `current_user` test is what tells a browser from the table's
+owner — so its `exists (select 1 from public.ratings ...)` runs under the caller's own policies.
+The caller is the claim's author, who can see exactly one rating: their own. The `debate_tags`
+policies read the same table from the same position and fail identically, because a policy
+subquery is evaluated as the caller too.
+
+The version before this was broken differently and less visibly: it looked for *any* rating,
+found the author's own when they had one and nothing at all when they had not — so the freeze
+engaged on the author's own answer and never on anybody else's. It has never done what it says.
+
+`debates.answered_at`, stamped by a DEFINER trigger on the first rating by somebody other than
+the author, ungranted, frozen in the guard, and backfilled. **This is the second time this schema
+met this shape in two days** — `comments.endorsed_at` exists for the identical reason on
+`comment_endorsements` — and it was documented at the time, which did not stop it recurring one
+migration later on a different own-rows-only table. It is now a trap entry rather than an
+anecdote.
+
+Worth noting what did catch it: not review, and not `astro check`. A pgTAP assertion written from
+the browser's side, under `set local role authenticated`, on a rule whose failure mode is silence.

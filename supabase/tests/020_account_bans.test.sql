@@ -20,19 +20,22 @@
 --
 -- The last section is the point of the whole feature and belongs in a test rather than in a
 -- runbook: a banned account cannot write. Every content table is asserted from the banned
--- side, because "a ban means a ban" appears in **eight** insert policies and one of them being
--- wrong would look exactly like a member having a bad day. Eight rather than seven is not a
--- detail: the first version of this file, and the runbook beside it, both said seven and both
--- forgot public.citations. A clause repeated in eight places with nothing central holding it is
--- exactly the kind of rule that gets counted wrong, which is the argument for asserting each
--- one by hand rather than trusting the list.
+-- side, because "a ban means a ban" appears in **nine** insert policies and one of them being
+-- wrong would look exactly like a member having a bad day.
+--
+-- The count has now been wrong twice, in opposite directions, which is the argument for
+-- asserting each policy by hand rather than trusting any list of them. The first version of
+-- this file and the runbook beside it both said seven and both forgot public.citations, making
+-- it eight. 20260821120200 added public.comment_endorsements, making it nine. Every place that
+-- states the number — this header, docs/moderation.md, the README and CLAUDE.md — has been
+-- wrong about it at some point, and none of them is load-bearing: the assertions below are.
 
 begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path to extensions, public, pg_catalog;
 
-select plan(33);
+select plan(34);
 
 -- ── People ──────────────────────────────────────────────────────────────────────────
 
@@ -69,6 +72,20 @@ insert into public.reports (
 insert into public.debates (id, author_id, statement, area)
 values ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000002',
         'AI-assisted literature search should be disclosed in papers.', 'writing');
+
+-- Both accounts answer the debate before the ban, and somebody else writes a contribution to
+-- it. This is scaffolding for the ninth write path: endorsing requires a rating and refuses
+-- your own contribution, so without all three rows the refusal below would be attributable to
+-- a missing rating rather than to the ban, and would pass for the wrong reason.
+insert into public.ratings (debate_id, user_id, score) values
+  ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', 3),
+  ('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000002', 8);
+
+insert into public.comments (id, parent_type, parent_id, author_id, body)
+values ('44444444-0000-0000-0000-000000000001', 'debate',
+        '33333333-0000-0000-0000-000000000001',
+        '11111111-0000-0000-0000-000000000002',
+        'Disclosure costs nothing, and the alternative is a claim nobody can check.');
 
 -- ── A ban needs a sentence, and refuses without one ─────────────────────────────────
 
@@ -249,7 +266,7 @@ select cmp_ok(
 reset role;
 
 -- ── A ban stops writing and nothing else ────────────────────────────────────────────
--- Seven policies carry `not p.is_banned`. Each is asserted from the banned side, because a
+-- Nine policies carry `not p.is_banned`. Each is asserted from the banned side, because a
 -- ban that silently permitted one kind of write would present as a member having a bad day.
 
 set local role authenticated;
@@ -329,6 +346,18 @@ select throws_ok(
              'Relevant to the claim.', '11111111-0000-0000-0000-000000000001') $$,
   '42501'::text, null::text,
   'nor cite one thing from another'
+);
+
+-- The ninth, added with public.comment_endorsements in 20260821120200. Every other clause of
+-- comment_endorsements_insert_own is satisfied: the account holds a rating on that debate, the
+-- contribution is somebody else's, it is live and on a debate. So the refusal is attributable
+-- to `not p.is_banned` and to nothing else.
+select throws_ok(
+  $$ insert into public.comment_endorsements (comment_id, user_id, kind)
+     values ('44444444-0000-0000-0000-000000000001',
+             '11111111-0000-0000-0000-000000000001', 'captures_my_view') $$,
+  '42501'::text, null::text,
+  'nor say that somebody else''s contribution captures their view'
 );
 
 -- What a ban is not. Reading is untouched, and so is the way out: an account that could not
