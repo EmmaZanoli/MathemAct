@@ -34,6 +34,7 @@ import {
 import { getReport, listReports } from '../../lib/reports';
 import { findRelated } from '../../lib/related';
 import { LICENCE, SITE } from '../../lib/site';
+import { VERDICT, confirmationQuestion, verdictsFor } from '../../lib/status';
 
 export async function getStaticPaths() {
   const reports = await listReports();
@@ -58,6 +59,17 @@ const [thread, incoming, outgoing] = await Promise.all([
 ]);
 
 const related = findRelated(report);
+
+/**
+ * The two answers this report's outcome puts on the table, in the order they are offered.
+ * A report that did not work is asked whether it still does not, because asking it "does
+ * this still work?" — which is what this page did until 2026-08-23 — offers a reader who
+ * has rechecked a failure no way to say what they found.
+ *
+ * The pair is sent to the browser on `data-outcome` rather than duplicated in the script:
+ * one place decides, and it is `verdictsFor`.
+ */
+const verdicts = verdictsFor(report.outcome);
 
 /**
  * A citation somebody can paste into a paper. Author, title, the corpus, the date it was
@@ -248,9 +260,9 @@ const metadata = countedFacts(report);
             and "three people say this no longer works" is exactly the kind of number a
             reader acts on. */}
         <section class="field-block" id="confirmations" data-pagefind-ignore>
-          <span class="field-block__label">Does this still work?</span>
+          <span class="field-block__label">{confirmationQuestion(report.outcome)}</span>
 
-          <div class="confirm" data-confirm data-report-id={report.id}>
+          <div class="confirm" data-confirm data-report-id={report.id} data-outcome={report.outcome}>
             <p class="confirm__tally" data-confirm-tally>
               {
                 report.staleness.confirmationCount === 0
@@ -261,23 +273,29 @@ const metadata = countedFacts(report);
 
             <div data-confirm-signedout hidden>
               <p class="field__hint">
-                <a href={path('/account/sign-in/')}>Sign in</a> to say whether this still
-                works. It is the lightest contribution there is, and it is what stops the
-                corpus quietly going out of date.
+                <a href={path('/account/sign-in/')}>Sign in</a> to say whether this{' '}
+                {VERDICT[verdicts[0]].short}. It is the lightest contribution there is, and
+                it is what stops the corpus quietly going out of date.
               </p>
             </div>
 
             <form class="form" data-confirm-form hidden novalidate>
               <fieldset class="choices">
                 <legend class="field__label">Have you tried this?</legend>
-                <label class="choice" for="verdict-still">
-                  <input class="choice__input" type="radio" id="verdict-still" name="verdict" value="still_works" />
-                  <span>It still works</span>
-                </label>
-                <label class="choice" for="verdict-no">
-                  <input class="choice__input" type="radio" id="verdict-no" name="verdict" value="no_longer_works" />
-                  <span>It no longer works</span>
-                </label>
+                {
+                  verdicts.map((verdict) => (
+                    <label class="choice" for={`verdict-${verdict}`}>
+                      <input
+                        class="choice__input"
+                        type="radio"
+                        id={`verdict-${verdict}`}
+                        name="verdict"
+                        value={verdict}
+                      />
+                      <span>{VERDICT[verdict].label}</span>
+                    </label>
+                  ))
+                }
               </fieldset>
 
               <div class="field">
@@ -408,11 +426,16 @@ const metadata = countedFacts(report);
   } from '../../lib/reports';
   import { startSession, subscribeToSession } from '../../lib/session';
   import { hideStatus, setBusy, showStatus } from '../../lib/forms';
+  import { VERDICT, verdictsFor } from '../../lib/status';
+  import type { Outcome, Verdict } from '../../lib/status';
 
   const root = document.querySelector<HTMLElement>('[data-confirm]');
 
   if (root) {
     const reportId = root.dataset.reportId!;
+    // Safe to read once here, unlike on a view page: this attribute is written into the
+    // HTML at build time, not filled in after a fetch.
+    const pair = verdictsFor(root.dataset.outcome as Outcome);
     const tally = root.querySelector<HTMLElement>('[data-confirm-tally]')!;
     const signedOut = root.querySelector<HTMLElement>('[data-confirm-signedout]')!;
     const form = root.querySelector<HTMLFormElement>('[data-confirm-form]')!;
@@ -444,17 +467,23 @@ const metadata = countedFacts(report);
       if (!result.ok) return;
 
       const { all, mine } = result.value;
-      const works = all.filter((one) => one.verdict === 'still_works').length;
-      const broken = all.length - works;
+      // `holds` rather than a comparison against 'still_works': on a report that did not
+      // work the reproducing answer is 'still_fails', and counting only the one name would
+      // file every reproduced failure on the "it changed" side of the tally.
+      const holds = all.filter((one) => VERDICT[one.verdict].holds).length;
+      const changed = all.length - holds;
 
       tally.textContent = all.length
-        ? `${works} say it still works · ${broken} say it no longer does`
+        ? `${holds} ${says(holds)} it ${VERDICT[pair[0]].short} · ` +
+          `${changed} ${says(changed)} it ${VERDICT[pair[1]].short}`
         : 'Nobody has confirmed either way.';
 
       if (mine) {
-        form
-          .querySelector<HTMLInputElement>(`input[value="${mine.verdict}"]`)!
-          .checked = true;
+        // Optional rather than asserted: a row carrying the other pair's verdict cannot be
+        // written any more, but one written before the two questions were split would have
+        // no radio to check, and an assertion here would take the whole tally down with it.
+        const own = form.querySelector<HTMLInputElement>(`input[value="${mine.verdict}"]`);
+        if (own) own.checked = true;
         note.value = mine.note;
         submit.textContent = 'Update my confirmation';
         withdraw.hidden = false;
@@ -471,6 +500,8 @@ const metadata = countedFacts(report);
       );
     }
 
+    const says = (n: number): string => (n === 1 ? 'says' : 'say');
+
     function render(confirmation: Confirmation): HTMLLIElement {
       const item = document.createElement('li');
       item.className = 'confirm__note';
@@ -479,7 +510,7 @@ const metadata = countedFacts(report);
       who.className = 'confirm__who';
       who.textContent =
         `${confirmation.displayName}${confirmation.isPseudonym ? ' (pseudonym)' : ''} · ` +
-        `${confirmation.verdict === 'still_works' ? 'still works' : 'no longer works'} · ` +
+        `${VERDICT[confirmation.verdict].short} · ` +
         longDate(confirmation.createdAt);
 
       const body = document.createElement('span');
@@ -495,17 +526,12 @@ const metadata = countedFacts(report);
 
       const verdict = form.querySelector<HTMLInputElement>('input[name="verdict"]:checked')?.value;
       if (!verdict || !viewerId) {
-        showStatus(status, 'error', 'Choose whether it still works before sending.');
+        showStatus(status, 'error', 'Choose one of the two answers before sending.');
         return;
       }
 
       setBusy(submit, true, 'Sending…');
-      const result = await saveConfirmation(
-        reportId,
-        viewerId,
-        verdict as 'still_works' | 'no_longer_works',
-        note.value,
-      );
+      const result = await saveConfirmation(reportId, viewerId, verdict as Verdict, note.value);
       setBusy(submit, false);
 
       if (!result.ok) {

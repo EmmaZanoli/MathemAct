@@ -2,9 +2,12 @@
 /**
  * The QED tombstone — the signature element.
  *
- * A filled square marks a report whose correctness verification is recorded and
- * confirmed still working. An open square marks one that is unverified, stale, or
- * reported as no longer working. The optional outcome tints the square.
+ * A filled square marks a report somebody has rechecked and found to hold — still
+ * working if it worked, still not working if it did not. An open square marks one that is
+ * unverified, stale, or reported to have changed since. The optional outcome tints the
+ * square, and where the verification axis says a different thing on each side of it,
+ * `verificationOf` is what knows: "No longer works" would be a lie on a report that never
+ * worked, so the words for `changed` come from both axes and not from the status alone.
  *
  * Accessibility, which is the whole reason this is a component and not a CSS class:
  *
@@ -19,7 +22,7 @@
  *    meaning, not about contrast: all three outcome colours clear 4.5:1 on the ground,
  *    --outcome-partial included at 4.63:1. See the note in tokens.css.
  */
-import { OUTCOME, TOMBSTONE_STATUS, tombstoneName } from '../lib/status';
+import { OUTCOME, tombstoneFilled, tombstoneName, verificationOf } from '../lib/status';
 import type { Outcome, TombstoneStatus } from '../lib/status';
 
 interface Props {
@@ -34,8 +37,8 @@ interface Props {
 
 const { status, outcome, compact = false } = Astro.props;
 
-const { filled } = TOMBSTONE_STATUS[status];
-const visibleLabel = outcome ? OUTCOME[outcome].label : TOMBSTONE_STATUS[status].label;
+const filled = tombstoneFilled(status);
+const visibleLabel = outcome ? OUTCOME[outcome].label : verificationOf(status).label;
 const name = tombstoneName(status, outcome);
 ---
 

@@ -238,14 +238,20 @@ reasoning.
 ## Editing, and when it stops
 
 **A report is editable by its author while it is hidden, and until somebody else has
-answered it.** An answer is a "still works / no longer works" confirmation or a comment.
-After that the text is fixed, for anyone, including its author.
+answered it.** An answer is a confirmation — that the report still reproduces, or that it no
+longer does — or a comment. After that the text is fixed, for anyone, including its author.
 
 The rule is one sentence but it replaced two, so it is worth being explicit about why:
 
 - The freeze exists because **confirmations attest to a version**. Somebody says a report
-  still works; if the report can then be rewritten, their confirmation points at text nobody
-  can read any more. A comment quoting it has the same problem.
+  still reproduces; if the report can then be rewritten, their confirmation points at text
+  nobody can read any more. A comment quoting it has the same problem.
+- The report's **outcome** is frozen twice over, because a confirmation answers a question
+  chosen by it. Even the author's own confirmation — which does not freeze the report, and is
+  deliberately allowed — stops the outcome crossing between "it worked" and "it did not".
+  `reports_verdicts_match_outcome` raises there; on an already-frozen report the column guard
+  has reverted the change before that trigger is reached, so the freeze still shows up as a
+  statement that succeeds having changed nothing.
 - Until an answer exists there is nothing pointing at the old text, so a correction misleads
   nobody. The old rule froze at publication, which was a proxy for this — a good one while
   publication was a decision somebody took days later, and a useless one now that publishing

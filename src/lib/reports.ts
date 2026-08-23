@@ -32,7 +32,7 @@ import type {
   ReferenceKind,
   TaskType,
 } from './report-schema';
-import type { Outcome, TombstoneStatus } from './status';
+import type { Outcome, TombstoneStatus, Verdict } from './status';
 
 // ── What a page gets ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +82,9 @@ export interface CorpusTag {
  *  here: the same answer has to appear in a listing, on a page, and in the export. */
 export interface Staleness {
   readonly latestToolUse: string | null;
-  readonly latestVerdict: 'still_works' | 'no_longer_works' | null;
+  /** Which of the four answers the most recent confirmation gave. Which two were on offer
+   *  was decided by `outcome`; `VERDICT[v].holds` is the way to read it without caring. */
+  readonly latestVerdict: Verdict | null;
   readonly latestConfirmationAt: string | null;
   readonly confirmationCount: number;
   readonly tombstoneStatus: TombstoneStatus;
@@ -755,9 +757,14 @@ export async function resubmitReport(
   }
 }
 
-// ── Still works / no longer works ─────────────────────────────────────────────────────
+// ── Whether the report still describes what happens ───────────────────────────────────
+//
+// Two questions, not one. Which two answers are on offer is decided by the report's
+// outcome and enforced by a trigger, so a caller passing the wrong pair gets a finished
+// sentence back rather than a stored row. `verdictsFor()` in ./status is what the form
+// asks with; this layer only carries the value.
 
-export type Verdict = 'still_works' | 'no_longer_works';
+export type { Verdict } from './status';
 
 export interface Confirmation {
   readonly id: string;

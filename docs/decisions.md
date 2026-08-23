@@ -353,8 +353,12 @@ for a number that changes every tombstone on the site.
 
 ## 2026-08-15 — An author may confirm their own report
 
-Forbidding self-confirmation would refuse the most likely source of a truthful `no_longer_works`.
-The tombstone reflects the most recent verdict, whoever filed it.
+Forbidding self-confirmation would refuse the most likely source of a truthful "it no longer
+works". The tombstone reflects the most recent verdict, whoever filed it.
+
+This is also the only route by which a report's outcome can move under a live verdict, since an
+author's own confirmation does not set `answered_at` and so does not freeze the report. See
+2026-08-23 below for the guard that closes it.
 
 ## 2026-08-15 — The status column grant is wide, and the policy is what narrows it
 
@@ -2078,3 +2082,64 @@ anecdote.
 
 Worth noting what did catch it: not review, and not `astro check`. A pgTAP assertion written from
 the browser's side, under `set local role authenticated`, on a rule whose failure mode is silence.
+
+## 2026-08-23 — Two questions, because "does this still work?" is nonsense on a failure
+
+The confirmation control asked one question of every report from the day it was built: *Does this
+still work?*, answered `still_works` or `no_longer_works`. On a report whose outcome was `failed`,
+both answers were claims its author had not made. Somebody who rechecked a failure and found that
+it still failed — which is exactly the work this feature exists to collect, and the cheapest
+contribution anyone can make to the corpus — had no way to say so, and the nearest available
+answer was the one that meant the opposite.
+
+Two questions now, chosen by the report's outcome: *does this still work?* for `worked` and
+`partial`, *does this still not work?* for `failed`.
+
+**Four enum values, not two neutral ones.** `reproduced` / `changed` would have been a smaller
+enum and would have kept the wording entirely in the frontend. It was refused because the corpus
+is downloadable and every row in it should stand alone: a researcher reading `latest_verdict` out
+of the CSV must be able to tell which question was asked without joining the report back to find
+its outcome, and `changed` cannot say whether a tool stopped working or started. Adding values
+also reinterprets nothing — the two original names keep the exact meaning they were written with.
+
+**The pairing cannot be a CHECK,** since the verdict and the outcome are on different tables, so
+it is two BEFORE triggers: one refusing a verdict from the wrong pair, one refusing an outcome
+change that would strand a verdict already filed. Both are needed because there are two ways to
+break the rule. The second is reachable only through the author's own confirmation of their own
+report, which does not set `answered_at` and so does not freeze anything — that is the one hole
+the existing freeze leaves.
+
+Neither guard exempts `service_role` or the table owner, which is a deliberate departure from
+`private.protect_report_columns()` next door. That one is about privilege, and an administrator
+repairing data is not the author it defends against. These two are the cross-table CHECK constraint
+Postgres will not let us write, and a CHECK exempts nobody either.
+
+**The pairing is written out three times** — twice in SQL, once in `verdictsFor()` in
+`src/lib/status.ts` — and the duplication is not laziness. `authenticated` holds no USAGE on the
+`private` schema, so a shared `private.verdicts_for_outcome()` helper called from inside a
+SECURITY INVOKER trigger body is refused with 42501 at the moment a user tries to confirm
+something. The alternative is a public function granted to browser roles, which is a permanent API
+surface for an implementation detail.
+
+**The trigger's name is load-bearing.** BEFORE ROW triggers fire in alphabetical order, and a WHEN
+clause sees NEW as earlier triggers have already modified it. `reports_protect_columns` reverts the
+outcome on a frozen report and lets the statement succeed having changed nothing, which is relied
+on: an author who sends one UPDATE that both deletes their report and sneaks a content change gets
+the deletion and none of the sneak. `reports_verdicts_match_outcome` sorts after it on purpose, so
+the revert lands first and the raise never happens. Rename it to anything sorting before `p` and a
+frozen report's harmless no-op becomes an exception that aborts the legitimate half of the same
+statement. `024_confirmation_by_outcome.test.sql` asserts the no-op rather than the ordering,
+which is the assertion that survives somebody not knowing why.
+
+**`broken` became `changed`,** and this is a rename in the published dataset rather than an
+addition. The label "No longer works" is right for a success that stopped and states the opposite
+of what happened for a failure somebody has since got working. The status means "somebody
+rechecked this and found something different"; the words for it are composed from both axes in
+`verificationOf()`, which is how a tombstone's accessible name has always been assembled. The
+dataset carried no `broken` rows, so nothing had to be migrated.
+
+**A reproduced failure fills the square.** `src/lib/status.ts` has said since it was written that
+"a report can report 'did not work' and still be verified and current" — the axes were always
+meant to be independent. The question was simply never asked in a form that let anybody say it.
+This is the same rule the rest of the project states as *failures are first-class content*, and
+the tombstone was quietly the one place it was not true.

@@ -471,7 +471,11 @@ function sentence(item: ActivityItem): string {
       // rating would file a declared non-opinion as a score.
       return 'You answered a debate.';
     case 'confirmed_report':
-      return 'You said whether a report still works.';
+      // "Reproduces" rather than "still works", because a feed row does not carry the
+      // report's outcome and half of them are answering "does this still not work?". A
+      // reproduced failure is the same act as a reproduced success and gets the same
+      // sentence; the report page is where the two questions are told apart.
+      return 'You said whether a report still reproduces.';
     case 'flagged':
       return 'You flagged something for the moderators.';
     case 'cited':
@@ -530,7 +534,7 @@ function sentence(item: ActivityItem): string {
         ? 'Somebody answered your debate.'
         : `${item.count} people answered your debate.`;
     case 'report_confirmed':
-      return `${who(item)} said whether your report still works.`;
+      return `${who(item)} said whether your report still reproduces.`;
     case 'content_cited':
       return `${who(item)} referenced your ${noun(item.targetType)}.`;
   }

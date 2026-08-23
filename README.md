@@ -210,7 +210,7 @@ production rather than a report after it.
 
 ### Database tests
 
-634 pgTAP assertions across twenty-three files in `supabase/tests/`, covering domain matching, the
+653 pgTAP assertions across twenty-four files in `supabase/tests/`, covering domain matching, the
 API surface, badge derivation, write protection, matching precedence, what signup metadata
 is allowed to set, who may file or read an erasure request, every report policy from both
 directions, the constraints that make a report structured rather than a paragraph, the
@@ -226,7 +226,12 @@ the two widened vocabularies, the secondary task types and how they are normalis
 supporting links and every URL they refuse, the five scales and the two bounds on each, the
 ordered `time_saved` vocabulary that replaced a sixth scale, the guard's freeze list, reached
 by the one route that gets past the policy, and the column grants on the two columns this
-version retyped — which are per column, so a `drop column` silently revokes one.
+version retyped — which are per column, so a `drop column` silently revokes one. And the two
+confirmation questions: that a report which did not work is asked whether it still does not, that
+a verdict from the other pair is refused on either table, that a reproduced failure fills the
+tombstone, and that a frozen report still answers an outcome change with the silent revert rather
+than an exception — which is a trigger's *name* being asserted, since alphabetical firing order is
+the only thing holding that apart.
 
 Every policy is asserted from both sides. A test that only checks the allowed case proves
 the feature works and says nothing about whether it is a door.
