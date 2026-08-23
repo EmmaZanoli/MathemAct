@@ -1108,3 +1108,26 @@ overlay added carries the same data attributes as one the build wrote — that i
 `src/lib/report-facets.ts` exists to guarantee.
 
 `?cat=` still works on `/network/` — `legacyParams` maps the old name forward on read.
+
+## 2026-08-23 — A report page reads in the order the work happened, not conclusion-first
+
+Reversed. `src/pages/reports/[id].astro` opened with **Outcome** and **How this was verified** on
+a raised surface, ahead of the narrative, on the argument that they are what a reader is deciding
+on and that burying them under the method arranges the page for the author. The order is now
+tools → aim → method → prompts → outcome → verification → caveats → supporting material.
+
+The old order answered *is this worth reading* before the page said what "this" was. A reader
+arriving at a report has not yet met the work: an outcome sentence read before the aim and the
+method is a verdict on something unspecified, and "partially worked" carries nothing until you
+know what was attempted and with which model. Tools lead because the model and version are the
+first thing that decides whether a report is about the reader's situation at all — a 2024 result
+from a superseded model is a different document from the same result last week.
+
+Outcome keeps `field-block--key`; **verification lost it**. Two raised blocks in a row stopped
+reading as emphasis and started reading as a panel, and the boxed treatment sat oddly mid-page
+now that the narrative runs above it. Verification is still required of every report and still
+titled — the constraint was never carried by the box.
+
+Both renderings changed together: `[id].astro` and `src/pages/reports/view.astro`, the runtime
+fallback for a report with no static page yet. Those two are the same report seen a day apart,
+and letting the order drift between them is the `report-facets.ts` problem in another surface.

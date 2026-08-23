@@ -2,11 +2,11 @@
 /**
  * One report, laid out to be skimmed the way a researcher skims a paper.
  *
- * A reader arriving here usually wants one specific thing: how did they check it, which
- * model was it, did it work. So every field is a titled block with a mono label above it,
- * and the two that decide whether the rest is worth reading — the outcome and the
- * verification — are set larger and on a raised surface near the top. Everything else is in
- * the content model's order, because that order is the reporting standard.
+ * A reader arriving here usually wants one specific thing: which model was it, what did
+ * they do, did it work. So every field is a titled block with a mono label above it.
+ * Order: tools → aim → method → prompts → outcome/verification (raised surface) →
+ * caveats → supporting material. Outcome and verification are set larger to distinguish
+ * them from the narrative, even though they follow it.
  *
  * A real page at a real URL, generated at build time. That is what makes a report
  * citable, and it is why reads go through the corpus module rather than a browser query:
@@ -114,29 +114,6 @@ const metadata = countedFacts(report);
           </ul>
         </header>
 
-        {/* Outcome and verification first, before the narrative. They are what a reader is
-            deciding on, and burying them under the method would be arranging the page for
-            the author rather than for the person reading it. */}
-        <section class="field-block field-block--key">
-          <span class="field-block__label">Outcome</span>
-          <p class="field-block__body"><strong>{outcomeLabel(report.outcome)}.</strong> {report.outcomeNotes}</p>
-        </section>
-
-        <section class="field-block field-block--key">
-          <span class="field-block__label">How this was verified</span>
-          <p class="field-block__body">{report.verification}</p>
-        </section>
-
-        <section class="field-block">
-          <span class="field-block__label">What they were trying to do</span>
-          <p class="field-block__body">{report.aim}</p>
-        </section>
-
-        <section class="field-block">
-          <span class="field-block__label">What they actually did</span>
-          <p class="field-block__body">{report.method}</p>
-        </section>
-
         <section class="field-block">
           <span class="field-block__label">Tools used</span>
           <table class="tools-table">
@@ -163,6 +140,16 @@ const metadata = countedFacts(report);
               }
             </tbody>
           </table>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">What they were trying to do</span>
+          <p class="field-block__body">{report.aim}</p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">What they actually did</span>
+          <p class="field-block__body">{report.method}</p>
         </section>
 
         {/* The prompts, above the transcript and outside its disclosure, because this is the
@@ -217,6 +204,16 @@ const metadata = countedFacts(report);
             </section>
           )
         }
+
+        <section class="field-block field-block--key">
+          <span class="field-block__label">Outcome</span>
+          <p class="field-block__body"><strong>{outcomeLabel(report.outcome)}.</strong> {report.outcomeNotes}</p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">How this was verified</span>
+          <p class="field-block__body">{report.verification}</p>
+        </section>
 
         {
           report.caveats && (

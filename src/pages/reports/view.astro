@@ -58,29 +58,6 @@ import { path } from '../../lib/paths';
           </ul>
         </header>
 
-        <section class="field-block field-block--key">
-          <span class="field-block__label">Outcome</span>
-          <p class="field-block__body">
-            <strong data-outcome-label></strong>
-            <span data-outcome-notes></span>
-          </p>
-        </section>
-
-        <section class="field-block field-block--key">
-          <span class="field-block__label">How this was verified</span>
-          <p class="field-block__body" data-verification></p>
-        </section>
-
-        <section class="field-block">
-          <span class="field-block__label">What they were trying to do</span>
-          <p class="field-block__body" data-aim></p>
-        </section>
-
-        <section class="field-block">
-          <span class="field-block__label">What they actually did</span>
-          <p class="field-block__body" data-method></p>
-        </section>
-
         <section class="field-block">
           <span class="field-block__label">Tools used</span>
           <table class="tools-table">
@@ -96,13 +73,20 @@ import { path } from '../../lib/paths';
           </table>
         </section>
 
+        <section class="field-block">
+          <span class="field-block__label">What they were trying to do</span>
+          <p class="field-block__body" data-aim></p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">What they actually did</span>
+          <p class="field-block__body" data-method></p>
+        </section>
+
         <section class="field-block" data-prompts-section hidden>
           <span class="field-block__label">Prompts</span>
           <div class="verbatim">
             <div class="verbatim__head">
-              <p class="field__hint">
-                As the author typed them, including any that had to be rewritten.
-              </p>
             </div>
             <div class="verbatim__body" data-prompts></div>
           </div>
@@ -124,6 +108,19 @@ import { path } from '../../lib/paths';
               Share links expire and get revoked, so the excerpt above is the record.
             </p>
           </details>
+        </section>
+
+        <section class="field-block field-block--key">
+          <span class="field-block__label">Outcome</span>
+          <p class="field-block__body">
+            <strong data-outcome-label></strong>
+            <span data-outcome-notes></span>
+          </p>
+        </section>
+
+        <section class="field-block">
+          <span class="field-block__label">How this was verified</span>
+          <p class="field-block__body" data-verification></p>
         </section>
 
         <section class="field-block" data-caveats-section hidden>
