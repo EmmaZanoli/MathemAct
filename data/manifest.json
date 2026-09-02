@@ -1,5 +1,5 @@
 {
-  "exportedAt": "2026-09-01T08:38:26.601Z",
+  "exportedAt": "2026-09-02T07:54:40.662Z",
   "generator": "scripts/export.mjs",
   "licence": "CC BY 4.0",
   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
@@ -34,7 +34,7 @@
     },
     "network.json": {
       "rows": 1,
-      "bytes": 786
+      "bytes": 808
     },
     "csv/reports.csv": {
       "rows": 1,
@@ -54,7 +54,7 @@
     },
     "csv/network.csv": {
       "rows": 1,
-      "bytes": 688
+      "bytes": 718
     }
   }
 }
