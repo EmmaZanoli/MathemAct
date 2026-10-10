@@ -110,10 +110,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 
     <p class="field__hint">
       A badge states only that an address at that institution's domain was confirmed to
-      work, on that date. It is not a claim that you are faculty there, hold any particular
-      position, or still work there today. Your email address itself is never displayed,
-      never returned by the API, never included in the export, and never shown to
-      moderators.
+      work, on that date. Your email address itself is never displayed.
     </p>
   </section>
 
@@ -122,8 +119,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 
     <p>
       An account of how you used an AI tool in mathematical work: twelve sections, about ten
-      minutes if you have the session in front of you. Accounts of things that
-      <em>did not</em> work are the ones this corpus is shortest of.
+      minutes.
     </p>
 
     <p class="actions" data-post-action>
@@ -143,10 +139,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
     <h2>Your submissions</h2>
 
     <p class="field__hint">
-      Every report and network entry you have posted, in whatever state it is in. Posting
-      publishes: nothing here waited for anybody. A report stays editable until somebody else
-      confirms it or comments on it, and a hidden one stays editable for as long as it is
-      hidden — with the reason a moderator gave on the row.
+      Every report and network entry you have posted, in whatever state it is in.
     </p>
 
     <ul class="submissions" data-submission-list role="list"></ul>
@@ -220,10 +213,6 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
         <label class="checkbox__label" for="is-pseudonym">
           Show this as a pseudonym rather than my name
         </label>
-        <p class="checkbox__hint">
-          Marks the name as one you have chosen, so readers do not try to look you up. A
-          pseudonym is allowed at every tier, including alongside an institutional badge.
-        </p>
       </div>
 
       <Field
@@ -246,8 +235,7 @@ const missingInstitution = `mailto:${SITE.contactEmail}?subject=${encodeURICompo
 
     <ul class="tombstone-list">
       <li>
-        <a href={path('/account/activity/')}>Your activity</a> — what you have posted, rated
-        and flagged, and what has happened to it since
+        <a href={path('/account/activity/')}>Your activity</a>
       </li>
       <li><a href={path('/account/password/')}>Change your password</a></li>
       <li><a href={path('/account/sign-out/')}>Sign out of this browser</a></li>
