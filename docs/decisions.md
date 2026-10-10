@@ -2143,3 +2143,30 @@ dataset carried no `broken` rows, so nothing had to be migrated.
 meant to be independent. The question was simply never asked in a form that let anybody say it.
 This is the same rule the rest of the project states as *failures are first-class content*, and
 the tombstone was quietly the one place it was not true.
+
+## 2026-10-10 — The Supabase CLI is pinned in CI, and moving the pin is a deliberate act
+
+`test-db.yml` installed the CLI with `version: latest`. The suite went red on a commit that had
+passed in August, with nothing under `supabase/` changed in between: 45 assertions across 15
+files, every one of them a `throws_ok(..., '42501')` that caught no exception at all. The CLI
+version chooses the image tags `supabase start` pulls. `supabase/postgres` had moved
+`17.6.1.159` -> `17.11.0.004`, and under the newer image `anon` and `authenticated` hold
+privileges these migrations never grant — INSERT and DELETE on `profiles`, UPDATE on `role` and
+`is_banned`, SELECT on `ratings`, `flags` and the activity feed.
+
+**A floating version is worse on this job than on any other**, because the thing that drifts is
+the grant baseline, and the grant baseline is what the suite exists to police. The failure is
+indistinguishable by eye from somebody having widened a grant in a migration; it lands on a branch
+that changed no SQL; and it surfaces on whichever pull request happens to be open — here
+`confirmation-by-outcome`, which wore the blame for it until the same workflow was dispatched
+against `main` alone and failed identically. Pinned to `2.115.0`, the last release before the
+known-good run of 2026-08-22.
+
+`migrate.yml` and `ror-verify.yml` take the same pin. `ror-verify.yml` runs `supabase start` and
+has the identical exposure. `migrate.yml` does not, but it holds write access to the production
+database, and `latest` there meant the tool applying the SQL could differ from the one the gate
+proved it against.
+
+Bumping the pin is its own branch: raise it, diff `role_table_grants` for the two browser roles
+against this version, and revoke whatever widened in a migration. The alternative — relaxing the
+assertions until they pass — would retire the only check that noticed.
