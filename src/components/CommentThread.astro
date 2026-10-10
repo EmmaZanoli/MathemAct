@@ -176,9 +176,6 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
 
   {/* An invitation, not a mood piece. It says what a good first comment does, because on a
       page with no discussion the hard part is knowing what would be worth adding. */}
-  <p class="thread__empty" data-thread-empty hidden={total > 0}>
-    Nothing here yet.
-  </p>
 
   <div class="composer" data-composer>
     <div class="panel" data-composer-signedout hidden>
@@ -243,11 +240,6 @@ const total = nodes.reduce((count, node) => count + 1 + node.replies.length, 0);
 
       <p class="form-status" data-composer-status role="status" tabindex="-1" hidden></p>
 
-      <p class="field__hint">
-        You can edit a comment for 24 hours, and only until somebody replies to it — long
-        enough to fix a formula after you have seen it set. Deleting removes the text for
-        good and takes your name off it; the reply under it stays.
-      </p>
     </form>
   </div>
 </section>
