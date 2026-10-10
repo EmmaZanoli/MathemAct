@@ -114,15 +114,39 @@ ceiling on what they support.
 }
 ```
 
-A report written against a 2025 model may be misleading by 2026, so any logged-in member
-can add a "still works" or "no longer works" confirmation. `tombstoneStatus` is one of
-`verified`, `unverified`, `stale`, `broken`, decided in SQL by `public.report_staleness`,
-and it is exported rather than recomputed so that the same report cannot be verified in a
-listing, stale on its own page, and something else again in an analysis.
+A report written against a 2025 model may be misleading by 2026, so any logged-in member can
+recheck one and say what they found. **Which question they are answering depends on the
+report's `outcome`**, and `latestVerdict` is one of four values rather than two:
 
-`verified` requires both halves: a verification on record *and* a confirmation that it still
-works. `stale` means the last confirmation is old enough that the model has almost certainly
-changed underneath it.
+| `outcome` | The question | `latestVerdict` is one of |
+|---|---|---|
+| `worked`, `partial` | Does this still work? | `still_works`, `no_longer_works` |
+| `failed` | Does this still not work? | `still_fails`, `now_works` |
+
+The two pairs are never mixed on one report: a trigger refuses a verdict from the wrong pair,
+and a second one refuses an outcome change that would strand a verdict already filed. So
+`latestVerdict` alone tells you which question was asked — you do not have to join `outcome`
+back to find out. Before 2026-08-23 only the first pair existed and it was offered on every
+report, `failed` ones included, where none of it meant anything; there are no rows from that
+period in this dataset.
+
+`still_works` and `still_fails` both mean *the report still describes what happens*, and both
+fill the tombstone. A failure somebody has rechecked and found still failing is a reproduced
+result on exactly the same terms as a reproduced success.
+
+`tombstoneStatus` is one of `verified`, `unverified`, `stale`, `changed`, decided in SQL by
+`public.report_staleness`, and it is exported rather than recomputed so that the same report
+cannot be verified in a listing, stale on its own page, and something else again in an
+analysis.
+
+- `verified` — somebody rechecked it within the last twelve months and found what it reports.
+- `stale` — the last confirmation is old enough that the model has almost certainly changed
+  underneath it, or nobody has ever confirmed it and the tool was last used over a year ago.
+- `unverified` — nobody has rechecked it.
+- `changed` — somebody rechecked it and found something else. Read it together with `outcome`:
+  on a success it means the thing stopped working, and on a failure it means somebody got it
+  working. **It was called `broken` until 2026-08-23**, which was renamed because that name
+  states the opposite of what happened in the second case.
 
 ## Reading a debate
 

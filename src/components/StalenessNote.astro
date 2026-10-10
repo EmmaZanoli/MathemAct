@@ -18,6 +18,7 @@
 import Tombstone from './Tombstone.astro';
 import { longDate, monthsAgo, monthsSince } from '../lib/format';
 import type { Staleness } from '../lib/reports';
+import { VERDICT } from '../lib/status';
 import type { Outcome } from '../lib/status';
 
 interface Props {
@@ -31,6 +32,16 @@ const { staleness, outcome, verbose = false } = Astro.props;
 
 const age = monthsSince(staleness.latestToolUse);
 const isOld = age !== null && age >= 12;
+
+/**
+ * Somebody rechecked this and found something else. Read off `holds` rather than compared
+ * against a verdict name, because there are two ways for an account to stop describing
+ * what happens and only one of them is "it no longer works" — a report of a failure that
+ * somebody has since got working has changed just as much, and is the more interesting of
+ * the two.
+ */
+const latest = staleness.latestVerdict;
+const hasChanged = latest !== null && !VERDICT[latest].holds;
 ---
 
 <div class="staleness">
@@ -72,10 +83,11 @@ const isOld = age !== null && age >= 12;
   }
 
   {
-    verbose && staleness.latestVerdict === 'no_longer_works' && (
+    verbose && hasChanged && (
       <p class="staleness__warning">
-        Somebody has tried this since and reported that it no longer works. Their note is
-        below.
+        {outcome === 'failed'
+          ? 'Somebody has tried this since and got it to work. Their note is below.'
+          : 'Somebody has tried this since and reported that it no longer works. Their note is below.'}
       </p>
     )
   }

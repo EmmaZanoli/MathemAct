@@ -233,7 +233,7 @@ import { path } from '../../lib/paths';
   // this page's bundle, and the whole point of this page is that it reads live.
   import { categoryLabel } from '../../lib/network';
   import type { NetworkCategory, NetworkLinkStatus } from '../../lib/network';
-  import { OUTCOME, TOMBSTONE_STATUS, tombstoneName } from '../../lib/status';
+  import { OUTCOME, tombstoneFilled, tombstoneName } from '../../lib/status';
   import type { Outcome, TombstoneStatus } from '../../lib/status';
 
   const id = new URLSearchParams(window.location.search).get('id');
@@ -401,7 +401,7 @@ import { path } from '../../lib/paths';
     tombstone.setAttribute('aria-label', tombstoneName(status, report.outcome));
     // `data-filled` is an attribute the CSS tests for presence, not for value, so it has to
     // be removed rather than set to something falsy.
-    if (TOMBSTONE_STATUS[status].filled) tombstone.dataset.filled = '';
+    if (tombstoneFilled(status)) tombstone.dataset.filled = '';
     else delete tombstone.dataset.filled;
     const label = tombstone.querySelector<HTMLElement>('.tombstone__label');
     if (label) label.textContent = OUTCOME[report.outcome].label;
